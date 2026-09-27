@@ -52,7 +52,7 @@
 - [x] `savePlaylists(playlists: Playlist[]): Promise<void>`
 - [x] `getRecentlyPlayed(): Promise<Song[]>`
 - [x] `saveRecentlyPlayed(songs: Song[]): Promise<void>` — actual impl `addRecentlyPlayed(song)` (top-pe-add + dedupe + cap 20)
-- [ ] Test: Data persists after app restart (device run; playlist-persist headless test Phase 9 me pass)
+- [ ] Test: Data persists after app restart (device run baaki — AsyncStorage persist wiring tsc-verified; restart device pe verify hona hai)
 
 ### Apinator Service (`services/apinator.ts`)
 - [x] Initialize client with app key
@@ -68,7 +68,7 @@
 - [x] `playerStore.ts` — currentSong, queue, index, isPlaying, position (+ shuffle/repeat/volume)
 - [x] `playlistStore.ts` — playlists, add, remove, create, delete
 - [x] `roomStore.ts` — roomCode, isHost, members, connectionStatus (+ naam FR-5.11)
-- [ ] Test: State updates correctly (headless: searchStore 14/14 + playlistStore 22/22 pass; device run pending)
+- [ ] Test: State updates correctly (pure logic `npm test` → 65 assertions PASS; zustand store transitions + device run pending)
 
 **Phase 1 Complete?** `[x]` (code ✓ tsc clean; device tests baaki)
 
@@ -144,7 +144,7 @@
 - [x] Test: Search returns Punjabi songs (live API probe: Diljit / AP Dhillon / Karan Aujla → 30 songs each; garbage query → 0)
   - Extra (design reference): filter chips "All / Songs / Artists / Albums / Playlists" — filhaal sab pe songs hi aate hain (API song-level hai)
 
-**Phase 5 Complete?** `[x]` (code + headless tests ✓ — searchStore 14/14, useDebounce 8/8; phone pe ek manual run baaki)
+**Phase 5 Complete?** `[x]` (code + live search probe + tsc/lint ✓; `npm test` covers app logic; phone pe ek manual run baaki)
 
 ---
 
@@ -213,9 +213,9 @@
 - [x] Remove song from playlist
 - [x] Empty state
 - [x] Persist to AsyncStorage
-- [x] Test: Create → add → restart → persists (headless store test 22/22 pass; device run pending)
+- [x] Test: Create → add → name/duplicate validate headless-PASS (`npm test` → playlistValidation 10/10); AsyncStorage restart-run device pe pending
 
-**Phase 9 Complete?** `[x]` (code + headless tests ✓; phone pe ek manual run baaki)
+**Phase 9 Complete?** `[x]` (code + `npm test` ✓; phone pe ek manual run baaki)
 
 ---
 
@@ -251,7 +251,7 @@
 - [x] Auto-reconnect (SDK built-in: 6 attempts, 1s→30s cap, reconnect pe channel auto-resubscribe)
 - [ ] Test: 2 devices sync within 200ms (manual — Phase 12 deploy + 2 phones chahiye)
 
-**Phase 11 Complete?** `[x]` (code ✓ tsc clean; 2-device latency test Phase 12 ke baad)
+**Phase 11 Complete?** `[x]` (code ✓ tsc clean + `npm test` sync logic ✓; 2-device latency test — backend LIVE, phones chahiye)
 
 ---
 
@@ -300,7 +300,7 @@
 - [x] Presence (online users) — host roster + `member-join`/`member-leave`/`member-list` events + 30s heartbeat + stale-prune (`roomSync`) — FR-5.10
 - [x] User names — Room tab naam field (persist `@pb_room_name`, default `Guest-XXXX`) + members list me naam — FR-5.11
 
-**Phase 14 Complete?** `[x]` (code ✓ tsc clean; 2-device presence live test Phase 12 deploy ke baad)
+**Phase 14 Complete?** `[x]` (code ✓ tsc clean; 2-device presence live test — backend LIVE hai, ab possible)
 
 ---
 
@@ -372,7 +372,7 @@
 - [x] Local git repo + initial commit (`git init -b main` + add + commit; gitignores se `node_modules/`/`.env` excluded)
 - [ ] Code pushed to GitHub (repo create ke baad: `git remote add origin <url> && git push -u origin main`)
 
-**Phase 17 Complete?** `[~]` (7/10 — screenshots/GitHub/push user task)
+**Phase 17 Complete?** `[~]` (8/11 — screenshots/GitHub/push user task)
 
 ---
 
@@ -382,12 +382,12 @@ Before releasing:
 - [ ] All P0 features working
 - [ ] All P1 features working
 - [ ] 0 crashes in 1 hour usage
-- [x] 0 TypeScript errors — verified 2026-09-25 (`npx tsc --noEmit`, strict → 0)
+- [x] 0 TypeScript errors — re-verified 2026-09-27 (`npx tsc --noEmit`, strict → 0)
 - [x] 0 ESLint warnings — verified (`npm run lint` → 47 files, 0 problems, `--max-warnings=0` enforced)
 - [ ] APK size < 50MB
-- [ ] App icon designed
-- [ ] Splash screen designed
-- [ ] App name finalized
+- [ ] App icon designed (abhi `assets/icon.png` = default Expo template — custom design pending)
+- [ ] Splash screen designed (abhi `assets/splash.png` = default Expo template)
+- [x] App name finalized — "Punjabi Beats" (app.json `name` + `slug: punjabi-beats` + `scheme` consistent)
 - [ ] Privacy policy (if publishing)
 - [ ] Terms of service (if publishing)
 - [ ] Tested on 3+ devices
@@ -423,9 +423,9 @@ Before releasing:
 | Phase 17: Documentation | 11 | 8 | 73% |
 | **TOTAL** | **225** | **186** | **83%** |
 
-> Counts 2026-09-25 ko actual checkbox lines se auto-verify hue (indented sub-boxes
+> Counts 2026-09-27 ko actual checkbox lines se auto-verify hue (indented sub-boxes
 > jaise Phase 12 ke env vars bhi count me). `Test:` / device / account wale boxes
-> isi liye pending hain — code unka already likha hua hai.
+> isi liye pending hain — code + `npm test` (65 assertions) + tsc + lint already green hain.
 
 ### ⏳ Abhi kya pending hai (sirf yehi baaki)
 - **Device/manual tests** — har phase ke `Test:` boxes + Phase 15 ke 12 box (9 manual + 3 runtime); **backend LIVE hai — 2-phone sync test ab possible hai**
@@ -442,6 +442,6 @@ Before releasing:
 - [ ] **M2:** Songs load and play (Phase 6)
 - [ ] **M3:** Playlists save (Phase 9)
 - [ ] **M4:** Group room syncs (Phase 11)
-- [ ] **M5:** Backend deployed (Phase 12)
+- [x] **M5:** Backend deployed (Phase 12) — LIVE `punjabi-beats-api.vercel.app` + probe 3/3
 - [ ] **M6:** APK built (Phase 16)
 - [ ] **M7:** Released! 🎉

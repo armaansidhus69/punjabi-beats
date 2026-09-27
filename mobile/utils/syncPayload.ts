@@ -6,7 +6,7 @@
  * Apinator / player / store import nahi hai (sirf types) — isliye ye headless
  * test ho sakti hai, aur `services/roomSync.ts` in helpers ko use karta hai.
  */
-import { PlayerActionEvent, Song, SyncPayload } from '../types';
+import type { PlayerActionEvent, Song, SyncPayload } from '../types';
 
 /* ---------- Event names (client bind + Vercel /api/publish dono me same) ---------- */
 /** song badla (queue + position + isPlaying ke saath) */
