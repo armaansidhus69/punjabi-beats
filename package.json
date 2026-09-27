@@ -1,0 +1,10 @@
+{
+  "name": "punjabi-beats",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Punjabi Beats — group music listening app (Apinator realtime)",
+  "dependencies": {
+    "@apinator/server": "^2.0.0"
+  }
+}

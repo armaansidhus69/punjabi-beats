@@ -1,0 +1,24 @@
+# Dependencies
+node_modules/
+
+# Secrets — .env.example files committed rehte hain (values kabhi nahi)
+.env
+.env.*
+!.env.example
+
+# Vercel
+.vercel/
+
+# Logs / temp
+*.log
+tsc-out.txt
+tsc.log
+.expo/
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Transient artifacts (not source)
+_backup-player.corrupt.bak.txt
+files.txt

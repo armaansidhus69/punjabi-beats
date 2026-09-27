@@ -1,0 +1,11 @@
+# Vercel ko sirf: api/ function + root static pages chahiye.
+# mobile/ Expo app hai (phone pe chalta hai) — uska source aur .env
+# kabhi upload nahi hone chahiye (secret hygiene).
+mobile/
+node_modules/
+probe-*.mjs
+.env*
+*.bak.txt
+tsc.log
+tsc-out.txt
+files.txt
