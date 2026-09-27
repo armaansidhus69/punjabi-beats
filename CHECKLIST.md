@@ -260,15 +260,15 @@
 - [x] `api/publish.js` created (project ROOT `api/` — Vercel root se deploy; SDK v2 `trigger({name,channel,data})` se verified; cluster env-se, data string/object dono accept)
 - [x] `package.json` with `@apinator/server` (root, ^2.0.0)
 - [x] `vercel.json` (functions config; `api/` auto-route) + `.vercelignore` (mobile/ aur .env* kabhi upload nahi hote)
-- [ ] Environment variables set (Vercel dashboard → Settings → Environment Variables; ref root `.env.example`):
-  - [ ] `APINATOR_APP_ID`
-  - [ ] `APINATOR_KEY`
-  - [ ] `APINATOR_SECRET`
-- [ ] Deploy to Vercel (login chahiye; deploy ke baad URL `mobile/.env` → `EXPO_PUBLIC_PUBLISH_URL` me bharo)
-- [ ] Test: POST to `/api/publish` triggers Apinator (`node probe-publish.mjs --live <deployed-url>` — local handler test PASS: 6/6 exit 0; `--live` run deploy ke baad)
+- [x] Environment variables set — **LIVE-VERIFIED**: `--live` POST valid → 200 `{success:true}` (env missing hota to 500 aata — local test me aaya bhi tha; ref root `.env.example`):
+  - [x] `APINATOR_APP_ID` (Vercel pe configured — probe 200 se prove)
+  - [x] `APINATOR_KEY` (configured)
+  - [x] `APINATOR_SECRET` (sirf server-side — client bundle me kabhi nahi)
+- [x] Deploy to Vercel — **LIVE**: `https://punjabi-beats-api.vercel.app` (2026-09-27); URL `mobile/.env` → `EXPO_PUBLIC_PUBLISH_URL` me bhi set (verify kiya; `.env` gitignored)
+- [x] Test: POST to `/api/publish` triggers Apinator — `node probe-publish.mjs --live https://punjabi-beats-api.vercel.app` → **3/3 PASS exit 0** (GET 405, POST{} 400, valid → 200 + Apinator trigger). Local handler tests bhi 6/6.
 - [x] Verify: Secrets NOT exposed to client (mobile/ me zero `APINATOR_SECRET`/`APINATOR_APP_ID` refs; client me sirf public `EXPO_PUBLIC_APINATOR_KEY`; `.vercelignore` mobile/ exclude karta hai)
 
-**Phase 12 Complete?** `[~]` (4/10 — baaki sab Vercel login/env/deploy + live probe + 2-device test)
+**Phase 12 Complete?** `[x]` (10/10 — deploy + env vars + live probe 3/3 PASS; 2-device sync test Phase 15 me)
 
 ---
 
@@ -350,11 +350,11 @@
 - [ ] Submit to App Store
 
 ### Backend
-- [ ] Vercel deployed (user task — steps README/QUICKSTART me; deploy ke baad live probe chalana)
-- [ ] Environment variables set (4 server vars — reference root `.env.example` me; Vercel dashboard me daalne hain)
-- [ ] Custom domain (optional)
+- [x] Vercel deployed — **LIVE**: `https://punjabi-beats-api.vercel.app` (2026-09-27, live probe se verified)
+- [x] Environment variables set — 3 critical vars live-verified (`--live` probe → 200); `APINATOR_CLUSTER` optional hai (default `eu` = mobile env se match)
+- [ ] Custom domain (optional — abhi `*.vercel.app` subdomain)
 
-**Phase 16 Complete?** `[~]` (1/15 — `eas.json` ready; baaki sab EAS/Vercel login + device tasks)
+**Phase 16 Complete?** `[~]` (3/15 — `eas.json` ready + backend LIVE; baaki sab EAS login + builds + device tasks)
 
 ---
 
@@ -415,23 +415,22 @@ Before releasing:
 | Phase 9: Playlists | 12 | 12 | 100% |
 | Phase 10: Group Room | 10 | 9 | 90% |
 | Phase 11: Real-Time Sync | 12 | 11 | 92% |
-| Phase 12: Backend (Vercel) | 10 | 4 | 40% |
+| Phase 12: Backend (Vercel) | 10 | 10 | 100% |
 | Phase 13: Polish | 10 | 9 | 90% |
 | Phase 14: Extra Features (P2) | 8 | 8 | 100% |
 | Phase 15: Testing | 17 | 5 | 29% |
-| Phase 16: Build & Deploy | 15 | 1 | 7% |
+| Phase 16: Build & Deploy | 15 | 3 | 20% |
 | Phase 17: Documentation | 11 | 8 | 73% |
-| **TOTAL** | **225** | **178** | **79%** |
+| **TOTAL** | **225** | **186** | **83%** |
 
 > Counts 2026-09-25 ko actual checkbox lines se auto-verify hue (indented sub-boxes
 > jaise Phase 12 ke env vars bhi count me). `Test:` / device / account wale boxes
 > isi liye pending hain — code unka already likha hua hai.
 
 ### ⏳ Abhi kya pending hai (sirf yehi baaki)
-- **Device/manual tests** — har phase ke `Test:` boxes + Phase 15 ke 12 box (9 manual + 3 runtime; 2-phone sync test Phase 12 deploy ke turant baad)
-- **Phase 12 (backend)** — Vercel env vars + deploy + live probe (user, login chahiye)
+- **Device/manual tests** — har phase ke `Test:` boxes + Phase 15 ke 12 box (9 manual + 3 runtime); **backend LIVE hai — 2-phone sync test ab possible hai**
 - **Phase 13 (1 box)** — runtime console-warnings device check (ESLint setup + 0-warning run ✓ done)
-- **Phase 16 (14 box)** — `mobile/eas.json` ready; ab `npx eas-cli login` + builds (user)
+- **Phase 16 (12 box)** — backend 2 box DONE (deploy + env); ab `npx eas-cli login` + builds (user)
 - **Phase 17 (3 box)** — screenshots + GitHub repo + push (local git commit ✓ done; remote push commands box me hain)
 - **Phase 0 (1 box)** — Expo Go QR-scan smoke test
 
