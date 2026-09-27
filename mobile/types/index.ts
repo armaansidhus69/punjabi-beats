@@ -11,6 +11,12 @@ export interface Song {
   preview: string;
   /** Duration in milliseconds */
   duration: number;
+  /**
+   * Sirf 30s preview available hai (iTunes preview limitation — full song nahi).
+   * JioSaavn mirror se full song aaye to false rehta hai; SongItem ka "30s"
+   * badge aur player ka preview note sirf true pe dikhte hain.
+   */
+  previewOnly?: boolean;
 }
 
 export interface Playlist {

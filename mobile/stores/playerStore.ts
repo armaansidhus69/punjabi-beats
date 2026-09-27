@@ -9,6 +9,16 @@ import { addRecentlyPlayed } from '../services/storage';
 
 let sound: Audio.Sound | null = null;
 let audioModeConfigured = false;
+/**
+ * DOUBLE-PLAY FIX (state):
+ * - `sound` = currentSoundRef — hamesha ACTIVE sound ko point karta hai.
+ * - `loadGeneration` — har loadAndPlaySong ek naya token; stale token = load
+ *   skip / naya sound unload (rapid taps A→B pe A kabhi play nahi hota).
+ * - `loadQueue` — serialized mutex; do `Audio.Sound.createAsync` parallel
+ *   kabhi nahi chalte (yehi race purane double-play ka root cause tha).
+ */
+let loadGeneration = 0;
+let loadQueue: Promise<void> = Promise.resolve();
 
 /* ---------- Action listener (room sync Phase 11) ---------- */
 /**
@@ -61,6 +71,9 @@ async function configureAudio(): Promise<void> {
 async function unloadCurrentSound(): Promise<void> {
   if (!sound) return;
   try {
+    // Pehle listener detach — unload ke BAAD bhi purana sound didJustFinish/
+    // error status bhej sakta tha → extra playNext (double-advance bug)
+    sound.setOnPlaybackStatusUpdate(null);
     await sound.unloadAsync();
   } catch (err) {
     console.warn('Sound unload failed:', err);
@@ -99,41 +112,79 @@ async function loadAndPlaySong(
   song: Song,
   { shouldPlay = true, initialPosition, remote = false }: LoadOptions = {},
 ): Promise<void> {
-  await configureAudio();
-  await unloadCurrentSound();
-  try {
-    const { sound: newSound } = await Audio.Sound.createAsync(
-      { uri: song.preview },
-      {
-        shouldPlay,
-        progressUpdateIntervalMillis: 500,
-        ...(initialPosition && initialPosition > 0 ? { positionMillis: initialPosition } : {}),
-      },
-      handlePlaybackStatus,
-      false,
-    );
-    sound = newSound;
-    // FR-2.11: naye sound pe user ka saved volume lagao (expo-av default 1)
-    const savedVolume = usePlayer.getState().volume;
-    if (savedVolume !== 1) {
-      newSound.setVolumeAsync(savedVolume).catch(err => console.warn('Volume apply failed:', err));
-    }
-    emitAction({
-      type: 'song',
-      song,
-      queue: usePlayer.getState().queue,
-      position: initialPosition ?? 0,
-      isPlaying: shouldPlay,
-      remote,
+  /**
+   * DOUBLE-PLAY FIX — generation token + serialized load queue:
+   * 1. Rapid tap (Song A → Song B): A ka token stale → A kabhi load hi nahi
+   *    hota, sirf B chalta hai.
+   * 2. Queue ke wajah se kabhi do createAsync parallel nahi chalte — purana
+   *    sound hamesha pehle unload hota hai, phir naya load + ref update.
+   * 3. create ke turant baad token re-check → agar beech me naya load aaya to
+   *    ye wala instance abhi unload (leak nahi hoga, audio bhi nahi bajega).
+   * playSong / playNext / playPrev / repeat-one / togglePlay sab isi loader se
+   * guzarte hain, isliye fix poore player me ek jagah laga.
+   */
+  const token = ++loadGeneration;
+  const run = loadQueue
+    .catch(() => undefined)
+    .then(async () => {
+      if (token !== loadGeneration) return; // nayi request pending — stale skip
+      await configureAudio();
+      await unloadCurrentSound(); // purana sound hamesha pehle unload (ref null)
+      if (token !== loadGeneration) return;
+      try {
+        const { sound: newSound } = await Audio.Sound.createAsync(
+          { uri: song.preview },
+          {
+            shouldPlay,
+            progressUpdateIntervalMillis: 500,
+            ...(initialPosition && initialPosition > 0 ? { positionMillis: initialPosition } : {}),
+          },
+          handlePlaybackStatus,
+          false,
+        );
+        if (token !== loadGeneration) {
+          // Load ke beech naya request aa gaya — instance abhi unload karo
+          void newSound.unloadAsync().catch(() => undefined);
+          return;
+        }
+        sound = newSound; // currentSoundRef update — sirf latest load ke liye
+        // FR-2.11: naye sound pe user ka saved volume lagao (expo-av default 1)
+        const savedVolume = usePlayer.getState().volume;
+        if (savedVolume !== 1) {
+          newSound.setVolumeAsync(savedVolume).catch(err => console.warn('Volume apply failed:', err));
+        }
+        emitAction({
+          type: 'song',
+          song,
+          queue: usePlayer.getState().queue,
+          position: initialPosition ?? 0,
+          isPlaying: shouldPlay,
+          remote,
+        });
+      } catch (err) {
+        if (token !== loadGeneration) return; // stale load ke errors ignore
+        console.warn('Audio load failed:', err);
+        if (canAutoSkip()) {
+          void usePlayer.getState().playNext();
+        } else {
+          usePlayer.setState({ isPlaying: false });
+        }
+      }
     });
-  } catch (err) {
-    console.warn('Audio load failed:', err);
-    if (canAutoSkip()) {
-      void usePlayer.getState().playNext();
-    } else {
-      usePlayer.setState({ isPlaying: false });
-    }
-  }
+  loadQueue = run;
+  await run.catch(() => undefined);
+}
+
+/**
+ * Cleanup — root layout unmount/dev-teardown pe call hota hai (_layout.tsx):
+ * pending load cancel + active Sound unload + isPlaying false. iOS pe Sound
+ * leak aur HMR ke baad zombie playback dono isi se bachte hain.
+ */
+export async function disposePlayer(): Promise<void> {
+  loadGeneration++; // queue me pending load ho to stale ho jaye
+  await loadQueue.catch(() => undefined);
+  await unloadCurrentSound();
+  usePlayer.setState({ isPlaying: false });
 }
 
 /* ---------- Store ---------- */
@@ -180,6 +231,11 @@ export const usePlayer = create<PlayerStore>()((set, get) => ({
   repeat: 'off',
   volume: 1,
 
+  /**
+   * Nayi song load — serialized loader (loadAndPlaySong) se guzarta hai.
+   * playNext/playPrev/repeat-one bhi yahin aate hain, isliye double-play fix
+   * (generation token + load queue) poore player ko ek saath cover karta hai.
+   */
   playSong: async (song, queue = [], options) => {
     const remote = options?.remote === true;
     const nextQueue = queue.length > 0 ? queue : [song];

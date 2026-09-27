@@ -172,6 +172,13 @@ export default function PlayerScreen() {
         <ProgressBar position={position} duration={duration} onSeek={handleSeek} showTimes />
       </View>
 
+      {/* iTunes 30s preview note (FR-2.8 ke alawa full song nahi milta) */}
+      {currentSong.previewOnly ? (
+        <Text style={styles.previewNote}>
+          Preview mode — full song ke liye JioSaavn app use karo
+        </Text>
+      ) : null}
+
       {/* Volume slider (FR-2.11) — sirf local device, room sync me kabhi broadcast nahi */}
       <VolumeSlider value={volume} onChange={setVolume} />
 
@@ -338,6 +345,13 @@ const styles = StyleSheet.create({
   artist: { ...typography.body, color: colors.subtext, textAlign: 'center', marginTop: spacing.xs },
   queueInfo: { ...typography.caption, color: colors.primary, marginTop: spacing.sm },
   progressSection: { paddingHorizontal: spacing.lg, marginTop: spacing.lg },
+  previewNote: {
+    ...typography.caption,
+    color: colors.subtext,
+    textAlign: 'center',
+    paddingHorizontal: spacing.xl,
+    marginTop: spacing.sm,
+  },
   controls: { marginTop: spacing.xl, marginBottom: spacing.xl },
   /* Volume slider (FR-2.11) */
   volumeRow: {

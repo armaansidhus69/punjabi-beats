@@ -51,6 +51,13 @@ export default function SongItem({
         </Text>
       </View>
 
+      {/* iTunes 30s preview badge — full-song mirror env enable hone pe gayab */}
+      {song.previewOnly ? (
+        <View style={styles.previewBadge}>
+          <Text style={styles.previewBadgeText}>30s</Text>
+        </View>
+      ) : null}
+
       {isActive ? <Ionicons name="volume-medium" size={18} color={colors.primary} /> : null}
 
       {onAddPress ? (
@@ -99,4 +106,13 @@ const styles = StyleSheet.create({
   titleActive: { color: colors.primary },
   artist: { ...typography.caption, color: colors.subtext },
   actionButton: { padding: spacing.xs },
+  previewBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    backgroundColor: colors.surface,
+  },
+  previewBadgeText: { fontSize: 10, fontWeight: '700', color: colors.primary },
 });

@@ -111,6 +111,8 @@ function toSong(value: unknown): Song | null {
     cover: typeof cover === 'string' ? cover : '',
     preview,
     duration: Number.isFinite(duration) && duration > 0 ? duration : 30000,
+    // Room sync se aaya song bhi badge/player note sahi dikhaye (field pass-through)
+    previewOnly: value.previewOnly === true,
   };
 }
 

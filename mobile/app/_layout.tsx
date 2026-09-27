@@ -23,6 +23,7 @@ import AppErrorBoundary from '../components/ErrorBoundary';
 import MiniPlayer from '../components/MiniPlayer';
 import AddToPlaylistSheet from '../components/AddToPlaylistSheet';
 import { initRoomSync } from '../services/roomSync';
+import { disposePlayer } from '../stores/playerStore';
 
 export function ErrorBoundary(props: ErrorBoundaryProps) {
   return <AppErrorBoundary {...props} />;
@@ -72,6 +73,11 @@ export default function RootLayout() {
   // non-crashing (warning + failed state).
   useEffect(() => {
     initRoomSync();
+    // Unmount/dev-teardown pe audio cleanup — pending load cancel + active
+    // Sound unload (double-play + iOS Sound leak dono se bachav)
+    return () => {
+      void disposePlayer();
+    };
   }, []);
 
   return (

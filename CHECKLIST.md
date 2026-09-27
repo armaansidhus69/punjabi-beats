@@ -150,7 +150,7 @@
 
 ## ▶️ PHASE 6: Audio Player
 
-- [x] `playerStore.ts` implemented (expo-av module-level Sound, strict TS)
+- [x] `playerStore.ts` implemented (expo-av module-level Sound, strict TS; **2026-09-27 double-play fix**: generation token + serialized load queue + `disposePlayer` cleanup — sim test `test-loadqueue.mjs` 3/3 PASS)
 - [x] `playSong(song, queue)` action (+ `initialPosition`/`startPaused`/`remote` options)
 - [x] `togglePlay()` action (+ idempotent `play`/`pause` for sync)
 - [x] `playNext()` action (shuffle/repeat logic FR-2.9/2.10 ke saath)

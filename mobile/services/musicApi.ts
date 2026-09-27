@@ -7,6 +7,15 @@
  * saavn.dev/saavn.me → NXDOMAIN. iTunes free + no-key + reliable hai.
  * IN store pe Punjabi queries perfect results dete hain (US store
  * generic queries garbage deta hai — isliye default country=IN).
+ *
+ * RETEST (2026-09-27): teen aur candidate mirrors bhi dead:
+ * jiosaavn-api-ts.vercel.app → 404 DEPLOYMENT_NOT_FOUND,
+ * saavn.dev → NXDOMAIN (curl exit 6; jiosaavn.com DNS theek hai),
+ * jiosaavn-api-privatecvc2.vercel.app → DEPLOYMENT_DISABLED (Vercel payment).
+ * Official www.jiosaavn.com/api.php search bhi empty deta hai (auth-gated).
+ * → iTunes hi rehta hai PRIMARY; previewOnly flag se UI "30s" badge dikhata hai
+ *   (SongItem) + player me preview note. Full-song mirror jeevit hua to
+ *   env set karte hi badge/note apne aap gayab ho jayenge.
  */
 import axios from 'axios';
 import { Mood, Song } from '../types';
@@ -99,6 +108,8 @@ function mapITunesSong(raw: ITunesResult): Song | null {
     cover: raw.artworkUrl100?.replace('100x100bb', '600x600bb') ?? '',
     preview: raw.previewUrl,
     duration: raw.trackTimeMillis ?? 30000,
+    // iTunes sirf 30s preview deta hai (full song nahi) — UI badge + player note
+    previewOnly: true,
   };
 }
 
