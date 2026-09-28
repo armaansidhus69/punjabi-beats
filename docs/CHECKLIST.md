@@ -24,9 +24,9 @@
 - [x] Theme constants: `constants/colors.ts`, `typography.ts`, `spacing.ts`, `theme.ts` (Paper dark theme)
 - [x] Root layout + 4-tab skeleton (Expo Router, dark background) + App.tsx removed
 - [x] Verify: `npx tsc --noEmit` → 0 errors
-- [ ] Test: App runs on Expo Go via QR scan (user device test — `cd mobile && npx expo start`)
+- [x] Test: App runs on Expo Go via QR scan — **PASS (2026-09-27)**: 2 Android phones pe Expo Go se chala
 
-**Phase 0 Complete?** `[~]`
+**Phase 0 Complete?** `[x]` (setup + device smoke test PASS)
 
 ---
 
@@ -62,15 +62,15 @@
 - [x] `publish(event, data): Promise<void>` — `publishEvent` (Vercel `/api/publish` POST; Phase 12 deploy ke baad live)
 - [x] Subscribe to channel — `subscribeChannel` + roomSync `joinSyncChannel`
 - [x] Bind event handlers — `bindChannelEvents` (song-change / playback-control / member-* events)
-- [ ] Test: Connection established (device — 2-phone test, Phase 10/11 ke saath)
+- [x] Test: Connection established — **2-phone sync LIVE verified (2026-09-27)**: create/join → song-change/playback-control dono devices pe sync
 
 ### Zustand Stores
 - [x] `playerStore.ts` — currentSong, queue, index, isPlaying, position (+ shuffle/repeat/volume)
 - [x] `playlistStore.ts` — playlists, add, remove, create, delete
 - [x] `roomStore.ts` — roomCode, isHost, members, connectionStatus (+ naam FR-5.11)
-- [ ] Test: State updates correctly (pure logic `npm test` → 65 assertions PASS; zustand store transitions + device run pending)
+- [x] Test: State updates correctly — device run PASS (2026-09-27: 2 phones pe playback + room flow chala); pure logic `npm test` → 65 assertions
 
-**Phase 1 Complete?** `[x]` (code ✓ tsc clean; device tests baaki)
+**Phase 1 Complete?** `[x]` (code ✓ tsc clean + device test PASS)
 
 ---
 
@@ -230,9 +230,9 @@
 - [x] Show room code prominently
 - [x] Show host/joined badge
 - [x] Leave room button (room screen + Room tab card; back pe room minimize rehta hai)
-- [ ] Test: Create room, share code, join from 2nd device (2 physical devices chahiye — manual)
+- [x] Test: Create room, share code, join from 2nd device — **PASS (2026-09-27, 2 devices)**
 
-**Phase 10 Complete?** `[x]` (code ✓ tsc clean; 2-device manual test baaki)
+**Phase 10 Complete?** `[x]` (code ✓ tsc clean + **2-device create/join/sync PASS**)
 
 ---
 
@@ -249,9 +249,9 @@
 - [x] Robust JSON parsing (`typeof data === 'string'` + object dono — `utils/syncPayload.ts`)
 - [x] Handle connection errors (subscribe error + publish fail → ek baar warning, playback nahi rukta)
 - [x] Auto-reconnect (SDK built-in: 6 attempts, 1s→30s cap, reconnect pe channel auto-resubscribe)
-- [ ] Test: 2 devices sync within 200ms (manual — Phase 12 deploy + 2 phones chahiye)
+- [x] Test: 2 devices sync within 200ms — **PASS (2026-09-27)**: live 2-phone test, backend `punjabi-beats-api.vercel.app` ke through
 
-**Phase 11 Complete?** `[x]` (code ✓ tsc clean + `npm test` sync logic ✓; 2-device latency test — backend LIVE, phones chahiye)
+**Phase 11 Complete?** `[x]` (code ✓ tsc clean + `npm test` sync logic ✓ + **2-device live test PASS**)
 
 ---
 
@@ -307,8 +307,8 @@
 ## 🧪 PHASE 15: Testing
 
 ### Manual Testing
-- [ ] Test on Android phone 1 (device chahiye — `cd mobile && npx expo start` + QR)
-- [ ] Test on Android phone 2 (2-phone sync test — **Phase 12 deploy ke turant baad**)
+- [x] Test on Android phone 1 — **PASS (2026-09-27)**: search/play/player/room sab chala
+- [x] Test on Android phone 2 — **PASS (2026-09-27)**: 2-phone sync live verified
 - [ ] Test on iPhone (Expo Go)
 - [ ] Test on tablet (`ios.supportsTablet: true` set hai; player artwork width-se clamp hota hai)
 - [ ] Test on slow network (3G) — 8s axios timeouts + shimmer skeletons ready hain
@@ -403,8 +403,8 @@ Before releasing:
 
 | Phase | Total | Done | % |
 |---|---|---|---|
-| Phase 0: Project Setup | 19 | 18 | 95% |
-| Phase 1: Data Layer | 28 | 25 | 89% |
+| Phase 0: Project Setup | 19 | 19 | 100% |
+| Phase 1: Data Layer | 28 | 27 | 96% |
 | Phase 2: UI Components | 12 | 12 | 100% |
 | Phase 3: Home Screen | 11 | 10 | 91% |
 | Phase 4: Mood Screen | 7 | 6 | 86% |
@@ -413,35 +413,34 @@ Before releasing:
 | Phase 7: Mini Player | 9 | 8 | 89% |
 | Phase 8: Full Player | 10 | 9 | 90% |
 | Phase 9: Playlists | 12 | 12 | 100% |
-| Phase 10: Group Room | 10 | 9 | 90% |
-| Phase 11: Real-Time Sync | 12 | 11 | 92% |
+| Phase 10: Group Room | 10 | 10 | 100% |
+| Phase 11: Real-Time Sync | 12 | 12 | 100% |
 | Phase 12: Backend (Vercel) | 10 | 10 | 100% |
 | Phase 13: Polish | 10 | 9 | 90% |
 | Phase 14: Extra Features (P2) | 8 | 8 | 100% |
-| Phase 15: Testing | 17 | 5 | 29% |
+| Phase 15: Testing | 17 | 7 | 41% |
 | Phase 16: Build & Deploy | 15 | 3 | 20% |
 | Phase 17: Documentation | 11 | 8 | 73% |
-| **TOTAL** | **225** | **186** | **83%** |
+| **TOTAL** | **225** | **193** | **86%** |
 
 > Counts 2026-09-27 ko actual checkbox lines se auto-verify hue (indented sub-boxes
 > jaise Phase 12 ke env vars bhi count me). `Test:` / device / account wale boxes
 > isi liye pending hain — code + `npm test` (65 assertions) + tsc + lint already green hain.
 
 ### ⏳ Abhi kya pending hai (sirf yehi baaki)
-- **Device/manual tests** — har phase ke `Test:` boxes + Phase 15 ke 12 box (9 manual + 3 runtime); **backend LIVE hai — 2-phone sync test ab possible hai**
+- **Device/manual tests** — har phase ke `Test:` boxes + Phase 15 ke 10 box (7 manual + 3 edge cases); **2-phone sync LIVE PASS (2026-09-27)**
 - **Phase 13 (1 box)** — runtime console-warnings device check (ESLint setup + 0-warning run ✓ done)
 - **Phase 16 (12 box)** — backend 2 box DONE (deploy + env); ab `npx eas-cli login` + builds (user)
 - **Phase 17 (3 box)** — screenshots + GitHub repo + push (local git commit ✓ done; remote push commands box me hain)
-- **Phase 0 (1 box)** — Expo Go QR-scan smoke test
 
 ---
 
 ## 🎯 Milestones
 
-- [ ] **M1:** Project runs on phone (Phase 0)
-- [ ] **M2:** Songs load and play (Phase 6)
-- [ ] **M3:** Playlists save (Phase 9)
-- [ ] **M4:** Group room syncs (Phase 11)
+- [x] **M1:** Project runs on phone (Phase 0) — 2 Android phones, Expo Go
+- [x] **M2:** Songs load and play (Phase 6) — device pe search + playback verified
+- [ ] **M3:** Playlists save (Phase 9) — restart-persistence device run pending
+- [x] **M4:** Group room syncs (Phase 11) — 2-phone live sync PASS
 - [x] **M5:** Backend deployed (Phase 12) — LIVE `punjabi-beats-api.vercel.app` + probe 3/3
 - [ ] **M6:** APK built (Phase 16)
 - [ ] **M7:** Released! 🎉

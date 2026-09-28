@@ -155,7 +155,9 @@ if (fail > 0) {
   console.log('FAILURES:\n' + failures.join('\n'));
 }
 console.log(`test-logic: ${pass} passed, ${fail} failed, ${pass + fail} total`);
-process.exit(fail === 0 ? 0 : 1);
+// process.exit() Node/Windows pe stdio-teardown race (libuv assertion) karta hai
+// — natural exit se exit code bhi milta hai, crash bhi nahi hota.
+process.exitCode = fail === 0 ? 0 : 1;
 
 
 

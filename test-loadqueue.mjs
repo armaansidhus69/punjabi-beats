@@ -72,5 +72,6 @@ function playingCount() {
 
   doublePlays = [s1, s2, s3].filter(x => !x).length;
   console.log(doublePlays === 0 ? 'ALL SCENARIOS PASS — double-play nahi ho sakta' : 'FAILED');
-  process.exit(doublePlays === 0 ? 0 : 1);
+  // process.exit() Node/Windows pe flaky libuv assertion karta hai — natural exit
+  process.exitCode = doublePlays === 0 ? 0 : 1;
 })();

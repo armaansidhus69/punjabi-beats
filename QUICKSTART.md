@@ -42,4 +42,4 @@ Scan QR with Expo Go → App opens! 🎉
 4. Create room → code milega
 
 ## Done! 🚀
-Aage ke features ke liye `CHECKLIST.md` follow karo.
+Aage ke features ke liye `docs/CHECKLIST.md` follow karo.

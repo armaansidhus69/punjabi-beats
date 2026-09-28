@@ -1,5 +1,5 @@
 /**
- * Typography scale (per PROMPT.md): 28 h1 / 18 h2 / 14 body / 12 caption.
+ * Typography scale (per docs/PROMPT.md): 28 h1 / 18 h2 / 14 body / 12 caption.
  * System font, headings 700 weight.
  */
 import { TextStyle } from 'react-native';

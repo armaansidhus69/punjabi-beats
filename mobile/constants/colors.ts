@@ -1,5 +1,5 @@
 /**
- * Dark theme color palette (per PROMPT.md UI/UX spec).
+ * Dark theme color palette (per docs/PROMPT.md UI/UX spec).
  * Single source of truth — sabhi screens/components yahi use karenge.
  */
 export const colors = {

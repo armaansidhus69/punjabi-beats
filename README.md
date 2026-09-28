@@ -4,7 +4,7 @@ Punjabi music app — **Expo React Native** (mobile) + **Vercel serverless** (ro
 broadcast backend). Search Punjabi songs, make playlists, and — the fun part —
 **group rooms jahan sabke devices pe ek hi song sync chalta hai** (Apinator realtime).
 
-> Full development status: [`CHECKLIST.md`](./CHECKLIST.md) · Deep-dive setup: [`QUICKSTART.md`](./QUICKSTART.md) · Spec: [`REQUIREMENTS.md`](./REQUIREMENTS.md)
+> Full development status: [`docs/CHECKLIST.md`](./docs/CHECKLIST.md) · Deep-dive setup: [`QUICKSTART.md`](./QUICKSTART.md) · Spec: [`docs/REQUIREMENTS.md`](./docs/REQUIREMENTS.md)
 
 ## ✨ Features
 
@@ -20,6 +20,10 @@ broadcast backend). Search Punjabi songs, make playlists, and — the fun part �
   display **names**, connection status, **playback sync** (song/play/pause/seek) real-time
 - **Recently played** — last 20 history screen
 - **Polish** — dark theme, toasts, haptics, empty/error states, Reanimated press animations
+
+## 📸 Screenshots
+
+(Screenshots add karne hain — phone se capture honge)
 
 ## 🛠 Tech stack
 
@@ -43,9 +47,9 @@ broadcast backend). Search Punjabi songs, make playlists, and — the fun part �
 │   ├── services/           # musicApi, apinator, roomSync, storage
 │   ├── utils/              # syncPayload (wire format), haptics, format
 │   └── constants/          # colors, typography, spacing, moods, layout
+├── docs/                   # CHECKLIST (live status), REQUIREMENTS, PLAN, PROMPT
 ├── vercel.json             # backend deploy config
-├── probe-*.mjs             # headless API/self-test scripts (node)
-└── CHECKLIST.md            # 18-phase development checklist (live status)
+└── probe-*.mjs             # headless API/self-test scripts (node)
 ```
 
 ## 🚀 Setup
@@ -67,7 +71,6 @@ npx expo start           # QR scan karo — Expo Go me app chalegi
 
 | Key | Kyun chahiye |
 |---|---|
-| `EXPO_PUBLIC_APINATOR_APP_ID` | realtime app id (public) |
 | `EXPO_PUBLIC_APINATOR_KEY` | socket key (public) |
 | `EXPO_PUBLIC_PUBLISH_URL` | `https://YOUR-APP.vercel.app/api/publish` (Phase 12 deploy ke baad) |
 | `EXPO_PUBLIC_ITUNES_COUNTRY` | optional, default `IN` |
@@ -98,7 +101,14 @@ cd mobile && npx tsc --noEmit   # 0 TypeScript errors (strict mode)
 node probe-publish.mjs          # backend handler test
 ```
 
-Manual/device tests ke liye phase-wise list: [`CHECKLIST.md`](./CHECKLIST.md).
+Manual/device tests ke liye phase-wise list: [`docs/CHECKLIST.md`](./docs/CHECKLIST.md).
+
+## 📚 Development Docs
+
+- [`docs/CHECKLIST.md`](./docs/CHECKLIST.md) — 18-phase live status (tick counts)
+- [`docs/REQUIREMENTS.md`](./docs/REQUIREMENTS.md) — FR/NFR spec (feature ids)
+- [`docs/PLAN.md`](./docs/PLAN.md) — architecture + phase plan
+- [`docs/PROMPT.md`](./docs/PROMPT.md) — original build prompt / UI-UX spec
 
 ## 🤝 Contributing
 
