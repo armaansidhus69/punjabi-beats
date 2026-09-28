@@ -41,11 +41,17 @@
 
 ### Music API Service (`services/musicApi.ts`)
 - [x] `searchSongs(query: string): Promise<Song[]>`
-- [x] iTunes primary integration (`country=IN`, entity=song)
-- [x] Optional JioSaavn mirror (env-based, fail-safe)
-- [x] Response mapping (iTunes flat → Song)
-- [x] Error handling with fallback
-- [x] Test: `searchSongs('Diljit')` returns songs — live probe-verified (`probe-apis.mjs`: Diljit/AP Dhillon/Karan Aujla → 30 songs each)
+- [x] **Multi-source fallback chain (full songs priority):** JioSaavn mirrors → Audius → iTunes (2026-09-28)
+  - [x] Try 1 `searchJioSaavn` — 5 mirrors, dono paths (`/api/search/songs` + `/search/songs`), parallel + 10 min dead-cache
+  - [x] Try 2 `searchAudius` — `api.audius.co/v1/tracks/search` (free, no key, full songs 60s+)
+  - [x] Try 3 `searchITunes` — `country=IN`, `entity=song` (sirf 30s preview) + partial Audius top-up
+  - [x] **Audio guard** — JioSaavn mirror ke download URL ka HEAD check; zombie mirror (metadata sahi, CDN 404) skip hota hai
+  - [x] `previewOnly` flag: sirf iTunes pe `true` → SongItem ka "30s" badge + player note
+- [x] Response mapping (har source ka mapper → common `Song`; JioSaavn ke 3 shapes + `link`/`url` dono)
+- [x] Error handling with fallback (har source ka try/catch + `[musicApi] … → source` console log)
+- [x] Test: `searchSongs('Diljit')` → **Audius, 29 full songs** (23 songs ≥3 min, longest 448s) — `probe-search.mjs` 9/9 PASS
+- [x] Test: Karan Aujla / Sidhu Moose Wala / Satinder Sartaaj → full songs; `xyzabc` → 0 full (clips filter)
+- [x] JioSaavn mirror status (2026-09-28): 3 dead (404), `saavn-api` → downloadUrl nahi, `jiosaavn-api-2` → metadata + 320kbps link par CDN 404
 
 ### Storage Service (`services/storage.ts`)
 - [x] `getPlaylists(): Promise<Playlist[]>`
