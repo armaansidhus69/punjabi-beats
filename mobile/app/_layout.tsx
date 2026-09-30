@@ -11,7 +11,7 @@
  */
 import { useEffect } from 'react';
 import { ErrorBoundaryProps, Stack, useSegments } from 'expo-router';
-import { StyleSheet, View } from 'react-native';
+import { Platform, StyleSheet, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Provider as PaperProvider } from 'react-native-paper';
@@ -23,7 +23,11 @@ import AppErrorBoundary from '../components/ErrorBoundary';
 import MiniPlayer from '../components/MiniPlayer';
 import AddToPlaylistSheet from '../components/AddToPlaylistSheet';
 import { initRoomSync } from '../services/roomSync';
-import { disposePlayer } from '../stores/playerStore';
+import TrackPlayer from 'react-native-track-player';
+import { playbackService } from '../services/playbackService';
+import { initializePlayer } from '../stores/playerStore';
+
+TrackPlayer.registerPlaybackService(() => playbackService);
 
 export function ErrorBoundary(props: ErrorBoundaryProps) {
   return <AppErrorBoundary {...props} />;
@@ -73,11 +77,9 @@ export default function RootLayout() {
   // non-crashing (warning + failed state).
   useEffect(() => {
     initRoomSync();
-    // Unmount/dev-teardown pe audio cleanup — pending load cancel + active
-    // Sound unload (double-play + iOS Sound leak dono se bachav)
-    return () => {
-      void disposePlayer();
-    };
+    if (Platform.OS !== 'web') {
+      void initializePlayer().catch(err => console.warn('TrackPlayer setup failed:', err));
+    }
   }, []);
 
   return (

@@ -1,34 +1,23 @@
-/**
- * Player store (Zustand) — current song, queue, playback, seek.
- * expo-av Sound instance module-level rakha hai (state churn se bachne ke liye).
- */
+/** Player store (Zustand) — TrackPlayer owns native playback; this store owns app queue/UI state. */
 import { create } from 'zustand';
-import { Audio, AVPlaybackStatus } from 'expo-av';
+import TrackPlayer, {
+  AppKilledPlaybackBehavior,
+  Capability,
+  Event,
+  RepeatMode as TrackRepeatMode,
+  State,
+} from 'react-native-track-player';
 import { PlayerActionEvent, PlayerState, RepeatMode, Song } from '../types';
 import { addRecentlyPlayed } from '../services/storage';
 
-let sound: Audio.Sound | null = null;
-let audioModeConfigured = false;
-/**
- * DOUBLE-PLAY FIX (state):
- * - `sound` = currentSoundRef — hamesha ACTIVE sound ko point karta hai.
- * - `loadGeneration` — har loadAndPlaySong ek naya token; stale token = load
- *   skip / naya sound unload (rapid taps A→B pe A kabhi play nahi hota).
- * - `loadQueue` — serialized mutex; do `Audio.Sound.createAsync` parallel
- *   kabhi nahi chalte (yehi race purane double-play ka root cause tha).
- */
+let setupPromise: Promise<void> | null = null;
+let listenersRegistered = false;
 let loadGeneration = 0;
 let loadQueue: Promise<void> = Promise.resolve();
+let requestedTrackId: string | null = null;
 
-/* ---------- Action listener (room sync Phase 11) ---------- */
-/**
- * playerStore khud Apinator ko nahi jaanta — `services/roomSync.ts` ek listener
- * register karta hai aur local actions ko broadcast karta hai. Isse store
- * UI/realtime se decoupled rehta hai.
- *
- * `remote: true` ka matlab: ye action kisi remote event se aaya tha, isliye
- * roomSync isse dobara broadcast NAHI karta — echo loop isi flag se tootta hai.
- */
+/* ---------- Action listener (room sync) ---------- */
+
 export type { PlayerActionEvent };
 
 let actionListener: ((event: PlayerActionEvent) => void) | null = null;
@@ -47,159 +36,203 @@ function emitAction(event: PlayerActionEvent): void {
   }
 }
 
-/** Queue me ek hi song ho to auto-skip infinite loop bana deta hai — guard */
 function canAutoSkip(): boolean {
   return usePlayer.getState().queue.length > 1;
 }
 
-/* ---------- Audio helpers ---------- */
+function getRepeatTrackMode(mode: RepeatMode): TrackRepeatMode {
+  if (mode === 'all') return TrackRepeatMode.Queue;
+  if (mode === 'one') return TrackRepeatMode.Track;
+  return TrackRepeatMode.Off;
+}
 
-async function configureAudio(): Promise<void> {
-  if (audioModeConfigured) return;
-  try {
-    await Audio.setAudioModeAsync({
-      playsInSilentModeIOS: true,
-      // BACKGROUND AUDIO: minimize/lock pe playback chalta rahe.
-      // - Android: AVManager.onHostPause() sirf false hone pe sab handlers ko
-      //   pause + audioFocus chhodta hai — true se home button pe song nahi rukta
-      //   (background me auto-next/queue bhi chalta hai — focus acquire allowed).
-      // - iOS: app.json me UIBackgroundModes ["audio"] ke saath ye flag zaruri
-      //   hai, warna iOS app suspend kar deta hai.
-      staysActiveInBackground: true,
-      shouldDuckAndroid: true,
-      playThroughEarpieceAndroid: false,
-    });
-    audioModeConfigured = true;
-  } catch (err) {
-    console.warn('Audio mode setup failed:', err);
+function toTrack(song: Song) {
+  return {
+    id: song.id,
+    url: song.preview,
+    title: song.title,
+    artist: song.artist,
+    artwork: song.cover,
+    duration: song.duration / 1000,
+  };
+}
+
+function shuffleTracks<T>(tracks: T[]): T[] {
+  const shuffled = [...tracks];
+  for (let index = shuffled.length - 1; index > 0; index--) {
+    const randomIndex = Math.floor(Math.random() * (index + 1));
+    [shuffled[index], shuffled[randomIndex]] = [shuffled[randomIndex], shuffled[index]];
+  }
+  return shuffled;
+}
+
+async function reorderUpcoming(shuffle: boolean): Promise<void> {
+  const queue = await TrackPlayer.getQueue();
+  const activeIndex = await TrackPlayer.getActiveTrackIndex();
+  if (activeIndex === undefined) return;
+
+  const logicalQueue = usePlayer.getState().queue;
+  const order = [...queue];
+  const upcoming = order.slice(activeIndex + 1);
+  const orderedUpcoming = shuffle
+    ? shuffleTracks(upcoming)
+    : upcoming.sort((left, right) =>
+        logicalQueue.findIndex(song => song.id === left.id) -
+        logicalQueue.findIndex(song => song.id === right.id),
+      );
+
+  for (let offset = 0; offset < orderedUpcoming.length; offset++) {
+    const track = orderedUpcoming[offset];
+    const fromIndex = order.findIndex(item => item.id === track.id);
+    const toIndex = activeIndex + 1 + offset;
+    if (fromIndex === toIndex) continue;
+    await TrackPlayer.move(fromIndex, toIndex);
+    const [moved] = order.splice(fromIndex, 1);
+    order.splice(toIndex, 0, moved);
   }
 }
 
-async function unloadCurrentSound(): Promise<void> {
-  if (!sound) return;
-  try {
-    // Pehle listener detach — unload ke BAAD bhi purana sound didJustFinish/
-    // error status bhej sakta tha → extra playNext (double-advance bug)
-    sound.setOnPlaybackStatusUpdate(null);
-    await sound.unloadAsync();
-  } catch (err) {
-    console.warn('Sound unload failed:', err);
-  }
-  sound = null;
-}
+function registerPlaybackListeners(): void {
+  if (listenersRegistered) return;
+  listenersRegistered = true;
 
-/** Progress tracking (500ms interval) + auto-next on finish (FR-2.6, FR-2.7) */
-function handlePlaybackStatus(status: AVPlaybackStatus): void {
-  if (!status.isLoaded) {
-    const error = 'error' in status ? status.error : undefined;
-    if (error && canAutoSkip()) {
-      console.warn('Audio error, skipping to next:', error);
-      void usePlayer.getState().playNext();
-    }
-    return;
-  }
-  usePlayer.setState({
-    position: status.positionMillis ?? 0,
-    duration: status.durationMillis ?? 0,
+  TrackPlayer.addEventListener(Event.PlaybackState, ({ state }) => {
+    usePlayer.setState({ isPlaying: state === State.Playing });
   });
-  if (status.didJustFinish) {
-    void usePlayer.getState().playNext();
+
+  TrackPlayer.addEventListener(Event.PlaybackProgressUpdated, ({ position, duration }) => {
+    usePlayer.setState({ position: position * 1000, duration: duration * 1000 });
+  });
+
+  TrackPlayer.addEventListener(Event.PlaybackActiveTrackChanged, ({ track }) => {
+    if (!track) return;
+    if (requestedTrackId && track.id !== requestedTrackId) return;
+    if (track.id === requestedTrackId) requestedTrackId = null;
+    const state = usePlayer.getState();
+    const index = state.queue.findIndex(song => song.id === track.id);
+    if (index < 0 || state.currentSong?.id === track.id) return;
+    const song = state.queue[index];
+    usePlayer.setState({ currentSong: song, index, position: 0, duration: song.duration });
+    emitAction({
+      type: 'song',
+      song,
+      queue: state.queue,
+      position: 0,
+      isPlaying: state.isPlaying,
+      remote: false,
+    });
+  });
+
+  TrackPlayer.addEventListener(Event.PlaybackQueueEnded, ({ position }) => {
+    usePlayer.setState({ isPlaying: false, position: position * 1000 });
+  });
+
+  TrackPlayer.addEventListener(Event.PlaybackError, event => {
+    console.warn('TrackPlayer playback error:', event.message);
+    if (canAutoSkip()) void usePlayer.getState().playNext();
+    else usePlayer.setState({ isPlaying: false });
+  });
+}
+
+async function ensurePlayerSetup(): Promise<void> {
+  if (!setupPromise) {
+    setupPromise = (async () => {
+      await TrackPlayer.setupPlayer();
+      await TrackPlayer.updateOptions({
+        capabilities: [
+          Capability.Play,
+          Capability.Pause,
+          Capability.SkipToNext,
+          Capability.SkipToPrevious,
+          Capability.SeekTo,
+          Capability.Stop,
+        ],
+        compactCapabilities: [Capability.Play, Capability.Pause, Capability.SkipToNext],
+        notificationCapabilities: [
+          Capability.Play,
+          Capability.Pause,
+          Capability.SkipToNext,
+          Capability.SkipToPrevious,
+        ],
+        progressUpdateEventInterval: 0.5,
+        android: {
+          appKilledPlaybackBehavior: AppKilledPlaybackBehavior.ContinuePlayback,
+        },
+      });
+      await TrackPlayer.setRepeatMode(TrackRepeatMode.Off);
+      registerPlaybackListeners();
+    })().catch(err => {
+      setupPromise = null;
+      throw err;
+    });
   }
+  await setupPromise;
+}
+
+export function initializePlayer(): Promise<void> {
+  return ensurePlayerSetup();
 }
 
 interface LoadOptions {
   shouldPlay?: boolean;
-  /** start position in ms (room sync ke liye) */
   initialPosition?: number;
-  /** remote event se aaya? (roomSync broadcast skip karta hai) */
   remote?: boolean;
 }
 
 async function loadAndPlaySong(
   song: Song,
+  queue: Song[],
+  index: number,
   { shouldPlay = true, initialPosition, remote = false }: LoadOptions = {},
 ): Promise<void> {
-  /**
-   * DOUBLE-PLAY FIX — generation token + serialized load queue:
-   * 1. Rapid tap (Song A → Song B): A ka token stale → A kabhi load hi nahi
-   *    hota, sirf B chalta hai.
-   * 2. Queue ke wajah se kabhi do createAsync parallel nahi chalte — purana
-   *    sound hamesha pehle unload hota hai, phir naya load + ref update.
-   * 3. create ke turant baad token re-check → agar beech me naya load aaya to
-   *    ye wala instance abhi unload (leak nahi hoga, audio bhi nahi bajega).
-   * playSong / playNext / playPrev / repeat-one / togglePlay sab isi loader se
-   * guzarte hain, isliye fix poore player me ek jagah laga.
-   */
   const token = ++loadGeneration;
-  const run = loadQueue
-    .catch(() => undefined)
-    .then(async () => {
-      if (token !== loadGeneration) return; // nayi request pending — stale skip
-      await configureAudio();
-      await unloadCurrentSound(); // purana sound hamesha pehle unload (ref null)
+  const run = loadQueue.catch(() => undefined).then(async () => {
+    if (token !== loadGeneration) return;
+    try {
+      await ensurePlayerSetup();
+      requestedTrackId = song.id;
+      await TrackPlayer.reset();
       if (token !== loadGeneration) return;
-      try {
-        const { sound: newSound } = await Audio.Sound.createAsync(
-          { uri: song.preview },
-          {
-            shouldPlay,
-            progressUpdateIntervalMillis: 500,
-            ...(initialPosition && initialPosition > 0 ? { positionMillis: initialPosition } : {}),
-          },
-          handlePlaybackStatus,
-          false,
-        );
-        if (token !== loadGeneration) {
-          // Load ke beech naya request aa gaya — instance abhi unload karo
-          void newSound.unloadAsync().catch(() => undefined);
-          return;
-        }
-        sound = newSound; // currentSoundRef update — sirf latest load ke liye
-        // FR-2.11: naye sound pe user ka saved volume lagao (expo-av default 1)
-        const savedVolume = usePlayer.getState().volume;
-        if (savedVolume !== 1) {
-          newSound.setVolumeAsync(savedVolume).catch(err => console.warn('Volume apply failed:', err));
-        }
-        emitAction({
-          type: 'song',
-          song,
-          queue: usePlayer.getState().queue,
-          position: initialPosition ?? 0,
-          isPlaying: shouldPlay,
-          remote,
-        });
-      } catch (err) {
-        if (token !== loadGeneration) return; // stale load ke errors ignore
-        console.warn('Audio load failed:', err);
-        if (canAutoSkip()) {
-          void usePlayer.getState().playNext();
-        } else {
-          usePlayer.setState({ isPlaying: false });
-        }
+      const tracks = usePlayer.getState().shuffle ? shuffleTracks(queue) : queue;
+      const activeTrackIndex = tracks.findIndex(item => item.id === song.id);
+      await TrackPlayer.add(tracks.map(toTrack));
+      if (token !== loadGeneration) return;
+      await TrackPlayer.skip(activeTrackIndex >= 0 ? activeTrackIndex : index);
+      if (token !== loadGeneration) return;
+      const activeTrack = await TrackPlayer.getActiveTrack();
+      if (activeTrack?.id === song.id) requestedTrackId = null;
+      await TrackPlayer.setRepeatMode(
+        getRepeatTrackMode(usePlayer.getState().repeat),
+      );
+      const savedVolume = usePlayer.getState().volume;
+      if (savedVolume !== 1) await TrackPlayer.setVolume(savedVolume);
+      if (initialPosition && initialPosition > 0) {
+        await TrackPlayer.seekTo(initialPosition / 1000);
       }
-    });
+      if (token !== loadGeneration) return;
+      if (shouldPlay) await TrackPlayer.play();
+
+      emitAction({
+        type: 'song',
+        song,
+        queue: usePlayer.getState().queue,
+        position: initialPosition ?? 0,
+        isPlaying: shouldPlay,
+        remote,
+      });
+    } catch (err) {
+      if (token !== loadGeneration) return;
+      console.warn('TrackPlayer load failed:', err);
+      if (canAutoSkip()) void usePlayer.getState().playNext();
+      else usePlayer.setState({ isPlaying: false });
+    }
+  });
   loadQueue = run;
   await run.catch(() => undefined);
 }
 
-/**
- * Cleanup — root layout unmount/dev-teardown pe call hota hai (_layout.tsx):
- * pending load cancel + active Sound unload + isPlaying false. iOS pe Sound
- * leak aur HMR ke baad zombie playback dono isi se bachte hain.
- */
-export async function disposePlayer(): Promise<void> {
-  loadGeneration++; // queue me pending load ho to stale ho jaye
-  await loadQueue.catch(() => undefined);
-  await unloadCurrentSound();
-  usePlayer.setState({ isPlaying: false });
-}
-
-/* ---------- Store ---------- */
-
-/** Room sync options — `remote: true` = ye action remote event se aaya */
 export interface PlaybackOptions {
   remote?: boolean;
-  /** remote play/pause ke saath exact position (ms) — drift fix */
   seekTo?: number;
 }
 
@@ -209,19 +242,14 @@ interface PlayerActions {
     queue?: Song[],
     options?: { initialPosition?: number; startPaused?: boolean; remote?: boolean },
   ) => Promise<void>;
-  /** Idempotent play (toggle nahi) — remote sync ke liye zaroori */
   play: (options?: PlaybackOptions) => Promise<void>;
-  /** Idempotent pause (toggle nahi) — remote sync ke liye zaroori */
   pause: (options?: PlaybackOptions) => Promise<void>;
   togglePlay: (options?: { remote?: boolean }) => Promise<void>;
   playNext: () => Promise<void>;
   playPrev: () => Promise<void>;
   seek: (positionMs: number, options?: { remote?: boolean }) => Promise<void>;
-  /** FR-2.9 shuffle toggle */
   toggleShuffle: () => void;
-  /** FR-2.10 repeat cycle: off → all → one → off */
   cycleRepeat: () => void;
-  /** FR-2.11 volume slider (0..1) — local device, room sync me kabhi broadcast nahi */
   setVolume: (volume: number) => void;
 }
 
@@ -238,18 +266,10 @@ export const usePlayer = create<PlayerStore>()((set, get) => ({
   repeat: 'off',
   volume: 1,
 
-  /**
-   * Nayi song load — serialized loader (loadAndPlaySong) se guzarta hai.
-   * playNext/playPrev/repeat-one bhi yahin aate hain, isliye double-play fix
-   * (generation token + load queue) poore player ko ek saath cover karta hai.
-   */
   playSong: async (song, queue = [], options) => {
     const remote = options?.remote === true;
     const nextQueue = queue.length > 0 ? queue : [song];
-    const index = Math.max(
-      0,
-      nextQueue.findIndex(s => s.id === song.id),
-    );
+    const index = Math.max(0, nextQueue.findIndex(item => item.id === song.id));
     const shouldPlay = options?.startPaused !== true;
     set({
       currentSong: song,
@@ -259,51 +279,42 @@ export const usePlayer = create<PlayerStore>()((set, get) => ({
       position: options?.initialPosition ?? 0,
       duration: song.duration,
     });
-    // Recently played history (FR-8.1) — fire & forget
     void addRecentlyPlayed(song);
-    await loadAndPlaySong(song, {
+    await loadAndPlaySong(song, nextQueue, index, {
       shouldPlay,
       initialPosition: options?.initialPosition,
       remote,
     });
   },
 
-  /**
-   * Idempotent play. Toggle nahi hai kyunki remote events repeat ho sakte hain
-   * (do 'play' aaye to state same rehni chahiye, ulti nahi honi chahiye).
-   */
   play: async options => {
     const { currentSong, isPlaying } = get();
     if (!currentSong) return;
     const remote = options?.remote === true;
     try {
+      await ensurePlayerSetup();
       if (!isPlaying) {
-        await sound?.playAsync();
+        await TrackPlayer.play();
         set({ isPlaying: true });
       }
-      // Remote sync: sender ki position pe aa jao (late join drift fix)
-      if (options?.seekTo !== undefined) {
-        await get().seek(options.seekTo, { remote });
-      }
+      if (options?.seekTo !== undefined) await get().seek(options.seekTo, { remote });
       emitAction({ type: 'play', remote });
     } catch (err) {
       console.warn('Play failed:', err);
     }
   },
 
-  /** Idempotent pause (remote 'pause' do baar aaye to bhi sahi chalta hai) */
   pause: async options => {
     const { currentSong, isPlaying } = get();
     if (!currentSong) return;
     const remote = options?.remote === true;
     try {
+      await ensurePlayerSetup();
       if (isPlaying) {
-        await sound?.pauseAsync();
+        await TrackPlayer.pause();
         set({ isPlaying: false });
       }
-      if (options?.seekTo !== undefined) {
-        await get().seek(options.seekTo, { remote });
-      }
+      if (options?.seekTo !== undefined) await get().seek(options.seekTo, { remote });
       emitAction({ type: 'pause', remote });
     } catch (err) {
       console.warn('Pause failed:', err);
@@ -318,49 +329,30 @@ export const usePlayer = create<PlayerStore>()((set, get) => ({
   },
 
   playNext: async () => {
-    const { queue, index, currentSong, repeat, shuffle, isPlaying } = get();
-    if (!currentSong || queue.length === 0) return;
-
-    // FR-2.10: repeat "one" → wahi song dobara
+    const { currentSong, repeat } = get();
+    if (!currentSong) return;
     if (repeat === 'one') {
-      await get().playSong(currentSong, queue, { startPaused: !isPlaying });
+      await TrackPlayer.seekTo(0);
+      await TrackPlayer.play();
       return;
     }
-
-    // FR-2.9: shuffle → koi bhi doosra song (current index avoid)
-    let nextIndex: number;
-    if (shuffle && queue.length > 1) {
-      nextIndex = index;
-      while (nextIndex === index) {
-        nextIndex = Math.floor(Math.random() * queue.length);
-      }
-    } else {
-      nextIndex = index + 1;
+    requestedTrackId = null;
+    try {
+      await TrackPlayer.skipToNext();
+    } catch (err) {
+      if (repeat !== 'all') set({ isPlaying: false, position: get().duration });
+      else console.warn('Skip to next failed:', err);
     }
-
-    if (nextIndex >= queue.length) {
-      // Queue khatam: repeat "all" → wapas shuru, warna ruk jao
-      if (repeat === 'all') {
-        nextIndex = 0;
-      } else {
-        try {
-          await sound?.pauseAsync();
-        } catch (err) {
-          console.warn('Pause on queue end failed:', err);
-        }
-        set({ isPlaying: false, position: get().duration });
-        return;
-      }
-    }
-
-    await get().playSong(queue[nextIndex], queue, { startPaused: !isPlaying });
   },
 
   playPrev: async () => {
-    const { queue, index, currentSong, isPlaying } = get();
-    if (!currentSong || queue.length === 0) return;
-    const prevIndex = (index - 1 + queue.length) % queue.length;
-    await get().playSong(queue[prevIndex], queue, { startPaused: !isPlaying });
+    if (!get().currentSong) return;
+    requestedTrackId = null;
+    try {
+      await TrackPlayer.skipToPrevious();
+    } catch (err) {
+      console.warn('Skip to previous failed:', err);
+    }
   },
 
   seek: async (positionMs, options) => {
@@ -368,32 +360,35 @@ export const usePlayer = create<PlayerStore>()((set, get) => ({
     const remote = options?.remote === true;
     set({ position: positionMs });
     try {
-      await sound?.setPositionAsync(positionMs);
+      await ensurePlayerSetup();
+      await TrackPlayer.seekTo(positionMs / 1000);
     } catch (err) {
       console.warn('Seek failed:', err);
     }
-    // Song ho to hi broadcast ka matlab hai (roomSync seek ko throttle karta hai)
-    if (currentSong) {
-      emitAction({ type: 'seek', position: positionMs, remote });
-    }
+    if (currentSong) emitAction({ type: 'seek', position: positionMs, remote });
   },
 
   toggleShuffle: () => {
-    set({ shuffle: !get().shuffle });
+    const shuffle = !get().shuffle;
+    set({ shuffle });
+    void reorderUpcoming(shuffle).catch(err => console.warn('Shuffle update failed:', err));
   },
 
   cycleRepeat: () => {
     const order: RepeatMode[] = ['off', 'all', 'one'];
     const currentIndex = order.indexOf(get().repeat);
-    const nextMode = order[(currentIndex + 1) % order.length];
-    set({ repeat: nextMode });
+    const repeat = order[(currentIndex + 1) % order.length];
+    set({ repeat });
+    void ensurePlayerSetup()
+      .then(() => TrackPlayer.setRepeatMode(getRepeatTrackMode(repeat)))
+      .catch(err => console.warn('Repeat mode update failed:', err));
   },
 
   setVolume: volume => {
     const clamped = Math.min(1, Math.max(0, volume));
     set({ volume: clamped });
-    if (sound) {
-      sound.setVolumeAsync(clamped).catch(err => console.warn('Volume set failed:', err));
-    }
+    void ensurePlayerSetup()
+      .then(() => TrackPlayer.setVolume(clamped))
+      .catch(err => console.warn('Volume set failed:', err));
   },
 }));
