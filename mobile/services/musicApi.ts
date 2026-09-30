@@ -3,12 +3,18 @@
  *
  * Order:
  *   1. JioSaavn mirrors  → full song (320kbps), 3-5 min
- *   2. Audius            → full song (free, no API key), 3-5 min
- *   3. iTunes            → sirf 30s preview (last resort) + previewOnly: true
+ *   2. Audius direct     → full song (free, no API key), 3-5 min
+ *   3. iTunes (30s preview) + FULL-SONG UPGRADE passes:
+ *        a. artist expansion — iTunes results ke artist names se Audius search
+ *           ("Diljit party" → artist "Diljit Dosanjh" → 30 full songs)
+ *        b. per-song upgrade — top iTunes tracks ko title-match karke Audius ke
+ *           full version se replace (exact tracks, sabse precise match)
+ *   4. getTrendingSongs → curated Punjabi artist rotation (probe-artists.mjs
+ *      se 13/18 artists >=5 full verify) — home feed hamesha full songs
  *
- * Har source ka apna mapper hai → common `Song` type. `previewOnly` sirf
- * iTunes pe true rehta hai, isliye SongItem ka "30s" badge aur player ka
- * preview note sirf preview results pe dikhte hain.
+ * Har source ka apna mapper hai → common `Song` type. `previewOnly` sirf tab
+ * true rehta hai jab sach me 30s hi mile (ya dono upgrade pass fail ho jaayein)
+ * — isliye SongItem ka "30s" badge aur player ka preview note usi pe dikhte hain.
  *
  * PROBE (2026-09-28, probe-mirrors.mjs + probe-audius.mjs + probe-search.mjs):
  * - JioSaavn (har mirror ke DONO paths test kiye: /api/search/songs + /search/songs):
@@ -29,6 +35,10 @@
  *   Sartaaj ke full tracks milte hain), official catalogue nahi — isliye
  *   iTunes fallback rakha hai.
  * - iTunes: free + reliable, lekin previewUrl hamesha 30s ka hota hai.
+ * - UPGRADE PROBE (2026-09-29, probe-fullsong.mjs + probe-upgrade.mjs):
+ *   8 app queries me se sirf 5 Audius pe direct full deti thin; "Diljit party"
+ *   aur "Gurdas Maan" → 0 full (matlab 100% 30s). Expansion (artist name) +
+ *   per-song upgrade (title match) ke baad dono queries pe full songs aate hain.
  */
 import axios from 'axios';
 // `import type` — Mood/Song sirf types hain; test-logic jaisi Node ESM testing
@@ -76,6 +86,39 @@ const MIRROR_DEAD_TTL_MS = 10 * 60_000;
 const AUDIUS_MIN_FULL_SONGS = 5;
 /** 1 min se chhote clips (jingles/reels) full song nahi hain */
 const MIN_FULL_SONG_MS = 60_000;
+/**
+ * iTunes results ko upgrade karne ke liye kitne parallel Audius calls chalte hain.
+ * Zyada cap = search latency badhti hai; 6 se zyada tracks user waise bhi nahi chunta.
+ */
+const UPGRADE_CAP = 6;
+/** Artist-expansion me kitne alag artist names try karne hain (parallel) */
+const ARTIST_EXPAND_MAX = 4;
+/**
+ * Expansion tab hi chalta hai jab iTunes ne kam se kam itne results diye hain.
+ * Kam results = fuzzy/garbage query ("xyzabc" → sirf 3 unrelated tracks) —
+ * wahan artist expansion random gaane la deta tha jo query se related hi nahi.
+ */
+const MIN_ITUNES_FOR_EXPANSION = 6;
+/**
+ * Trending artist rotation — probe-artists.mjs (2026-09-29) se har ek pe
+ * Audius pe >=5 FULL songs (60s+) verify. Home feed inhi se banta hai, isliye
+ * "punjabi hits" jaisi generic query pe 30s fallback kabhi nahi aata.
+ */
+const TRENDING_ARTISTS: string[] = [
+  'Diljit Dosanjh',
+  'Sidhu Moose Wala',
+  'Karan Aujla',
+  'AP Dhillon',
+  'Shubh',
+  'Jazzy B',
+  'Ammy Virk',
+  'Guru Randhawa',
+  'Ninja',
+  'Satinder Sartaaj',
+  'Bohemia',
+  'Yo Yo Honey Singh',
+  'Badshah',
+];
 
 /** base → ms tak dead (JioSaavn mirror dead cache) */
 const mirrorDeadUntil = new Map<string, number>();
@@ -210,9 +253,75 @@ function firstNonEmpty(tasks: Promise<Song[]>[]): Promise<Song[]> {
   });
 }
 
-/** Console me source visibility — user ko pata chale 30s kyon aaya */
+/** Console me source visibility — release me silent (`__DEV__` guard) */
 function logSource(query: string, source: string, count: number, note?: string) {
-  console.log(`[musicApi] "${query}" → ${source} (${count} songs${note ? `, ${note}` : ''})`);
+  if (__DEV__) {
+    console.log(`[musicApi] "${query}" → ${source} (${count} songs${note ? `, ${note}` : ''})`);
+  }
+}
+
+/* ---------- Full-song upgrade helpers ---------- */
+
+/** Title normalize — dedupe ke key jaisa (Latin + Gurmukhi dono) */
+function normalizeTitle(title: string): string {
+  return title.toLowerCase().replace(/[^a-z0-9਀-੿]+/g, '');
+}
+
+/**
+ * Kya iTunes title Audius ke full track ka same gaana hai?
+ * Rule: exact match HAMESHA valid; warna chhota side >=5 chars ho tabhi prefix/
+ * contains match — isse "Vibe" ≠ "Vibe Tonight" jaise false positives kat-te hain
+ * (probe-upgrade.mjs me isi rule se 8/18 exact upgrades mile).
+ */
+function titleMatches(iTunesTitle: string, fullTitle: string): boolean {
+  const a = normalizeTitle(iTunesTitle);
+  const b = normalizeTitle(fullTitle);
+  if (!a || !b) return false;
+  if (a === b) return true;
+  const shorter = Math.min(a.length, b.length);
+  if (shorter < 5) return false;
+  return a.startsWith(b) || b.startsWith(a) || a.includes(b) || b.includes(a);
+}
+
+/**
+ * iTunes `artistName` ko alag artist candidates me baant lo (split):
+ * "Gurdas Maan, Diljit Dosanjh & Ikky" → ['Gurdas Maan', 'Diljit Dosanjh', 'Ikky']
+ *
+ * Sirf wo candidates rakho jo query se related hain:
+ *   - artist kam se kam 2 results me aaya (genuine match), YA
+ *   - query me artist ka naam hai (query 'Gurdas Maan' → artist 'Gurdas Maan')
+ * Frequent pehle, cap ARTIST_EXPAND_MAX — isse garbage queries pe unrelated
+ * artists expansion me nahi ghus paate.
+ */
+function extractArtistCandidates(songs: Song[], query: string): string[] {
+  const counts = new Map<string, number>();
+  for (const song of songs) {
+    for (const piece of song.artist.split(/,| & | and |; | feat\. | ft\. | x /i)) {
+      const name = piece.replace(/\s+/g, ' ').trim();
+      if (name.length < 3 || /^(unknown|various artists)$/i.test(name)) continue;
+      counts.set(name, (counts.get(name) ?? 0) + 1);
+    }
+  }
+  const normQuery = normalizeTitle(query);
+  return [...counts.entries()]
+    .filter(([name, count]) => {
+      const normName = normalizeTitle(name);
+      const queryMentions = normQuery.length >= 3 && (normQuery.includes(normName) || normName.includes(normQuery));
+      return count >= 2 || queryMentions;
+    })
+    .sort((x, y) => y[1] - x[1])
+    .map(([name]) => name)
+    .slice(0, ARTIST_EXPAND_MAX);
+}
+
+/** Fisher-Yates — trending rotation me har open pe nayi variety ho */
+function shuffle<T>(items: T[]): T[] {
+  const out = [...items];
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
 }
 
 /* ---------- Mappers ---------- */
@@ -416,11 +525,91 @@ async function searchITunes(query: string, limit: number): Promise<Song[]> {
     .filter((s): s is Song => s !== null);
 }
 
+/**
+ * Ek artist ka Audius search — naam poora miss ho to pehla word try karo.
+ * Probe-se-verified case: "Gurdas Maan" → Audius 0 (exact-phrase miss), lekin
+ * "gurdas" → 24 results / 20 full (asli Gurdas Mann tracks). Token fallback ke
+ * baad sirf wahi tracks rakhte hain jismein wahi token title/artist me hai —
+ * random fuzzy hits nahi chahiye.
+ */
+async function searchAudiusArtist(name: string, limit: number): Promise<Song[]> {
+  const direct = await searchAudius(name, limit);
+  if (direct.length >= 3) return direct;
+
+  const tokenWord = name.split(/\s+/).find(w => w.length >= 5);
+  if (!tokenWord || tokenWord.toLowerCase() === name.toLowerCase()) return direct;
+
+  const token = normalizeTitle(tokenWord);
+  const alt = await searchAudius(tokenWord, limit).catch(() => [] as Song[]);
+  const filtered = alt.filter(
+    s => normalizeTitle(s.title).includes(token) || normalizeTitle(s.artist).includes(token),
+  );
+  return dedupeByTitle([...direct, ...filtered]);
+}
+
+/**
+ * Artist expansion — iTunes results ke artist names se Audius search.
+ * Ye un queries ka ilaaj hai jahan Audius direct query pe 0 deta hai:
+ * "Diljit party" → 0, lekin artist "Diljit Dosanjh" → 30 full songs.
+ * Ek artist fail ho to doosra chal raha hota hai (sare parallel).
+ */
+async function searchAudiusByArtists(artists: string[], perArtistLimit = 20): Promise<Song[]> {
+  if (artists.length === 0) return [];
+  const batches = await Promise.all(
+    artists.map(name =>
+      searchAudiusArtist(name, perArtistLimit).catch((err: unknown) => {
+        console.warn('[musicApi] Audius artist fail:', name, err);
+        return [] as Song[];
+      }),
+    ),
+  );
+  return dedupeByTitle(batches.flat());
+}
+
+/**
+ * Per-song upgrade — iTunes ke top tracks ko Audius ke FULL version se replace
+ * karo (title match). Ye sabse precise pass hai: user ko wahi gaana chahiye jo
+ * iTunes list me tha, bas 30s ki jagah pura. Fail ho to wahi 30s preview rehta hai.
+ */
+async function upgradeITunesWithAudius(songs: Song[], cap: number): Promise<Song[]> {
+  const targets: number[] = [];
+  for (let i = 0; i < songs.length && targets.length < cap; i++) {
+    if (songs[i].previewOnly) targets.push(i);
+  }
+  if (targets.length === 0) return songs;
+
+  const upgraded = await Promise.all(
+    targets.map(async idx => {
+      const song = songs[idx];
+      try {
+        const candidates = await searchAudius(`${song.title} ${song.artist}`, 10);
+        const hit = candidates.find(c => titleMatches(song.title, c.title));
+        if (!hit) return song;
+        return {
+          ...song,
+          preview: hit.preview,
+          duration: hit.duration,
+          cover: song.cover || hit.cover,
+          previewOnly: false,
+        };
+      } catch {
+        return song;
+      }
+    }),
+  );
+
+  const out = [...songs];
+  targets.forEach((idx, k) => {
+    out[idx] = upgraded[k];
+  });
+  return out;
+}
+
 /* ---------- Public API ---------- */
 
 /**
- * Search songs — multi-source fallback chain:
- * JioSaavn (full) → Audius (full) → iTunes (30s preview).
+ * Search songs — full-song-first chain:
+ * JioSaavn (full) → Audius direct (full) → iTunes + upgrade passes.
  * Kaunsa source chala wo console me `[musicApi] …` line me dikhta hai.
  */
 export async function searchSongs(query: string, limit = 30): Promise<Song[]> {
@@ -438,50 +627,86 @@ export async function searchSongs(query: string, limit = 30): Promise<Song[]> {
     console.warn('[musicApi] JioSaavn fail:', err);
   }
 
-  // ---- Try 2: Audius (full song) ----
+  // ---- Try 2 + 3 (parallel): Audius direct + iTunes ----
+  // iTunes ab sirf fallback nahi — uske artist/title se upgrade passes chalte hain
   let audius: Song[] = [];
-  try {
-    audius = await searchAudius(trimmed, limit);
-    if (audius.length >= AUDIUS_MIN_FULL_SONGS) {
-      logSource(trimmed, 'audius', audius.length, 'full');
-      return audius;
-    }
-  } catch (err) {
-    console.warn('[musicApi] Audius fail:', err);
-  }
-
-  // ---- Try 3: iTunes (30s preview) + partial Audius top-up ----
   let itunes: Song[] = [];
-  try {
-    itunes = await searchITunes(trimmed, limit);
-  } catch (err) {
-    console.warn('[musicApi] iTunes fail:', err);
-  }
+  const [audiusRes, itunesRes] = await Promise.allSettled([
+    searchAudius(trimmed, limit),
+    searchITunes(trimmed, limit),
+  ]);
+  if (audiusRes.status === 'fulfilled') audius = audiusRes.value;
+  else console.warn('[musicApi] Audius fail:', audiusRes.reason);
+  if (itunesRes.status === 'fulfilled') itunes = itunesRes.value;
+  else console.warn('[musicApi] iTunes fail:', itunesRes.reason);
 
-  // Audius se 1-4 full songs aaye unhe aage rakh ke iTunes se top-up karo:
-  // list poori rahegi AUR user ko sabse upar full song milega.
-  if (audius.length > 0 && itunes.length > 0) {
-    logSource(trimmed, 'audius+itunes', audius.length + itunes.length, `${audius.length} full, baaki 30s`);
-    return dedupeByTitle([...audius, ...itunes]).slice(0, limit);
-  }
-  if (audius.length > 0) {
-    logSource(trimmed, 'audius', audius.length, 'full (partial)');
+  // Fast path: direct query se hi kaafi full songs mile → extra calls ki zarurat nahi
+  if (audius.length >= AUDIUS_MIN_FULL_SONGS) {
+    logSource(trimmed, 'audius', audius.length, 'full');
     return audius;
   }
-  if (itunes.length > 0) {
-    logSource(trimmed, 'itunes', itunes.length, '30s preview');
-    return itunes;
+
+  // ---- Upgrade passes (parallel): artist expansion + per-song upgrade ----
+  // Expansion gate: iTunes results kam = fuzzy/garbage query → unrelated artists
+  // expansion me nahi bhejte (wahan preview hi sahi hai, random full song nahi)
+  const expandable = itunes.length >= MIN_ITUNES_FOR_EXPANSION;
+  const candidates = expandable ? extractArtistCandidates(itunes, trimmed) : [];
+  const [expanded, upgraded] = await Promise.all([
+    searchAudiusByArtists(candidates).catch(() => [] as Song[]),
+    upgradeITunesWithAudius(itunes, UPGRADE_CAP),
+  ]);
+
+  // Merge order = precision order: direct query > exact upgraded tracks >
+  // artist matches > baaki 30s previews. Full songs isi liye top pe.
+  const upgradedFull = upgraded.filter(s => !s.previewOnly);
+  const previews = upgraded.filter(s => s.previewOnly);
+  const merged = dedupeByTitle([...audius, ...upgradedFull, ...expanded, ...previews]).slice(0, limit);
+
+  if (merged.length === 0) {
+    logSource(trimmed, 'none', 0);
+    return [];
   }
-  logSource(trimmed, 'none', 0);
-  return [];
+
+  const fullCount = merged.filter(s => !s.previewOnly).length;
+  const source =
+    fullCount === merged.length
+      ? expanded.length > 0 || upgradedFull.length > 0
+        ? 'itunes+upgrade'
+        : 'audius'
+      : fullCount > 0
+        ? 'itunes+upgrade'
+        : 'itunes';
+  logSource(
+    trimmed,
+    source,
+    merged.length,
+    `${fullCount} full, ${merged.length - fullCount} 30s (direct=${audius.length}, artist=${expanded.length}, upgraded=${upgradedFull.length})`,
+  );
+  return merged;
 }
 
-/** Home screen trending list — "punjabi hits" IN store pe probe-verified */
+/**
+ * Home screen trending — probe-verified artist rotation se FULL songs.
+ * Purana `searchSongs('punjabi hits')` sirf 1 full deta tha (baaki 29 × 30s),
+ * isliye har call pe 3 random artist pick hote hain — fresh variety + guarantee
+ * ki list full songs ki hai. Rotation kam pade to wahi query fallback.
+ */
 export async function getTrendingSongs(limit = 20): Promise<Song[]> {
+  try {
+    const picked = shuffle(TRENDING_ARTISTS).slice(0, 3);
+    const songs = await searchAudiusByArtists(picked, Math.ceil(limit / 2) + 5);
+    if (songs.length >= Math.min(10, limit)) {
+      logSource('trending', `artists(${picked.join(' / ')})`, songs.length, 'full');
+      return shuffle(songs).slice(0, limit);
+    }
+  } catch (err) {
+    console.warn('[musicApi] trending rotation fail:', err);
+  }
   return searchSongs('punjabi hits', limit);
 }
 
-/** Mood-based playlist (Phase 4) */
+/** Mood-based playlist (Phase 4) — trending mood seedhi artist rotation se */
 export async function getSongsByMood(mood: Mood, limit = 30): Promise<Song[]> {
+  if (mood.id === 'trending') return getTrendingSongs(limit);
   return searchSongs(mood.query, limit);
 }

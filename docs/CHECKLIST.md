@@ -73,7 +73,7 @@
 ### Zustand Stores
 - [x] `playerStore.ts` — currentSong, queue, index, isPlaying, position (+ shuffle/repeat/volume)
 - [x] `playlistStore.ts` — playlists, add, remove, create, delete
-- [x] `roomStore.ts` — roomCode, isHost, members, connectionStatus (+ naam FR-5.11)
+- [x] `roomStore.ts` — `code`, isHost, members, connectionState (+ naam FR-5.11)
 - [x] Test: State updates correctly — device run PASS (2026-09-27: 2 phones pe playback + room flow chala); pure logic `npm test` → 65 assertions
 
 **Phase 1 Complete?** `[x]` (code ✓ tsc clean + device test PASS)
@@ -299,7 +299,7 @@
 
 - [x] Shuffle mode — playerStore `toggleShuffle` + PlayerControls button (FR-2.9)
 - [x] Repeat one / repeat all — `cycleRepeat` off→all→one (FR-2.10)
-- [x] Volume control — playerStore `setVolume` + full-player VolumeSlider (FR-2.11; local-only, sync me kabhi broadcast nahi)
+- [x] Volume control — playerStore `setVolume` + full-player inline `VolumeSlider` (`app/player.tsx`, FR-2.11; local-only, sync me kabhi broadcast nahi)
 - [x] Recently played screen — `/recent` route + Home header clock icon (last 20, FR-8.1)
 - [x] Share song — full-player header share button (RN `Share` API, preview URL ke saath)
 - [x] Share playlist — playlist detail header share (top 10 songs + count)
@@ -410,7 +410,7 @@ Before releasing:
 | Phase | Total | Done | % |
 |---|---|---|---|
 | Phase 0: Project Setup | 19 | 19 | 100% |
-| Phase 1: Data Layer | 28 | 27 | 96% |
+| Phase 1: Data Layer | 29 | 28 | 97% |
 | Phase 2: UI Components | 12 | 12 | 100% |
 | Phase 3: Home Screen | 11 | 10 | 91% |
 | Phase 4: Mood Screen | 7 | 6 | 86% |
@@ -421,17 +421,18 @@ Before releasing:
 | Phase 9: Playlists | 12 | 12 | 100% |
 | Phase 10: Group Room | 10 | 10 | 100% |
 | Phase 11: Real-Time Sync | 12 | 12 | 100% |
-| Phase 12: Backend (Vercel) | 10 | 10 | 100% |
+| Phase 12: Backend (Vercel) | 7 | 7 | 100% |
 | Phase 13: Polish | 10 | 9 | 90% |
 | Phase 14: Extra Features (P2) | 8 | 8 | 100% |
 | Phase 15: Testing | 17 | 7 | 41% |
 | Phase 16: Build & Deploy | 15 | 3 | 20% |
 | Phase 17: Documentation | 11 | 8 | 73% |
-| **TOTAL** | **225** | **193** | **86%** |
+| **TOTAL** | **213** | **181** | **85%** |
 
-> Counts 2026-09-27 ko actual checkbox lines se auto-verify hue (indented sub-boxes
-> jaise Phase 12 ke env vars bhi count me). `Test:` / device / account wale boxes
-> isi liye pending hain — code + `npm test` (65 assertions) + tsc + lint already green hain.
+> Counts 2026-09-30 ko actual checkbox lines se verify hue — har `## PHASE n` section
+> ke andar ke `- [ ]`/`- [x]` boxes gine gaye (SECTION 0/1/2 ke headers, Tracker table,
+> Pending summary, Milestones aur FINAL CHECKLIST is count me nahi — wo alag sections
+> hain). FINAL CHECKLIST (release gates) me alag se 5/20 done hain, Milestones me 4/7.
 
 ### ⏳ Abhi kya pending hai (sirf yehi baaki)
 - **Device/manual tests** — har phase ke `Test:` boxes + Phase 15 ke 10 box (7 manual + 3 edge cases); **2-phone sync LIVE PASS (2026-09-27)**
