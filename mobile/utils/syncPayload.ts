@@ -6,7 +6,7 @@
  * Apinator / player / store import nahi hai (sirf types) — isliye ye headless
  * test ho sakti hai, aur `services/roomSync.ts` in helpers ko use karta hai.
  */
-import type { PlayerActionEvent, QueueAddPayload, Song, SyncPayload } from '../types';
+import type { ChatMessagePayload, PlayerActionEvent, QueueAddPayload, Song, SyncPayload } from '../types';
 
 /* ---------- Event names (client bind + Vercel /api/publish dono me same) ---------- */
 /** song badla (queue + position + isPlaying ke saath) */
@@ -21,6 +21,8 @@ export const SYNC_EVENT_MEMBER_JOIN = 'member-join';
 export const SYNC_EVENT_MEMBER_LEAVE = 'member-leave';
 /** Koi bhi member (host bhi) queue me naya song add kare — spec event name */
 export const SYNC_EVENT_QUEUE_ADD = 'queue-add';
+/** FR-5.12 — room chat message (queue-add jaisa pattern) */
+export const SYNC_EVENT_CHAT_MESSAGE = 'chat-message';
 
 /* ---------- Tuning constants ---------- */
 /** seek me itna chhota farak ignore (network/timer jitter) */
@@ -220,6 +222,84 @@ export function parseQueueAdd(raw: unknown): QueueAddPayload | null {
   return {
     song,
     addedBy: rawName.slice(0, 20) || 'Guest',
+    senderId,
+    sentAt: Number.isFinite(sentAt) && sentAt > 0 ? sentAt : 0,
+  };
+}
+
+/* ---------- Chat (FR-5.12 — queue-add pattern) ---------- */
+
+/** Chat input limit (UI + wire dono pe same) */
+export const CHAT_TEXT_MAX = 500;
+/** UI list cap (ChatModal purane drop karta hai) */
+export const CHAT_HISTORY_MAX = 200;
+/** roomStore.name jaisa sender display name cap */
+export const CHAT_SENDER_MAX = 20;
+
+function chatId(senderId: string, sentAt: number): string {
+  const rand = Math.random().toString(36).slice(2, 8);
+  return `${senderId}-${sentAt}-${rand}`;
+}
+
+/**
+ * Local chat text → 'chat-message' wire payload (spec: { sender, text,
+ * timestamp, id }). Khali text → null (caller wapas 'empty' de).
+ */
+export function buildChatMessagePayload(
+  text: string,
+  sender: string,
+  ctx: { senderId: string; sentAt: number },
+): ChatMessagePayload | null {
+  const clean = typeof text === 'string' ? text.trim().slice(0, CHAT_TEXT_MAX) : '';
+  if (!clean) return null;
+  const name = typeof sender === 'string' ? sender.trim().slice(0, CHAT_SENDER_MAX) : '';
+  const sentAt = Number.isFinite(ctx.sentAt) && ctx.sentAt > 0 ? ctx.sentAt : Date.now();
+  return {
+    id: chatId(ctx.senderId, sentAt),
+    sender: name || 'Guest',
+    text: clean,
+    timestamp: sentAt,
+    senderId: ctx.senderId,
+    sentAt,
+  };
+}
+
+/**
+ * Incoming 'chat-message' → ChatMessagePayload. parseQueueAdd jaisa robust:
+ * string/object dono accept, bekaar payload pe null (caller skip).
+ */
+export function parseChatMessage(raw: unknown): ChatMessagePayload | null {
+  let data: unknown = raw;
+  if (typeof raw === 'string') {
+    try {
+      data = JSON.parse(raw);
+    } catch (err) {
+      console.warn('roomSync: chat-message JSON parse failed:', err);
+      return null;
+    }
+  }
+  if (!isRecord(data)) return null;
+
+  const senderId = typeof data.senderId === 'string' ? data.senderId : '';
+  if (!senderId) return null;
+  const text = typeof data.text === 'string' ? data.text.trim().slice(0, CHAT_TEXT_MAX) : '';
+  if (!text) return null;
+
+  const id = typeof data.id === 'string' && data.id ? data.id : '';
+  if (!id) return null;
+  const rawSender = typeof data.sender === 'string' ? data.sender.trim() : '';
+  const timestamp = Number(data.timestamp);
+  const sentAt = Number(data.sentAt);
+  return {
+    id,
+    sender: rawSender.slice(0, CHAT_SENDER_MAX) || 'Guest',
+    text,
+    timestamp:
+      Number.isFinite(timestamp) && timestamp > 0
+        ? Math.round(timestamp)
+        : Number.isFinite(sentAt) && sentAt > 0
+          ? Math.round(sentAt)
+          : Date.now(),
     senderId,
     sentAt: Number.isFinite(sentAt) && sentAt > 0 ? sentAt : 0,
   };

@@ -14,6 +14,8 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CONNECTION_DOT, CONNECTION_LABEL } from '../../constants/connection';
 import { useRoom } from '../../stores/roomStore';
+import { setChatOpen } from '../../services/roomSync';
+import ChatModal from '../../components/ChatModal';
 import { useMiniPlayerPadding } from '../../hooks/useMiniPlayerPadding';
 import { successFeedback, warningFeedback } from '../../utils/haptics';
 import { colors } from '../../constants/colors';
@@ -36,10 +38,13 @@ export default function RoomScreen() {
   const status = useRoom(s => s.connectionState);
   const roomError = useRoom(s => s.error);
   const members = useRoom(s => s.members);
+  const unreadCount = useRoom(s => s.unreadCount);
   const joinRoom = useRoom(s => s.joinRoom);
   const leaveRoom = useRoom(s => s.leaveRoom);
 
   const [joinError, setJoinError] = useState<string | null>(null);
+  /** FR-5.12 chat modal open state (badge modal khulne pe reset hota hai) */
+  const [chatVisible, setChatVisible] = useState(false);
   /** Leave dabane ke baad auto-join effect dobara join na kar le (race guard) */
   const leftRef = useRef(false);
   const contentPadding = useMiniPlayerPadding(spacing.xl);
@@ -77,6 +82,11 @@ export default function RoomScreen() {
     leaveRoom();
     router.back();
   }, [leaveRoom]);
+
+  const handleOpenChat = useCallback(() => {
+    successFeedback();
+    setChatVisible(true);
+  }, []);
 
   const handleInvite = useCallback(() => {
     if (!validCode) return;
@@ -146,6 +156,30 @@ export default function RoomScreen() {
           <Ionicons name="share-social-outline" size={18} color={colors.text} />
           <Text style={styles.inviteText}>Invite doston ko</Text>
         </Pressable>
+
+        {/* FR-5.12 room chat — unread badge (modal band ho to aaye messages) */}
+        <Pressable
+          onPress={handleOpenChat}
+          accessibilityRole="button"
+          accessibilityLabel={
+            unreadCount > 0 ? `Chat kholo, ${unreadCount} naye messages` : 'Chat kholo'
+          }
+          style={({ pressed }) => [styles.chatButton, pressed && styles.pressed]}
+        >
+          <Ionicons name="chatbubbles-outline" size={18} color={colors.text} />
+          <Text style={styles.inviteText}>Chat</Text>
+          {unreadCount > 0 && (
+            <View style={styles.unreadBadge}>
+              <Text style={styles.unreadText}>{unreadCount > 99 ? '99+' : String(unreadCount)}</Text>
+            </View>
+          )}
+        </Pressable>
+
+        <ChatModal
+          visible={chatVisible}
+          onClose={() => setChatVisible(false)}
+          onOpenChange={setChatOpen}
+        />
 
         <Text style={styles.hint}>
           Room me sab log ek hi song sunte hain — song, play/pause aur seek sab
@@ -250,6 +284,28 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     marginTop: spacing.xl,
   },
+  chatButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.xl,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    marginTop: spacing.md,
+  },
+  unreadBadge: {
+    minWidth: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.xs,
+  },
+  unreadText: { ...typography.caption, fontSize: 11, color: colors.background, fontWeight: '700' },
   inviteText: { ...typography.body, color: colors.text, fontWeight: '600' },
   hint: {
     ...typography.caption,

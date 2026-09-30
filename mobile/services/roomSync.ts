@@ -27,7 +27,14 @@
  */
 import { Channel } from '@apinator/client';
 import Toast from 'react-native-toast-message';
-import { PlayerActionEvent, QueueAddPayload, RoomMember, Song, SyncPayload } from '../types';
+import {
+  ChatMessagePayload,
+  PlayerActionEvent,
+  QueueAddPayload,
+  RoomMember,
+  Song,
+  SyncPayload,
+} from '../types';
 import { usePlayer, setPlayerActionListener } from '../stores/playerStore';
 import { RoomLifecycleEvent, setRoomLifecycleListener, useRoom } from '../stores/roomStore';
 import {
@@ -45,6 +52,7 @@ import {
 } from './apinator';
 import {
   SEEK_THROTTLE_MS,
+  SYNC_EVENT_CHAT_MESSAGE,
   SYNC_EVENT_CONTROL,
   SYNC_EVENT_MEMBER_JOIN,
   SYNC_EVENT_MEMBER_LEAVE,
@@ -54,6 +62,8 @@ import {
   SyncSnapshot,
   buildQueueAddPayload,
   buildSyncPayload,
+  buildChatMessagePayload,
+  parseChatMessage,
   compensatedPosition,
   isOwnEcho,
   parseQueueAdd,
@@ -67,6 +77,13 @@ let initialized = false;
 let senderId = '';
 let disposeStateListener: (() => void) | null = null;
 let publishWarned = false;
+/** ChatModal khula hai? (khula ho to toast/badge suppress — modal khud dikhata hai) */
+let chatOpen = false;
+
+/** ChatModal mount/unmount pe register kare — roomSync toast/unread decide kare */
+export function setChatOpen(open: boolean): void {
+  chatOpen = open;
+}
 /* seek throttle (leading edge + trailing flush) */
 let lastSeekSentAt = 0;
 let pendingSeek: number | null = null;
@@ -205,6 +222,10 @@ function bindChannelEvents(ch: Channel): void {
   ch.bind(SYNC_EVENT_QUEUE_ADD, (data: unknown) => {
     void handleQueueAdd(data);
   });
+  // FR-5.12 room chat — queue-add jaisa pattern (koi bhi member, host bhi)
+  ch.bind(SYNC_EVENT_CHAT_MESSAGE, (data: unknown) => {
+    handleChatMessage(data);
+  });
   ch.bind(SYNC_EVENT_MEMBERS, (data: unknown) => {
     handleMemberList(data);
   });
@@ -323,7 +344,7 @@ function flushSeek(positionMs: number): void {
 async function publish(
   code: string,
   event: string,
-  payload: SyncPayload | QueueAddPayload | Record<string, unknown>,
+  payload: SyncPayload | QueueAddPayload | ChatMessagePayload | Record<string, unknown>,
 ): Promise<void> {
   try {
     // Wire pe JSON string bhejte hain; receive side string aur object dono
@@ -341,6 +362,61 @@ async function publish(
 }
 
 /* ---------- Room queue add (spec: koi bhi member — host bhi — add kar sake) ---------- */
+
+/**
+ * FR-5.12 room chat send — queue-add pattern: pehle apna message local store
+ * me (turant dikhe), phir 'chat-message' broadcast. Khali text -> 'empty',
+ * room me nahi -> 'no-room'.
+ */
+export async function sendChatMessage(text: string): Promise<'sent' | 'empty' | 'no-room'> {
+  const chatRoom = useRoom.getState();
+  const chatCode = chatRoom.code;
+  if (!chatCode) return 'no-room';
+  const payload: ChatMessagePayload | null = buildChatMessagePayload(
+    text,
+    chatRoom.name.trim() || 'Guest',
+    { senderId: getSenderId(), sentAt: Date.now() },
+  );
+  if (!payload) return 'empty';
+  chatRoom.addMessage({
+    id: payload.id,
+    sender: payload.sender,
+    text: payload.text,
+    timestamp: payload.timestamp,
+    senderId: payload.senderId,
+    self: true,
+  });
+  await publish(chatCode, SYNC_EVENT_CHAT_MESSAGE, payload);
+  return 'sent';
+}
+
+/**
+ * Incoming 'chat-message' — queue-add jaisa: (1) apna echo skip (sender khud
+ * already add kar chuka hai), (2) id dedupe — addMessage bhi guard karta hai,
+ * (3) bekaar payload parseChatMessage me reject. Modal band ho to Toast +
+ * unread badge; khula ho to list khud dikhati hai.
+ */
+function handleChatMessage(raw: unknown): void {
+  const msg = parseChatMessage(raw);
+  if (!msg) return;
+  if (msg.senderId === getSenderId()) return;
+  const room = useRoom.getState();
+  const before = room.messages.length;
+  room.addMessage({
+    id: msg.id,
+    sender: msg.sender,
+    text: msg.text,
+    timestamp: msg.timestamp,
+    senderId: msg.senderId,
+    self: false,
+  });
+  if (useRoom.getState().messages.length === before) return;
+  if (!chatOpen) {
+    const current = useRoom.getState();
+    current.setUnreadCount(current.unreadCount + 1);
+    Toast.show({ type: 'info', text1: `${msg.sender}`, text2: msg.text });
+  }
+}
 
 /**
  * '+' → "Add to Room Queue". Pehle apne device pe queue me add (turant

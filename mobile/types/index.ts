@@ -81,6 +81,36 @@ export interface QueueAddPayload {
 }
 
 /**
+ * Wire payload: 'chat-message' (FR-5.12) — queue-add jaisa pattern.
+ * Koi bhi member (host bhi) bhej sake; echo/dedupe ke liye senderId + sentAt.
+ */
+export interface ChatMessagePayload {
+  /** `${senderId}-${sentAt}-${rand}` — receiver dedupe isi pe karta hai */
+  id: string;
+  /** bhejne wale member ka display name (roomStore.name) */
+  sender: string;
+  /** trimmed, max 500 chars */
+  text: string;
+  /** bhejne ka wall-clock time (bubble me "9:35 PM" isi se banta hai) */
+  timestamp: number;
+  senderId: string;
+  sentAt: number;
+}
+
+/**
+ * Room chat ka UI message — payload + `self` flag (apna message right side).
+ * Runtime only hai, persist nahi hota (room leave pe clear).
+ */
+export interface ChatMessage {
+  id: string;
+  sender: string;
+  text: string;
+  timestamp: number;
+  senderId: string;
+  self: boolean;
+}
+
+/**
  * Local player events — playerStore emit karta hai, roomSync consume karta hai.
  * `remote: true` = ye action doosre device se aaya tha, isliye broadcast NAHI
  * karna. Echo loop isi flag se tootta hai (isliye ye required field hai).

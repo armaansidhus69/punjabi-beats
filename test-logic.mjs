@@ -26,8 +26,11 @@ import {
   SYNC_EVENT_SONG,
   SYNC_EVENT_CONTROL,
   SYNC_EVENT_QUEUE_ADD,
+  SYNC_EVENT_CHAT_MESSAGE,
   buildQueueAddPayload,
   parseQueueAdd,
+  buildChatMessagePayload,
+  parseChatMessage,
   SEEK_THROTTLE_MS,
   DUPLICATE_POSITION_MS,
   SEEK_JITTER_MS,
@@ -163,6 +166,21 @@ check('parse queue-add garbage -> null', parseQueueAdd('nope{'), null);
 check('parse queue-add missing song -> null', parseQueueAdd({ addedBy: 'x', senderId: 's', sentAt: 1 }), null);
 check('parse queue-add missing senderId -> null', parseQueueAdd({ song: songA, addedBy: 'x' }), null);
 check('parse queue-add preview-less song -> null', parseQueueAdd({ song: { ...songA, preview: '' }, addedBy: 'x', senderId: 's' }), null);
+
+// Room chat ('chat-message' — FR-5.12, queue-add jaisa pattern)
+check('chat-message event name', SYNC_EVENT_CHAT_MESSAGE, 'chat-message');
+const cmp = buildChatMessagePayload('  Bhai gaana mast hai 🔥  ', '  Rahul  ', ctx);
+check('build chat keeps text+sender', [cmp?.text, cmp?.sender], ['Bhai gaana mast hai 🔥', 'Rahul']);
+check('build chat blank text -> null', buildChatMessagePayload('   ', 'Rahul', ctx), null);
+check('build chat blank sender -> Guest', buildChatMessagePayload('hi', '   ', ctx)?.sender, 'Guest');
+check('build chat trims 500 chars', buildChatMessagePayload('x'.repeat(600), 'A', ctx)?.text.length, 500);
+check('build chat id has sender+sentAt', cmp?.id.startsWith(`devA-${ctx.sentAt}-`), true);
+check('parse chat from string', parseChatMessage(JSON.stringify(cmp))?.text, 'Bhai gaana mast hai 🔥');
+check('parse chat object keeps sender', parseChatMessage(cmp)?.sender, 'Rahul');
+check('parse chat garbage -> null', parseChatMessage('nope{'), null);
+check('parse chat missing id -> null', parseChatMessage({ text: 'hi', sender: 'A', senderId: 's' }), null);
+check('parse chat missing senderId -> null', parseChatMessage({ id: 'x-1', text: 'hi', sender: 'A' }), null);
+check('parse chat empty text -> null', parseChatMessage({ id: 'x-1', text: '  ', sender: 'A', senderId: 's' }), null);
 
 console.warn = realWarn;
 

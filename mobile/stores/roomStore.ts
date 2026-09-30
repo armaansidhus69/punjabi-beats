@@ -13,7 +13,7 @@
  * update karta hai (SDK ke `state_change` event se), screens sirf padhte hain.
  */
 import { create } from 'zustand';
-import { ConnectionState, Room, RoomMember } from '../types';
+import { ChatMessage, ConnectionState, Room, RoomMember } from '../types';
 import { generateRoomCode } from '../services/apinator';
 import { getRoomName, saveRoomName } from '../services/storage';
 
@@ -42,6 +42,9 @@ function emitLifecycle(event: RoomLifecycleEvent): void {
 /** Room code 6 digits (FR-5.1) */
 const CODE_PATTERN = /^\d{6}$/;
 
+/** FR-5.12 — chat runtime cap (ChatModal ke saath same, syncPayload me bhi) */
+const CHAT_HISTORY_MAX = 200;
+
 /** Default display name (FR-5.11) — user Room tab se badal sakta hai */
 function defaultGuestName(): string {
   return `Guest-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
@@ -55,6 +58,14 @@ interface RoomStore extends Room {
   error: string | null;
   /** FR-5.11 — join time pe announce hone wala naam (AsyncStorage me persist) */
   name: string;
+  /* --- FR-5.12 room chat (runtime only — persist nahi, leave pe clear) --- */
+  /** naye sabse neeche; max CHAT_HISTORY_MAX (purane drop) */
+  messages: ChatMessage[];
+  /** modal band hone pe aaye messages (badge; modal khulne pe reset) */
+  unreadCount: number;
+  addMessage: (message: ChatMessage) => void;
+  clearMessages: () => void;
+  setUnreadCount: (count: number) => void;
   /** Naya 6-digit code banao aur room enter karo (code return — screens navigate karte hain) */
   createRoom: () => string;
   joinRoom: (code: string) => void;
@@ -76,10 +87,35 @@ export const useRoom = create<RoomStore>()((set, get) => ({
   error: null,
   members: [],
   name: defaultGuestName(),
+  messages: [],
+  unreadCount: 0,
+
+  addMessage: message => {
+    set(state => {
+      // dedupe: retransmit/echo se same id dobara aaye to skip
+      if (state.messages.some(m => m.id === message.id)) return state;
+      const messages =
+        state.messages.length >= CHAT_HISTORY_MAX
+          ? [...state.messages.slice(state.messages.length - CHAT_HISTORY_MAX + 1), message]
+          : [...state.messages, message];
+      return { messages };
+    });
+  },
+
+  clearMessages: () => {
+    if (get().messages.length > 0 || get().unreadCount > 0) {
+      set({ messages: [], unreadCount: 0 });
+    }
+  },
+
+  setUnreadCount: count => {
+    const clean = Number.isFinite(count) && count > 0 ? Math.floor(count) : 0;
+    if (clean !== get().unreadCount) set({ unreadCount: clean });
+  },
 
   createRoom: () => {
     const code = generateRoomCode();
-    set({ code, isHost: true, error: null, members: [], connectionState: 'connecting' });
+    set({ code, isHost: true, error: null, members: [], messages: [], unreadCount: 0, connectionState: 'connecting' });
     emitLifecycle({ type: 'entered', code, isHost: true });
     return code;
   },
@@ -91,13 +127,13 @@ export const useRoom = create<RoomStore>()((set, get) => ({
     }
     // Host apne hi room me hai → dobara join nahi (warna host badge ud jaata hai)
     if (get().code === clean && get().isHost) return;
-    set({ code: clean, isHost: false, error: null, members: [], connectionState: 'connecting' });
+    set({ code: clean, isHost: false, error: null, members: [], messages: [], unreadCount: 0, connectionState: 'connecting' });
     emitLifecycle({ type: 'entered', code: clean, isHost: false });
   },
 
   leaveRoom: () => {
     if (!get().code) return; // idempotent (screen unmount pe dobara call hota hai)
-    set({ code: null, isHost: false, members: [], error: null });
+    set({ code: null, isHost: false, members: [], messages: [], unreadCount: 0, error: null });
     emitLifecycle({ type: 'left' });
   },
 
