@@ -13,8 +13,8 @@ cd punjabi-beats
 
 ## Step 2: Install Deps (2 min)
 ```bash
-npx expo install expo-router expo-av expo-secure-store expo-constants
-npm install zustand axios @apinator/client@2.0.0 react-native-paper
+npx expo install expo-router expo-secure-store expo-constants
+npm install zustand axios @apinator/client@2.0.0 react-native-paper react-native-track-player@4.1.2
 ```
 
 ## Step 3: Configure (1 min)

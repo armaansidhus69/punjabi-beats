@@ -17,9 +17,9 @@ async function load(id, createMs) {
     .catch(() => undefined)
     .then(async () => {
       if (token !== loadGeneration) return; // stale skip
-      if (active) active.unloaded = true; // unloadCurrentSound
+      if (active) active.unloaded = true; // purana native track hatao (TrackPlayer.reset)
       active = null;
-      await new Promise(r => setTimeout(r, createMs)); // Audio.Sound.createAsync
+      await new Promise(r => setTimeout(r, createMs)); // TrackPlayer.add (native load)
       const s = { id, unloaded: false };
       if (token !== loadGeneration) {
         void s; // stale — naya instance unload (yahan kuch nahi bachta)

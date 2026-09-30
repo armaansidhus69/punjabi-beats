@@ -9,7 +9,7 @@
 - [x] Create Expo project: `npx create-expo-app mobile --template expo-template-blank-typescript@sdk-51`
 - [x] Project `mobile/` folder me ready (SDK 51: expo ~51.0.28, RN 0.74.5)
 - [x] Install Expo Router: `npx expo install expo-router react-native-safe-area-context react-native-screens expo-linking expo-constants expo-status-bar`
-- [x] Install audio: `npx expo install expo-av`
+- [x] Install audio: `npm install react-native-track-player@4.1.2` (TrackPlayer — native playback + notification controls; expo-av kabhi install nahi hua, migration ki zaroorat nahi padi)
 - [x] Install storage: `npx expo install @react-native-async-storage/async-storage expo-secure-store`
 - [x] Install state: `npm install zustand` (v5.0.15)
 - [x] Install HTTP: `npm install axios` (v1.20.0)
@@ -156,17 +156,17 @@
 
 ## ▶️ PHASE 6: Audio Player
 
-- [x] `playerStore.ts` implemented (expo-av module-level Sound, strict TS; **2026-09-27 double-play fix**: generation token + serialized load queue + `disposePlayer` cleanup — sim test `test-loadqueue.mjs` 3/3 PASS)
+- [x] `playerStore.ts` implemented (react-native-track-player@4.1.2 single instance + `setupPromise`, strict TS; **2026-09-27 double-play fix**: generation token + serialized load queue + `requestedTrackId` race guard + `TrackPlayer.reset()` before add — sim test `test-loadqueue.mjs` 3/3 PASS; purana expo-av `Audio.Sound` code kabhi tha hi nahi)
 - [x] `playSong(song, queue)` action (+ `initialPosition`/`startPaused`/`remote` options)
 - [x] `togglePlay()` action (+ idempotent `play`/`pause` for sync)
 - [x] `playNext()` action (shuffle/repeat logic FR-2.9/2.10 ke saath)
 - [x] `playPrev()` action
 - [x] `seek(position)` action (+ roomSync throttle)
-- [x] Audio.Sound setup — `configureAudio()` (silent-mode iOS, duck Android)
-- [x] Load sound on song change
-- [x] Unload old sound — `unloadAsync()` (load se pehle)
-- [x] Progress tracking (every 500ms) — `progressUpdateIntervalMillis: 500`
-- [x] Auto-next on finish — `didJustFinish` → `playNext()` (+ audio-error pe skip)
+- [x] TrackPlayer setup — `ensurePlayerSetup()` + `updateOptions` (capabilities Play/Pause/Next/Prev/Seek, `appKilledPlaybackBehavior: ContinuePlayback` = background audio; iOS silent-mode Duck nahi — native service)
+- [x] Load track on song change — `TrackPlayer.reset()` + `add()` + `skip()` + `play()` (`loadAndPlaySong`)
+- [x] Reload guard — `loadGeneration` token + serialized `loadQueue`: purana load stale-skip hota hai, `reset()` se pehle ka track nahi bajta (double-play impossible)
+- [x] Progress tracking (every 500ms) — `PlaybackProgressUpdated` listener (`progressUpdateEventInterval: 0.5`)
+- [x] Auto-next on finish — `PlaybackQueueEnded` → `playNext()` (+ `PlaybackError` pe skip)
 - [ ] Test: Play, pause, next, prev, seek all work (phone manual)
 
 **Phase 6 Complete?** `[x]` (code ✓ tsc clean; phone test baaki)
@@ -319,7 +319,7 @@
 - [ ] Test on tablet (`ios.supportsTablet: true` set hai; player artwork width-se clamp hota hai)
 - [ ] Test on slow network (3G) — 8s axios timeouts + shimmer skeletons ready hain
 - [ ] Test offline mode — API fail pe `[]` + empty states + "Try Again" retry UI ready hain
-- [ ] Test while app in background — background audio **ENABLED** (feature request 2026-09-30): `staysActiveInBackground: true` + iOS `infoPlist.UIBackgroundModes: ["audio"]` + Android `android.permissions: [FOREGROUND_SERVICE, WAKE_LOCK]`. Phone pe 3 scenarios baaki: home button → bajta rahe, lock screen → bajta rahe, wapas khola → same position se continue. Limitation: expo-av Android me foreground service/notification controls nahi hain — OS process mare to playback rukega
+- [ ] Test while app in background — background audio **ENABLED** (feature request 2026-09-30): TrackPlayer native service + `appKilledPlaybackBehavior: ContinuePlayback` + iOS `infoPlist.UIBackgroundModes: ["audio"]` + Android `permissions: [FOREGROUND_SERVICE, FOREGROUND_SERVICE_MEDIA_PLAYBACK, WAKE_LOCK, POST_NOTIFICATIONS]` + lock-screen notification controls (`playbackService.ts` RemotePlay/Pause/Next/Previous/Seek). Phone pe 3 scenarios baaki: home button → bajta rahe, lock screen → bajta rahe, wapas khola → same position se continue
 - [ ] Test after force close — AsyncStorage persistence (playlists, recently played, searches, room name)
 - [ ] Test with 100+ songs in playlist — FlatList virtualization
 

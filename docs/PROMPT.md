@@ -10,7 +10,7 @@ Punjabi Music Streaming mobile app called "Punjabi Beats".
 - Navigation: Expo Router (file-based, v3+)
 - State: Zustand (lightweight, no Redux)
 - Storage: AsyncStorage + expo-secure-store
-- Audio: expo-av (Audio.Sound)
+- Audio: react-native-track-player@4.1.2 (native service + notification controls)
 - Real-time: Apinator (@apinator/client v2.0.0)
 - HTTP: Axios
 - UI: React Native Paper + custom components
@@ -89,14 +89,13 @@ types/
 
 ## CRITICAL IMPLEMENTATION NOTES
 
-### 1. Audio Player (expo-av)
+### 1. Audio Player (react-native-track-player)
 ```typescript
-import { Audio } from 'expo-av';
-const { sound } = await Audio.Sound.createAsync(
-  { uri: song.preview },
-  { shouldPlay: true }
-);
-// MUST call sound.unloadAsync() on unmount
+import TrackPlayer from 'react-native-track-player';
+await TrackPlayer.setupPlayer();
+await TrackPlayer.add({ id: song.id, url: song.preview, title: song.title, artist: song.artist });
+await TrackPlayer.play();
+// MUST call TrackPlayer.reset() before loading a new queue (double-play guard)
 ```
 
 ### 2. Apinator SDK Import (ESM only)
@@ -177,7 +176,7 @@ type Playlist = { id: string; name: string; songs: Song[]; createdAt: number };
 - ❌ Use class components (use functional + hooks)
 - ❌ Use Redux (use Zustand)
 - ❌ Hardcode secrets (use .env + expo-constants)
-- ❌ Use deprecated expo-av APIs
+- ❌ Use expo-av (removed from Expo SDK 52+; use react-native-track-player)
 - ❌ Skip error boundaries
 - ❌ Ignore TypeScript errors
 

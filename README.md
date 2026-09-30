@@ -8,8 +8,9 @@ broadcast backend). Search Punjabi songs, make playlists, and — the fun part �
 
 ## ✨ Features
 
-- **Search** — iTunes Search API (IN store, no key) se Punjabi songs; debounced,
-  recent-search chips, empty/no-results states
+- **Search** — multi-source chain (JioSaavn mirrors → Audius → iTunes) se Punjabi songs;
+  **full-song priority** — artist expansion + per-song upgrade se 30s preview bhi full
+  me upgrade hota hai; debounced, recent-search chips, empty/no-results states
 - **Moods** — 8 mood cards (Romantic, Sad, Party, …) → curated query se gaane
 - **Player** — full-screen modal player: seek bar, shuffle, repeat one/all,
   **volume slider**, rotating album art, swipe-down-to-close, auto-next
@@ -31,10 +32,10 @@ broadcast backend). Search Punjabi songs, make playlists, and — the fun part �
 |---|---|
 | Mobile | Expo SDK 51 · React Native 0.74 · TypeScript (strict) · Expo Router |
 | State | Zustand 5 (player/playlist/room/search stores) |
-| Audio | expo-av (320kbps previews) |
+| Audio | react-native-track-player@4.1.2 (native service + notification controls) |
 | Realtime | `@apinator/client` (WebSocket channels) |
 | Backend | Vercel serverless `api/publish.js` + `@apinator/server` (HTTP trigger) |
-| Data | iTunes Search API (free, no key) · AsyncStorage |
+| Data | iTunes Search API + Audius (free, no key) · AsyncStorage |
 
 ## 📂 Project structure
 

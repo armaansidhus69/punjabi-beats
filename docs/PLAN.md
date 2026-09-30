@@ -36,7 +36,7 @@ Ek complete Punjabi music streaming app jo dost alag-alag shehron se bhi **same 
 |---|---|---|
 | **Day 1** | Project setup | Expo project running on phone |
 | | • `npx create-expo-app` | |
-| | • Install deps (zustand, axios, expo-av, etc.) | |
+| | • Install deps (zustand, axios, react-native-track-player, etc.) | |
 | | • Setup Expo Router | |
 | | • Setup dark theme constants | |
 | **Day 2** | Music API integration | Songs load ho rahe hain |
@@ -50,7 +50,7 @@ Ek complete Punjabi music streaming app jo dost alag-alag shehron se bhi **same 
 | | • SongItem component | |
 | | • Loading states | |
 | **Day 4** | Audio player | Songs play ho rahe hain |
-| | • expo-av setup | |
+| | • react-native-track-player setup | |
 | | • playerStore (Zustand) | |
 | | • Play/pause/next/prev | |
 | | • Progress bar + seek | |
@@ -146,7 +146,7 @@ Ek complete Punjabi music streaming app jo dost alag-alag shehron se bhi **same 
 │  │  Service Layer                        │  │
 │  │  • musicApi  • apinator  • storage    │  │
 │  ├───────────────────────────────────────┤  │
-│  │  Native Layer (expo-av, AsyncStorage) │  │
+│  │  Native Layer (react-native-track-player, AsyncStorage) │  │
 │  └───────────────────────────────────────┘  │
 └─────────────────────────────────────────────┘
          │              │              │
@@ -167,7 +167,7 @@ Ek complete Punjabi music streaming app jo dost alag-alag shehron se bhi **same 
   "dependencies": {
     "expo": "~51.0.0",
     "expo-router": "~3.5.0",
-    "expo-av": "~14.0.0",
+    "react-native-track-player": "^4.1.2",
     "expo-secure-store": "~13.0.0",
     "expo-constants": "~16.0.0",
     "expo-status-bar": "~1.12.0",
