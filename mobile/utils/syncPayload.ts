@@ -6,7 +6,7 @@
  * Apinator / player / store import nahi hai (sirf types) — isliye ye headless
  * test ho sakti hai, aur `services/roomSync.ts` in helpers ko use karta hai.
  */
-import type { PlayerActionEvent, Song, SyncPayload } from '../types';
+import type { PlayerActionEvent, QueueAddPayload, Song, SyncPayload } from '../types';
 
 /* ---------- Event names (client bind + Vercel /api/publish dono me same) ---------- */
 /** song badla (queue + position + isPlaying ke saath) */
@@ -19,6 +19,8 @@ export const SYNC_EVENT_MEMBERS = 'member-list';
 export const SYNC_EVENT_MEMBER_JOIN = 'member-join';
 /** Client room chhodne pe yehi event bhejta hai (host roster se hata deta hai) */
 export const SYNC_EVENT_MEMBER_LEAVE = 'member-leave';
+/** Koi bhi member (host bhi) queue me naya song add kare — spec event name */
+export const SYNC_EVENT_QUEUE_ADD = 'queue-add';
 
 /* ---------- Tuning constants ---------- */
 /** seek me itna chhota farak ignore (network/timer jitter) */
@@ -178,6 +180,49 @@ export function parseSyncPayload(raw: unknown): SyncPayload | null {
   }
 
   return null;
+}
+
+/* ---------- Room queue-add (koi bhi member queue me add kar sake) ---------- */
+
+/** Local '+' action → 'queue-add' wire payload (spec: { song, addedBy }) */
+export function buildQueueAddPayload(
+  song: Song,
+  addedBy: string,
+  ctx: { senderId: string; sentAt: number },
+): QueueAddPayload {
+  const name = typeof addedBy === 'string' ? addedBy.trim().slice(0, 20) : '';
+  return { song, addedBy: name || 'Guest', senderId: ctx.senderId, sentAt: ctx.sentAt };
+}
+
+/**
+ * Incoming 'queue-add' → QueueAddPayload. Robust parse bilkul parseSyncPayload
+ * jaisa: string/object dono accept, bekaar payload pe null (caller skip).
+ */
+export function parseQueueAdd(raw: unknown): QueueAddPayload | null {
+  let data: unknown = raw;
+  if (typeof raw === 'string') {
+    try {
+      data = JSON.parse(raw);
+    } catch (err) {
+      console.warn('roomSync: queue-add JSON parse failed:', err);
+      return null;
+    }
+  }
+  if (!isRecord(data)) return null;
+
+  const senderId = typeof data.senderId === 'string' ? data.senderId : '';
+  if (!senderId) return null;
+  const song = toSong(data.song);
+  if (!song) return null;
+
+  const rawName = typeof data.addedBy === 'string' ? data.addedBy.trim() : '';
+  const sentAt = Number(data.sentAt);
+  return {
+    song,
+    addedBy: rawName.slice(0, 20) || 'Guest',
+    senderId,
+    sentAt: Number.isFinite(sentAt) && sentAt > 0 ? sentAt : 0,
+  };
 }
 
 /* ---------- Guards / math ---------- */

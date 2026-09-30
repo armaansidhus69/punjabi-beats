@@ -242,6 +242,13 @@ interface PlayerActions {
     queue?: Song[],
     options?: { initialPosition?: number; startPaused?: boolean; remote?: boolean },
   ) => Promise<void>;
+  /**
+   * Queue ke end pe song add (room 'queue-add' ke liye). Koi PlayerActionEvent
+   * emit NAHI hota — broadcast roomSync ka alag 'queue-add' event karta hai
+   * (warna 'song' event pura queue replace kar deta). Dedupe: id pehle se
+   * queue me ho to false (spec: already present → skip).
+   */
+  addToQueue: (song: Song) => Promise<boolean>;
   play: (options?: PlaybackOptions) => Promise<void>;
   pause: (options?: PlaybackOptions) => Promise<void>;
   togglePlay: (options?: { remote?: boolean }) => Promise<void>;
@@ -285,6 +292,19 @@ export const usePlayer = create<PlayerStore>()((set, get) => ({
       initialPosition: options?.initialPosition,
       remote,
     });
+  },
+
+  addToQueue: async song => {
+    if (get().queue.some(item => item.id === song.id)) return false;
+    // Store pehle (UI turant update) + native queue ke end pe track append
+    set({ queue: [...get().queue, song] });
+    try {
+      await ensurePlayerSetup();
+      await TrackPlayer.add(toTrack(song));
+    } catch (err) {
+      console.warn('addToQueue: TrackPlayer add failed:', err);
+    }
+    return true;
   },
 
   play: async options => {

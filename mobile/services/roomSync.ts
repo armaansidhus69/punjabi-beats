@@ -26,7 +26,8 @@
  * (ek hi baar friendly warning log hoti hai).
  */
 import { Channel } from '@apinator/client';
-import { PlayerActionEvent, RoomMember, SyncPayload } from '../types';
+import Toast from 'react-native-toast-message';
+import { PlayerActionEvent, QueueAddPayload, RoomMember, Song, SyncPayload } from '../types';
 import { usePlayer, setPlayerActionListener } from '../stores/playerStore';
 import { RoomLifecycleEvent, setRoomLifecycleListener, useRoom } from '../stores/roomStore';
 import {
@@ -48,11 +49,14 @@ import {
   SYNC_EVENT_MEMBER_JOIN,
   SYNC_EVENT_MEMBER_LEAVE,
   SYNC_EVENT_MEMBERS,
+  SYNC_EVENT_QUEUE_ADD,
   SYNC_EVENT_SONG,
   SyncSnapshot,
+  buildQueueAddPayload,
   buildSyncPayload,
   compensatedPosition,
   isOwnEcho,
+  parseQueueAdd,
   parseSyncPayload,
   shouldIgnoreRemote,
   shouldThrottleSeek,
@@ -187,8 +191,9 @@ export function joinSyncChannel(code: string): void {
  * Channel events bind. Ye alag function hai kyunki room switch/reconnect pe
  * channel dobara subscribe hota hai aur handlers ek hi jagah se lagne chahiye.
  *
- * Event names: `song-change` (song + queue), `playback-control` (play/pause/seek)
- * aur `member-list` (Phase 14 presence ke liye reserved — abhi sirf bind hai).
+ * Event names: `song-change` (song + queue), `playback-control` (play/pause/seek),
+ * `queue-add` (member ne queue me naya song daala) aur `member-list` (Phase 14
+ * presence ke liye reserved — abhi sirf bind hai).
  */
 function bindChannelEvents(ch: Channel): void {
   ch.bind(SYNC_EVENT_SONG, (data: unknown) => {
@@ -196,6 +201,9 @@ function bindChannelEvents(ch: Channel): void {
   });
   ch.bind(SYNC_EVENT_CONTROL, (data: unknown) => {
     void handleRemoteEvent(data);
+  });
+  ch.bind(SYNC_EVENT_QUEUE_ADD, (data: unknown) => {
+    void handleQueueAdd(data);
   });
   ch.bind(SYNC_EVENT_MEMBERS, (data: unknown) => {
     handleMemberList(data);
@@ -315,7 +323,7 @@ function flushSeek(positionMs: number): void {
 async function publish(
   code: string,
   event: string,
-  payload: SyncPayload | Record<string, unknown>,
+  payload: SyncPayload | QueueAddPayload | Record<string, unknown>,
 ): Promise<void> {
   try {
     // Wire pe JSON string bhejte hain; receive side string aur object dono
@@ -329,6 +337,58 @@ async function publish(
         err instanceof Error ? err.message : err,
       );
     }
+  }
+}
+
+/* ---------- Room queue add (spec: koi bhi member — host bhi — add kar sake) ---------- */
+
+/**
+ * '+' → "Add to Room Queue". Pehle apne device pe queue me add (turant
+ * dikhta hai), phir sab members ko 'queue-add' broadcast. Koi isHost check
+ * nahi — host aur guest dono chala sakte hain. Dedupe id pe:
+ * duplicate → 'duplicate', room me nahi → 'no-room'.
+ */
+export async function addSongToRoomQueue(
+  song: Song,
+): Promise<'added' | 'duplicate' | 'no-room'> {
+  const room = useRoom.getState();
+  if (!room.code) return 'no-room';
+
+  const added = await usePlayer.getState().addToQueue(song);
+  if (!added) return 'duplicate';
+
+  // Apna echo wapas aake dobara add na kare — isliye senderId bhejte hain
+  const code = getSubscribedCode();
+  if (code) {
+    void publish(
+      code,
+      SYNC_EVENT_QUEUE_ADD,
+      buildQueueAddPayload(song, room.name.trim() || 'Guest', {
+        senderId: getSenderId(),
+        sentAt: Date.now(),
+      }),
+    );
+  }
+  return 'added';
+}
+
+/**
+ * Remote 'queue-add' → apne queue me add + Toast "<naam> ne '<song>' add kiya".
+ * Guards: (1) apna hi echo skip (sender khud already add kar chuka hai),
+ * (2) dedupe — race me do members ne ek saath same song bheja ho to skip,
+ * (3) bekaar payload parseQueueAdd me hi reject.
+ */
+async function handleQueueAdd(raw: unknown): Promise<void> {
+  const msg = parseQueueAdd(raw);
+  if (!msg) return;
+  if (msg.senderId === getSenderId()) return;
+
+  try {
+    const added = await usePlayer.getState().addToQueue(msg.song);
+    if (!added) return;
+    Toast.show({ type: 'info', text1: `${msg.addedBy} ne '${msg.song.title}' add kiya` });
+  } catch (err) {
+    console.warn('roomSync: queue-add apply fail:', err);
   }
 }
 

@@ -11,7 +11,7 @@ import { Mood, Song } from '../../types';
 import { MOODS } from '../../constants/moods';
 import { getTrendingSongs } from '../../services/musicApi';
 import { usePlayer } from '../../stores/playerStore';
-import { usePlaylists } from '../../stores/playlistStore';
+import { promptAddSong } from '../../utils/songActions';
 import { useMiniPlayerPadding } from '../../hooks/useMiniPlayerPadding';
 import { colors } from '../../constants/colors';
 import { typography } from '../../constants/typography';
@@ -32,8 +32,9 @@ export default function HomeScreen() {
 
   const playSong = usePlayer(s => s.playSong);
   const currentSongId = usePlayer(s => s.currentSong?.id ?? null);
-  // SongItem ke '+' button se global add-to-playlist sheet khulti hai (Phase 9)
-  const openAddSheet = usePlaylists(s => s.openAddSheet);
+  // SongItem ke '+' se shared prompt — room me ho to "Add to Room Queue"
+  // option, warna seedha add-to-playlist sheet (Phase 9)
+  const handleAddPress = promptAddSong;
   const contentPadding = useMiniPlayerPadding(spacing.xl);
 
   const loadTrending = useCallback(async (isRefresh = false) => {
@@ -112,7 +113,7 @@ export default function HomeScreen() {
             song={item}
             onPress={handleSongPress}
             isActive={item.id === currentSongId}
-            onAddPress={openAddSheet}
+            onAddPress={handleAddPress}
           />
         )}
         ListHeaderComponent={listHeader}

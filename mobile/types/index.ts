@@ -68,6 +68,19 @@ export type SyncPayload = SyncAction & {
 };
 
 /**
+ * Wire payload: 'queue-add' — kisi room member (host ya guest) ne queue me
+ * naya song add kiya. `addedBy` = uska room display name (toast me dikhta hai).
+ * Echo/dedupe ke liye senderId + sentAt zaruri hain (SyncPayload jaisa hi).
+ */
+export interface QueueAddPayload {
+  song: Song;
+  /** bhejne wale member ka display name (roomStore.name) */
+  addedBy: string;
+  senderId: string;
+  sentAt: number;
+}
+
+/**
  * Local player events — playerStore emit karta hai, roomSync consume karta hai.
  * `remote: true` = ye action doosre device se aaya tha, isliye broadcast NAHI
  * karna. Echo loop isi flag se tootta hai (isliye ye required field hai).

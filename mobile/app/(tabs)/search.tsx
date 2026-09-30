@@ -24,7 +24,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Song } from '../../types';
 import { searchSongs } from '../../services/musicApi';
 import { usePlayer } from '../../stores/playerStore';
-import { usePlaylists } from '../../stores/playlistStore';
+import { promptAddSong } from '../../utils/songActions';
 import { MAX_RECENT_SEARCHES, useSearch } from '../../stores/searchStore';
 import { useDebounce } from '../../hooks/useDebounce';
 import { useMiniPlayerPadding } from '../../hooks/useMiniPlayerPadding';
@@ -64,8 +64,9 @@ export default function SearchScreen() {
 
   const playSong = usePlayer(s => s.playSong);
   const currentSongId = usePlayer(s => s.currentSong?.id ?? null);
-  // SongItem ke '+' se global add-to-playlist sheet khulti hai (Phase 9)
-  const openAddSheet = usePlaylists(s => s.openAddSheet);
+  // SongItem ke '+' se shared prompt — room me ho to "Add to Room Queue"
+  // option, warna seedha add-to-playlist sheet (Phase 9)
+  const handleAddPress = promptAddSong;
 
   const recentSearches = useSearch(s => s.recentSearches);
   const historyLoaded = useSearch(s => s.loaded);
@@ -262,7 +263,7 @@ export default function SearchScreen() {
             song={item}
             onPress={handleSongPress}
             isActive={item.id === currentSongId}
-            onAddPress={openAddSheet}
+            onAddPress={handleAddPress}
           />
         )}
         contentContainerStyle={[

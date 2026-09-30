@@ -25,6 +25,9 @@ import {
   shouldThrottleSeek,
   SYNC_EVENT_SONG,
   SYNC_EVENT_CONTROL,
+  SYNC_EVENT_QUEUE_ADD,
+  buildQueueAddPayload,
+  parseQueueAdd,
   SEEK_THROTTLE_MS,
   DUPLICATE_POSITION_MS,
   SEEK_JITTER_MS,
@@ -147,6 +150,19 @@ check('allow after window', shouldThrottleSeek(1000, 1100 + SEEK_THROTTLE_MS), f
 check('never throttled w/o lastSent', shouldThrottleSeek(0, 1100), false);
 check('custom window respected', shouldThrottleSeek(1000, 1100, 50), false);
 check('jitter < duplicate const', SEEK_JITTER_MS < DUPLICATE_POSITION_MS, true);
+
+// Room queue-add ('queue-add' — koi bhi member, host bhi, add kar sake)
+check('queue-add event name', SYNC_EVENT_QUEUE_ADD, 'queue-add');
+const qap = buildQueueAddPayload(songB, '  Priya  ', ctx);
+check('build queue-add song+sender', [qap.song.id, qap.senderId, qap.sentAt], ['s2', 'devA', ctx.sentAt]);
+check('build queue-add trims addedBy', qap.addedBy, 'Priya');
+check('build queue-add blank name -> Guest', buildQueueAddPayload(songA, '   ', ctx).addedBy, 'Guest');
+check('parse queue-add from string', parseQueueAdd(JSON.stringify(qap))?.song.id, 's2');
+check('parse queue-add object keeps addedBy', parseQueueAdd(qap)?.addedBy, 'Priya');
+check('parse queue-add garbage -> null', parseQueueAdd('nope{'), null);
+check('parse queue-add missing song -> null', parseQueueAdd({ addedBy: 'x', senderId: 's', sentAt: 1 }), null);
+check('parse queue-add missing senderId -> null', parseQueueAdd({ song: songA, addedBy: 'x' }), null);
+check('parse queue-add preview-less song -> null', parseQueueAdd({ song: { ...songA, preview: '' }, addedBy: 'x', senderId: 's' }), null);
 
 console.warn = realWarn;
 

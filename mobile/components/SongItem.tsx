@@ -17,7 +17,7 @@ interface SongItemProps {
   onPress: (song: Song) => void;
   /** current playing song highlight (FR-6.1) */
   isActive?: boolean;
-  /** diya jaaye tabhi "+ playlist" button dikhta hai (Phase 9 entry point) */
+  /** diya jaaye tabhi "+" button dikhta hai — parent decide karta hai (playlist sheet ya room queue prompt) */
   onAddPress?: (song: Song) => void;
   /** diya jaaye tabhi "hatao" (trash) button dikhta hai — playlist detail screen */
   onRemovePress?: (song: Song) => void;
@@ -65,7 +65,7 @@ export default function SongItem({
           onPress={() => onAddPress(song)}
           hitSlop={10}
           accessibilityRole="button"
-          accessibilityLabel={`${song.title} ko playlist me add karo`}
+          accessibilityLabel={`${song.title} add karo`}
           style={({ pressed }) => [styles.actionButton, pressed && styles.pressed]}
         >
           <Ionicons name="add-circle-outline" size={22} color={colors.subtext} />
