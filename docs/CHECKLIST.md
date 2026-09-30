@@ -319,7 +319,7 @@
 - [ ] Test on tablet (`ios.supportsTablet: true` set hai; player artwork width-se clamp hota hai)
 - [ ] Test on slow network (3G) — 8s axios timeouts + shimmer skeletons ready hain
 - [ ] Test offline mode — API fail pe `[]` + empty states + "Try Again" retry UI ready hain
-- [ ] Test while app in background — background audio **jaan-boojh kar off** (REQUIREMENTS me koi FR/NFR nahi): `staysActiveInBackground: false` + app.json me `UIBackgroundModes` nahi. Foreground/background transition test karo; agar playback chahiye to dono jagah enable karna hoga
+- [ ] Test while app in background — background audio **ENABLED** (feature request 2026-09-30): `staysActiveInBackground: true` + iOS `infoPlist.UIBackgroundModes: ["audio"]` + Android `android.permissions: [FOREGROUND_SERVICE, WAKE_LOCK]`. Phone pe 3 scenarios baaki: home button → bajta rahe, lock screen → bajta rahe, wapas khola → same position se continue. Limitation: expo-av Android me foreground service/notification controls nahi hain — OS process mare to playback rukega
 - [ ] Test after force close — AsyncStorage persistence (playlists, recently played, searches, room name)
 - [ ] Test with 100+ songs in playlist — FlatList virtualization
 

@@ -59,8 +59,15 @@ async function configureAudio(): Promise<void> {
   try {
     await Audio.setAudioModeAsync({
       playsInSilentModeIOS: true,
-      staysActiveInBackground: false,
+      // BACKGROUND AUDIO: minimize/lock pe playback chalta rahe.
+      // - Android: AVManager.onHostPause() sirf false hone pe sab handlers ko
+      //   pause + audioFocus chhodta hai — true se home button pe song nahi rukta
+      //   (background me auto-next/queue bhi chalta hai — focus acquire allowed).
+      // - iOS: app.json me UIBackgroundModes ["audio"] ke saath ye flag zaruri
+      //   hai, warna iOS app suspend kar deta hai.
+      staysActiveInBackground: true,
       shouldDuckAndroid: true,
+      playThroughEarpieceAndroid: false,
     });
     audioModeConfigured = true;
   } catch (err) {
