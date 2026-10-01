@@ -9,7 +9,7 @@
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
     "lint": "eslint . --ext .js,.jsx,.ts,.tsx --max-warnings=0",
-    "test": "cd .. && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON test-logic.mjs && node test-loadqueue.mjs",
+    "test": "cd .. && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON test-logic.mjs && node test-loadqueue.mjs && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON test-youtube-match.mjs",
     "test:logic": "cd .. && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON test-logic.mjs",
     "test:loadqueue": "cd .. && node test-loadqueue.mjs"
   },

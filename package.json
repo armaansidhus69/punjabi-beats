@@ -4,6 +4,9 @@
   "private": true,
   "type": "module",
   "description": "Punjabi Beats — group music listening app (Apinator realtime)",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON test-logic.mjs && node test-loadqueue.mjs && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON test-youtube-match.mjs"
   },

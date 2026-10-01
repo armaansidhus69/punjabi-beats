@@ -305,6 +305,7 @@
 - [x] Share playlist — playlist detail header share (top 10 songs + count)
 - [x] Presence (online users) — host roster + `member-join`/`member-leave`/`member-list` events + 30s heartbeat + stale-prune (`roomSync`) — FR-5.10
 - [x] User names — Room tab naam field (persist `@pb_room_name`, default `Guest-XXXX`) + members list me naam — FR-5.11
+- [~] **YouTube matching (WIP — wire pending)** — `songMatch.ts` (pure scoring core) + `youtubeAudio.ts` (orchestration) + `api/youtube-match.js` (Vercel search endpoint) **code ready + tested** (`test-youtube-match.mjs` 67/67); lekin **app me abhi call site nahi** — player abhi bhi iTunes/Audius URL (`song.preview`) use karta hai. Env (`EXPO_PUBLIC_YOUTUBE_MATCH_URL`) bhi pending. Integration baad me (decision: pehle APK ship).
 
 **Phase 14 Complete?** `[x]` (code ✓ tsc clean; 2-device presence live test — backend LIVE hai, ab possible)
 
