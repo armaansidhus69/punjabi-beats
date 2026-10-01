@@ -140,7 +140,15 @@ export function initRoomSync(): void {
 
   try {
     disposeStateListener = onStateChange(state => {
-      useRoom.getState().setConnectionState(state);
+      console.log('[roomSync][DEBUG] connection change:', state);
+      const room = useRoom.getState();
+      room.setConnectionState(state);
+      // Reconnect ke baad safety net: agar transport ka channel kisi wajah se
+      // toot gaya ho (SDK normally khud re-subscribe karta hai) to wapas join.
+      if (state === 'connected' && room.code && getSubscribedCode() !== room.code) {
+        console.log('[roomSync][DEBUG] channel missing after reconnect — re-joining', room.code);
+        joinSyncChannel(room.code);
+      }
     });
     ensureClient(); // connect() — state 'connecting' ho jaata hai
 
@@ -194,6 +202,7 @@ export function joinSyncChannel(code: string): void {
   try {
     room.setError(null);
     room.setConnectionState('connecting');
+    console.log('[roomSync][DEBUG] subscribing to room-' + code, `(client=${getClientState()})`);
     subscribeChannel(code, bindChannelEvents);
     room.setConnectionState(getClientState());
   } catch (err) {
@@ -214,29 +223,37 @@ export function joinSyncChannel(code: string): void {
  */
 function bindChannelEvents(ch: Channel): void {
   ch.bind(SYNC_EVENT_SONG, (data: unknown) => {
+    console.log('[roomSync][DEBUG] event received:', SYNC_EVENT_SONG);
     void handleRemoteEvent(data);
   });
   ch.bind(SYNC_EVENT_CONTROL, (data: unknown) => {
+    console.log('[roomSync][DEBUG] event received:', SYNC_EVENT_CONTROL);
     void handleRemoteEvent(data);
   });
   ch.bind(SYNC_EVENT_QUEUE_ADD, (data: unknown) => {
+    console.log('[roomSync][DEBUG] event received:', SYNC_EVENT_QUEUE_ADD);
     void handleQueueAdd(data);
   });
   // FR-5.12 room chat — queue-add jaisa pattern (koi bhi member, host bhi)
   ch.bind(SYNC_EVENT_CHAT_MESSAGE, (data: unknown) => {
+    console.log('[roomSync][DEBUG] event received:', SYNC_EVENT_CHAT_MESSAGE);
     handleChatMessage(data);
   });
   ch.bind(SYNC_EVENT_MEMBERS, (data: unknown) => {
+    console.log('[roomSync][DEBUG] event received:', SYNC_EVENT_MEMBERS);
     handleMemberList(data);
   });
   ch.bind(SYNC_EVENT_MEMBER_JOIN, (data: unknown) => {
+    console.log('[roomSync][DEBUG] event received:', SYNC_EVENT_MEMBER_JOIN);
     handleMemberJoin(data);
   });
   ch.bind(SYNC_EVENT_MEMBER_LEAVE, (data: unknown) => {
+    console.log('[roomSync][DEBUG] event received:', SYNC_EVENT_MEMBER_LEAVE);
     handleMemberLeave(data);
   });
   // SDK ka asli subscribe-success event (pehle galat naam bind hota tha)
   ch.bind(SUBSCRIBED_EVENT, () => {
+    console.log('[roomSync][DEBUG] channel subscribed:', ch.name);
     const room = useRoom.getState();
     room.setConnectionState('connected');
     room.setError(null);
@@ -347,6 +364,7 @@ async function publish(
   payload: SyncPayload | QueueAddPayload | ChatMessagePayload | Record<string, unknown>,
 ): Promise<void> {
   try {
+    console.log('[roomSync][DEBUG] event sent:', event, '→ room-' + code);
     // Wire pe JSON string bhejte hain; receive side string aur object dono
     // handle karta hai (SDK khud bhi JSON string ko parse kar deta hai).
     await publishEvent(code, event, JSON.stringify(payload));

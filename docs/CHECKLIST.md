@@ -254,7 +254,7 @@
 - [x] On receive → update local player (`remote: true` flag se echo loop nahi banta)
 - [x] Robust JSON parsing (`typeof data === 'string'` + object dono — `utils/syncPayload.ts`)
 - [x] Handle connection errors (subscribe error + publish fail → ek baar warning, playback nahi rukta)
-- [x] Auto-reconnect (SDK built-in: 6 attempts, 1s→30s cap, reconnect pe channel auto-resubscribe)
+- [x] Auto-reconnect (app-level watchdog: `apinator.forceReconnect` + 5s health check + AppState resume recovery — SDK v2.0.0 ka reconnect NO-OP tha, `connect()` state guard ki wajah se; naye client pe channel auto-resubscribe + activity-timer keep-alive workaround)
 - [x] Test: 2 devices sync within 200ms — **PASS (2026-09-27)**: live 2-phone test, backend `punjabi-beats-api.vercel.app` ke through
 
 **Phase 11 Complete?** `[x]` (code ✓ tsc clean + `npm test` sync logic ✓ + **2-device live test PASS**)
