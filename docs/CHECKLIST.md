@@ -305,7 +305,8 @@
 - [x] Share playlist — playlist detail header share (top 10 songs + count)
 - [x] Presence (online users) — host roster + `member-join`/`member-leave`/`member-list` events + 30s heartbeat + stale-prune (`roomSync`) — FR-5.10
 - [x] User names — Room tab naam field (persist `@pb_room_name`, default `Guest-XXXX`) + members list me naam — FR-5.11
-- [~] **YouTube matching (WIP — wire pending)** — `songMatch.ts` (pure scoring core) + `youtubeAudio.ts` (orchestration) + `api/youtube-match.js` (Vercel search endpoint) **code ready + tested** (`test-youtube-match.mjs` 67/67); lekin **app me abhi call site nahi** — player abhi bhi iTunes/Audius URL (`song.preview`) use karta hai. Env (`EXPO_PUBLIC_YOUTUBE_MATCH_URL`) bhi pending. Integration baad me (decision: pehle APK ship).
+- [x] **YouTube matching — link-out (DONE 2026-10-05)** — `songMatch.ts` (pure scoring core) + `youtubeAudio.ts` (orchestration) + `api/youtube-match.js` (live Vercel) + **`utils/youtubeLink.ts` (call site, NEW)**. 67/67 unit + live probe 4 exact/partial + 2 honest fallback. Wired into `SongItem` (▶ YouTube button on preview-only rows) + `player.tsx` ("Full version on YouTube"). Env `EXPO_PUBLIC_YOUTUBE_MATCH_URL` set.
+  - ⚠️ **Link-out, NOT in-app WebView player — deliberate decision.** WebView se audio lena evaluate karke reject kiya: (a) `roomSync` ka core invariant tootti — sab devices same URL/position pe chalte hain; ek pe 30s preview + doosre pe full song = position math bekaar, aur phone lock pe WebView mar ke room permanently desync; (b) background play + notification controls chala jaate; (c) `url: ''` rows → `PlaybackError` → auto-skip storm. Playback hamesha TrackPlayer se.
 
 **Phase 14 Complete?** `[x]` (code ✓ tsc clean; 2-device presence live test — backend LIVE hai, ab possible)
 
