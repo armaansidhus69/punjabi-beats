@@ -101,14 +101,25 @@ export function isKeyConfigured(): boolean {
   return Boolean(APP_KEY) && !isPlaceholder(APP_KEY);
 }
 
+/**
+ * Shared publish token (client copy of the server-side `PUBLISH_CLIENT_TOKEN`).
+ * EXPO_PUBLIC_ prefix = client bundle me visible — obfuscation, not real auth.
+ */
+const PUBLISH_TOKEN = process.env.EXPO_PUBLIC_PUBLISH_TOKEN ?? '';
+
 /** Broadcast (/api/publish) ke liye Vercel URL chahiye */
 export function isPublishConfigured(): boolean {
   return Boolean(PUBLISH_URL) && !isPlaceholder(PUBLISH_URL);
 }
 
-/** Poora setup (socket + broadcast) tayyar hai? */
+/** 🔒 Publish token set hai? (nahi to har publish 401 dega) */
+export function isPublishTokenConfigured(): boolean {
+  return Boolean(PUBLISH_TOKEN) && !isPlaceholder(PUBLISH_TOKEN);
+}
+
+/** Poora setup (socket + broadcast + token) tayyar hai? */
 export function isConfigured(): boolean {
-  return isKeyConfigured() && isPublishConfigured();
+  return isKeyConfigured() && isPublishConfigured() && isPublishTokenConfigured();
 }
 
 export function configHint(): string {
@@ -422,6 +433,12 @@ export function disconnectClient(): void {
  * Secrets sirf server pe hote hain, isliye client se direct trigger nahi karte
  * (SDK ka `trigger` bhi sirf 'client-' prefix wale events allow karta hai, aur
  * wo doosre clients ko nahi pahunchte).
+ *
+ * 🔒 `x-publish-token` header (2026-10-05): endpoint auth ke liye ye token
+ * maangta hai — bina iske har publish 401 milega. Value EXPO_PUBLIC_ prefix
+ * hone ke bawajood CLIENT BUNDLE me visible rehti hai, toh ye obfuscation hai
+ * (casual abuse rokta hai), real auth nahi — dekhho api/publish.js ka header.
+ * Misconfigured hone par clear error aata hai (roomSync warn karta hai).
  */
 export async function publishEvent(code: string, event: string, data: unknown): Promise<void> {
   if (!isPublishConfigured()) {
@@ -429,9 +446,17 @@ export async function publishEvent(code: string, event: string, data: unknown): 
       'Publish URL missing. mobile/.env me EXPO_PUBLIC_PUBLISH_URL (Vercel /api/publish ka absolute URL) set karo.',
     );
   }
+  if (!isPublishTokenConfigured()) {
+    throw new Error(
+      'Publish token missing. mobile/.env me EXPO_PUBLIC_PUBLISH_TOKEN set karo (same value as Vercel PUBLISH_CLIENT_TOKEN).',
+    );
+  }
   await axios.post(
     PUBLISH_URL,
     { channel: getChannelName(code), event, data },
-    { timeout: PUBLISH_TIMEOUT_MS },
+    {
+      timeout: PUBLISH_TIMEOUT_MS,
+      headers: { 'x-publish-token': PUBLISH_TOKEN },
+    },
   );
 }

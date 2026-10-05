@@ -49,10 +49,45 @@ export async function savePlaylists(playlists: Playlist[]): Promise<void> {
 
 /* ---------- Recently Played (last 20) ---------- */
 
+const RECENT_MISSING_FIELDS = ['id', 'title', 'artist', 'preview'] as const;
+
+/**
+ * Song shape guard (2026-10-05) — pehle yahan raw `as Song[]` cast tha, jo
+ * file ke "saare reads defensively handle hote hain" claim ke against tha.
+ * Corrupt/old-schema data pe `recent.tsx` ko non-array milta → FlatList crash.
+ * Ab bekaar rows filter ho jaati hain (missing id/title/preview).
+ */
+/**
+ * Ek row valid hai? (array-level guard nahi — element-level type guard)
+ */
+function isSong(value: unknown): value is Song {
+  if (typeof value !== 'object' || value === null) return false;
+  const song = value as Partial<Song>;
+  return RECENT_MISSING_FIELDS.every(field => typeof song[field] === 'string');
+}
+
+function isSongArray(value: unknown): value is Song[] {
+  return Array.isArray(value) && value.every(isSong);
+}
+
 export async function getRecentlyPlayed(): Promise<Song[]> {
   try {
     const raw = await AsyncStorage.getItem(RECENT_KEY);
-    return raw ? (JSON.parse(raw) as Song[]) : [];
+    if (!raw) return [];
+    const parsed: unknown = JSON.parse(raw);
+    if (isSongArray(parsed)) return parsed;
+    if (Array.isArray(parsed)) {
+      // Kuch valid ho to valid wale rakho — ek corrupt entry poori history
+      // khaane se behtar hai.
+      const kept = parsed.filter(isSong);
+      console.warn(
+        `Recently played data corrupt tha — ${parsed.length - kept.length} invalid row drop ki`,
+      );
+      return kept;
+    }
+    // Array hi nahi (object/string/number) — puri history corrupt
+    console.warn('Recently played data corrupt tha — [] reset kiya');
+    return [];
   } catch (err) {
     console.warn('Recently played read failed:', err);
     return [];
@@ -112,6 +147,49 @@ export async function clearRecentSearches(): Promise<void> {
     await AsyncStorage.removeItem(SEARCHES_KEY);
   } catch (err) {
     console.warn('Recent searches clear failed:', err);
+  }
+}
+
+/* ---------- Dead JioSaavn mirrors (musicApi cache persistence) ---------- */
+
+const DEAD_MIRRORS_KEY = '@pb_dead_mirrors';
+
+/**
+ * base → expiryMs entries padho. Corrupt/expired data pe `[]` (fail-safe —
+ * worst case mirrors dobara probe ho jaate, app crash nahi hota).
+ */
+export async function getDeadMirrors(): Promise<[string, number][]> {
+  try {
+    const raw = await AsyncStorage.getItem(DEAD_MIRRORS_KEY);
+    if (!raw) return [];
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    const now = Date.now();
+    // shape check: [string, number>now]
+    return parsed.filter(
+      (e): e is [string, number] =>
+        Array.isArray(e) &&
+        e.length === 2 &&
+        typeof e[0] === 'string' &&
+        e[0].length > 0 &&
+        typeof e[1] === 'number' &&
+        e[1] > now,
+    );
+  } catch (err) {
+    console.warn('Dead mirrors read failed:', err);
+    return [];
+  }
+}
+
+/** Dead mirror entries persist karo (musicApi fire-and-forget call karta hai) */
+export async function saveDeadMirrors(entries: [string, number][]): Promise<void> {
+  try {
+    // expired entries bhi mat likho — storage size bounded rahe
+    const now = Date.now();
+    const clean = entries.filter(([base, until]) => base && until > now);
+    await AsyncStorage.setItem(DEAD_MIRRORS_KEY, JSON.stringify(clean));
+  } catch (err) {
+    console.warn('Dead mirrors save failed:', err);
   }
 }
 

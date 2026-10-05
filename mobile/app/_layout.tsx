@@ -23,6 +23,7 @@ import AppErrorBoundary from '../components/ErrorBoundary';
 import MiniPlayer from '../components/MiniPlayer';
 import AddToPlaylistSheet from '../components/AddToPlaylistSheet';
 import { initRoomSync } from '../services/roomSync';
+import { hydrateDeadMirrorCache } from '../services/musicApi';
 import TrackPlayer from 'react-native-track-player';
 import { playbackService } from '../services/playbackService';
 import { initializePlayer } from '../stores/playerStore';
@@ -77,6 +78,9 @@ export default function RootLayout() {
   // non-crashing (warning + failed state).
   useEffect(() => {
     initRoomSync();
+    // Dead JioSaavn mirrors AsyncStorage se preload karo — warna pehli search
+    // app launch pe ~5s wait karti (5 dead mirrors × 2 paths × timeout).
+    void hydrateDeadMirrorCache();
     if (Platform.OS !== 'web') {
       void initializePlayer().catch(err => console.warn('TrackPlayer setup failed:', err));
     }

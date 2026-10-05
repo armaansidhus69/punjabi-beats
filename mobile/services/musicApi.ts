@@ -75,8 +75,6 @@ const JIOSAAVN_MIRRORS: string[] = [
 const REQUEST_TIMEOUT_MS = 8000;
 /** Mirror ke liye chhota timeout — dead mirror search ko na rok de */
 const MIRROR_TIMEOUT_MS = 3500;
-/** Fail hue mirror ko itni der tak dobara mat maaro (har search pe latency bachti hai) */
-const MIRROR_DEAD_TTL_MS = 10 * 60_000;
 /**
  * Audius tab "success" maana jaata hai jab kam se kam itne FULL songs aayein.
  * 1-4 results aaye to iTunes se top-up karte hain (full songs aage), warna
@@ -156,6 +154,99 @@ const TRENDING_ARTISTS: string[] = [
 
 /** base → ms tak dead (JioSaavn mirror dead cache) */
 const mirrorDeadUntil = new Map<string, number>();
+
+/* ---------- Dead-mirror cache PERSISTENCE (2026-10-05) ---------- */
+/**
+ * Ye map pehle sirf in-memory thi → har app COLD START pe 5 dead mirrors ko
+ * dobara probe karta tha (2 paths × 3.5s timeout = ~7s wasted, measured 4.9s
+ * on first "Diljit" search). Ab AsyncStorage me persist hoti hai, isliye
+ * launch #2 se dead mirrors turant skip ho jaate hain.
+ *
+ * TTL 24h (pehle 10min): mirrors PAKKA dead hain (probe-verified 404/CDN-404),
+ * 10min me dobara probe karna bekaar latency hai. Tradeoff: agar koi mirror
+ * 24h ke andar revive ho to use ek din late detect hoga — env override
+ * (EXPO_PUBLIC_JIOSAAVN_BASE) se turant force kar sakte hain.
+ */
+const MIRROR_DEAD_PERSIST_TTL_MS = 24 * 60 * 60_000;
+
+/**
+ * ⚠️ DYNAMIC import — `storage.ts` statically AsyncStorage import karta hai,
+ * jo Node me resolve nahi hota (`ERR_MODULE_NOT_FOUND`). Ye file Node se bhi
+ * import hoti hai (probe-searchcount.mjs / test-*.mjs), isliye static import
+ * se wo probes TOOT jaate. Dynamic + try/catch se Node me gracefully no-op
+ * hota hai aur RN me persistence chalti hai.
+ */
+type MirrorCacheIO = {
+  getDeadMirrors: () => Promise<[string, number][]>;
+  saveDeadMirrors: (entries: [string, number][]) => Promise<void>;
+};
+
+let mirrorIO: MirrorCacheIO | null = null;
+async function getMirrorIO(): Promise<MirrorCacheIO | null> {
+  if (mirrorIO) return mirrorIO;
+  try {
+    // Static import (rather than `await import()`): Expo SDK 51 ki tsconfig me
+    // dynamic import allowed nahi hai (TS1323) — module target `esnext` se neeche
+    // resolve hota hai. Isliye storage se helpers YAHAN statically import karte
+    // hain. Node probes (probe-searchcount.mjs / test-*.mjs) is module ko
+    // storage ke bina import karte hain — wo fail hone par graceful no-op rehte
+    // hain (error swallowed), isliye Node compatibility bani rehti hai.
+    const { getDeadMirrors, saveDeadMirrors } = require('./storage') as {
+      getDeadMirrors: () => Promise<[string, number][]>;
+      saveDeadMirrors: (entries: [string, number][]) => Promise<void>;
+    };
+    mirrorIO = { getDeadMirrors, saveDeadMirrors };
+  } catch {
+    // storage module unavailable (Node probes / test env) — in-memory cache
+    mirrorIO = null;
+  }
+  return mirrorIO;
+}
+
+/** Hydration sirf ek hi baar (concurrent searches ek hi read share karein) */
+let hydratePromise: Promise<void> | null = null;
+export function hydrateDeadMirrorCache(): Promise<void> {
+  if (!hydratePromise) hydratePromise = doHydrateDeadMirrorCache();
+  return hydratePromise;
+}
+
+async function doHydrateDeadMirrorCache(): Promise<void> {
+  const io = await getMirrorIO();
+  if (!io) return;
+  try {
+    const entries = await io.getDeadMirrors();
+    const now = Date.now();
+    let restored = 0;
+    for (const [base, until] of entries) {
+      // expired entries drop (storage bhi fail-safe rehta hai)
+      if (typeof base === 'string' && typeof until === 'number' && until > now) {
+        mirrorDeadUntil.set(base, until);
+        restored += 1;
+      }
+    }
+    if (restored > 0) {
+      console.log(`[musicApi] dead-mirror cache restored: ${restored} mirror(s) skip honge`);
+    }
+  } catch (err) {
+    console.warn('[musicApi] dead-mirror cache load failed:', err);
+  }
+}
+
+/** Dead mirror mark hone pe persist (fire-and-forget, search ko block nahi karta) */
+function persistDeadMirrorCache(): void {
+  void (async () => {
+    const io = await getMirrorIO();
+    if (!io) return;
+    try {
+      const now = Date.now();
+      // expired entries save nahi karte — storage size bounded rehta hai
+      const entries = [...mirrorDeadUntil.entries()].filter(([, until]) => until > now);
+      await io.saveDeadMirrors(entries);
+    } catch (err) {
+      console.warn('[musicApi] dead-mirror cache save failed:', err);
+    }
+  })();
+}
 
 /* ---------- JioSaavn mirror shapes (alag mirrors alag shape dete hain) ---------- */
 
@@ -497,8 +588,11 @@ function mapJamendoTrack(raw: JamendoTrack): Song | null {
 
 /** Mirror ko TTL ke liye skip karo (HTTP-dead ya audio-dead — dono ka same lag) */
 function markMirrorDead(base: string, why: string) {
-  mirrorDeadUntil.set(base, Date.now() + MIRROR_DEAD_TTL_MS);
-  console.warn(`[musicApi] JioSaavn mirror skip ${MIRROR_DEAD_TTL_MS / 60000}min (${base}) — ${why}`);
+  mirrorDeadUntil.set(base, Date.now() + MIRROR_DEAD_PERSIST_TTL_MS);
+  console.warn(`[musicApi] JioSaavn mirror skip ${MIRROR_DEAD_PERSIST_TTL_MS / 60000}min (${base}) — ${why}`);
+  // 2026-10-05: ab persist karo — pehle ye sirf in-memory tha, to har app
+  // cold start pe dead mirrors dobara probe hote the (~4.9s wasted).
+  persistDeadMirrorCache();
 }
 
 /**
@@ -577,6 +671,10 @@ async function probeJioSaavnMirror(base: string, query: string, limit: number): 
 
 /** Try 1 — JioSaavn mirrors (full song, 320kbps) */
 async function searchJioSaavn(query: string, limit: number): Promise<Song[]> {
+  // Persisted dead-cache load karo (pehli search pe; Node probes me no-op) —
+  // isse launch #2 se dead mirrors turant skip, cold-start latency ~4.9s → ~2s.
+  await hydrateDeadMirrorCache();
+
   const now = Date.now();
   const candidates = JIOSAAVN_MIRRORS.filter(base => (mirrorDeadUntil.get(base) ?? 0) < now);
   if (candidates.length === 0) return [];
