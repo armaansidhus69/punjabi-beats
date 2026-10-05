@@ -99,8 +99,42 @@ const ARTIST_EXPAND_MAX = 4;
  * wahan artist expansion random gaane la deta tha jo query se related hi nahi.
  */
 const MIN_ITUNES_FOR_EXPANSION = 6;
+
+/* ---------- Pagination caps (probe-verified 2026-10-05) ---------- */
 /**
- * Trending artist rotation — probe-artists.mjs (2026-09-29) se har ek pe
+ * Kitna ORIGINAL fetch karein — caller ke `limit` se independent. Isse
+ * `searchSongs` har source se max nikalta hai, phir top-quality wala `limit`
+ * tak trim karta hai (precision order: full song → preview).
+ */
+const AUDIUS_FETCH_MAX = 90;
+/**
+ * iTunes ek call me 200 tak deta hai.
+ * ⚠️ PROBE: iTunes `offset` PARAM IGNORE KARTA HAI — offset=0 aur offset=200
+ * ka response byte-identical aata hai. Isliye pagination nahi, ek hi bada
+ * call (limit=200). Isse hi 30 → 200 ka jump milta hai.
+ */
+const ITUNES_FETCH_MAX = 200;
+/**
+ * Audius search ek page me ~30 deta hai (offset=30 pe 28, offset=60 pe 0).
+ * Probe: page0 ∩ page1 = 0 overlap → 2 pages genuinely ~58 unique dete hain.
+ * 3+ page pool khaali ho jaata hai, isliye 2 page cap.
+ */
+const AUDIUS_PAGE_SIZE = 30;
+const AUDIUS_MAX_PAGES = 2;
+/** Jamendo se kitne maangein (full/legal tracks) */
+const JAMENDO_FETCH_MAX = 50;
+
+/**
+ * Jamendo (free, legal, full songs) — OPTIONAL source.
+ * Bina key ke gracefully skip (app crash nahi hota).
+ * Key kahan se: https://devportal.jamendo.com/ → free account → "Get API key".
+ * NOTE: catalogue chhota hai aur bohot kuch 30s preview hote hain — isliye
+ * `previewOnly` duration se honestly set hota hai, full ka daava nahi.
+ */
+const JAMENDO_KEY = process.env.EXPO_PUBLIC_JAMENDO_KEY ?? '';
+const JAMENDO_BASE = 'https://api.jamendo.com/v3.0';
+
+/** Trending artist rotation — probe-artists.mjs (2026-09-29) se har ek pe
  * Audius pe >=5 FULL songs (60s+) verify. Home feed inhi se banta hai, isliye
  * "punjabi hits" jaisi generic query pe 30s fallback kabhi nahi aata.
  */
@@ -208,16 +242,25 @@ interface ITunesResponse {
 
 /* ---------- Helpers ---------- */
 
-/** Cross-source / duplicate-upload hatao (Audius pe same gaana 3 baar milta hai) */
+/**
+ * Cross-source / duplicate-upload hatao (Audius pe same gaana 3 baar milta hai).
+ *
+ * ⚠️ KEY = title + artist (2026-10-05): pehle sirf title tha, jisse do ALAG
+ * artists ke same-title gaane ("Vibe" — Artist A vs "Vibe" — Artist B) ek maan
+ * liye jaate the. Ab artist bhi key me hai — full songs kam kat-te hain par
+ * result zyada accurate.
+ * Latin + Gurmukhi dono normalize me rakhte hain — warna Punjabi-script titles
+ * sab "" ban jaate aur galat se sab ek hi song samajh lete.
+ */
 function dedupeByTitle(songs: Song[]): Song[] {
   const seen = new Set<string>();
   return songs.filter(song => {
-    const key = song.title
+    const key = `${song.title.toLowerCase().replace(/[^a-z0-9਀-੿]+/g, '')}|${song.artist
       .toLowerCase()
-      // Latin + Gurmukhi dono chahiye — warna Punjabi-script titles sab "" ban
-      // jayenge aur galat se sab ek hi song samjhe jayenge
-      .replace(/[^a-z0-9਀-੿]+/g, '');
-    if (!key) return true;
+      .replace(/[^a-z0-9਀-੿]+/g, '')}`;
+    // title+artist dono normalize hone pe khaali → key khaali mat rakhna
+    // (warna "Unknown" artist ke sabhi songs ek ho jaate)
+    if (key === '|') return true;
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
@@ -409,6 +452,47 @@ function mapITunesSong(raw: ITunesResult): Song | null {
   };
 }
 
+/* ---------- Jamendo shapes (optional source) ---------- */
+
+interface JamendoTrack {
+  id?: number;
+  name?: string;
+  /** seconds */
+  duration?: number;
+  /** direct mp3 (legal, CDN-hosted) */
+  audio?: string;
+  album_image?: string;
+  image?: string;
+  artist?: { name?: string };
+}
+
+interface JamendoResponse {
+  results?: JamendoTrack[];
+}
+
+/**
+ * Jamendo → Song. Audio URL DIRECT milti hai (koi WebView nahi) — isliye ye
+ * source TrackPlayer ke saath poori tarah compatible hai (notification +
+ * background play + room sync sab normal chalta hai).
+ * `previewOnly` duration se honestly set (60s se chhota = preview).
+ */
+function mapJamendoTrack(raw: JamendoTrack): Song | null {
+  const id = raw.id;
+  const title = raw.name?.trim();
+  const preview = raw.audio;
+  if (!id || !title || !preview) return null;
+  const durationMs = (Number(raw.duration) || 0) * 1000;
+  return {
+    id: `jamendo-${id}`,
+    title,
+    artist: raw.artist?.name?.trim() || 'Unknown',
+    cover: raw.album_image ?? raw.image ?? '',
+    preview,
+    duration: durationMs || 30_000,
+    previewOnly: durationMs < MIN_FULL_SONG_MS,
+  };
+}
+
 /* ---------- Sources ---------- */
 
 /** Mirror ko TTL ke liye skip karo (HTTP-dead ya audio-dead — dono ka same lag) */
@@ -510,6 +594,71 @@ async function searchAudius(query: string, limit: number): Promise<Song[]> {
   });
   const songs = (res.data.data ?? [])
     .map(mapAudiusTrack)
+    .filter((s): s is Song => s !== null);
+  return dedupeByTitle(songs).slice(0, limit);
+}
+
+/**
+ * Audius PAGINATED (2026-10-05) — ek page ~30 deta hai, isliye offsets parallel
+ * maangein. PROBE: offset=0 → 30, offset=30 → 28, offset=60 → 0, aur page0 ∩
+ * page1 = 0 overlap. Matlab 2 page GENUINELY ~58 unique dete hain (pehle sirf
+ * 30). 3rd page pool khaali hai — isliye AUDIUS_MAX_PAGES=2.
+ *
+ * Pages parallel chalti hain (latency ek hi round-trip jitni rehti hai) aur
+ * merge order preserve hota hai taaki dedupe stable rahe.
+ */
+async function searchAudiusPaginated(query: string, maxResults: number): Promise<Song[]> {
+  const pages = Math.max(1, Math.min(AUDIUS_MAX_PAGES, Math.ceil(maxResults / AUDIUS_PAGE_SIZE)));
+  if (pages === 1) return searchAudius(query, Math.min(maxResults, AUDIUS_PAGE_SIZE));
+
+  const fetched = await Promise.allSettled(
+    Array.from({ length: pages }, (_, i) =>
+      axios
+        .get<AudiusResponse>(`${AUDIUS_BASE}/tracks/search`, {
+          params: {
+            query,
+            limit: AUDIUS_PAGE_SIZE,
+            offset: i * AUDIUS_PAGE_SIZE,
+            app_name: AUDIUS_APP_NAME,
+          },
+          timeout: REQUEST_TIMEOUT_MS,
+        })
+        .then(res =>
+          (res.data.data ?? [])
+            .map(mapAudiusTrack)
+            .filter((s): s is Song => s !== null),
+        ),
+    ),
+  );
+  const all: Song[] = [];
+  fetched.forEach((r, i) => {
+    if (r.status === 'fulfilled') all.push(...r.value);
+    else console.warn(`[musicApi] Audius page ${i} fail:`, r.reason);
+  });
+  return dedupeByTitle(all).slice(0, maxResults);
+}
+
+/**
+ * Jamendo (OPTIONAL) — key na ho to [] (app normal chalta rehta hai).
+ * Audio direct CDN URL hai → TrackPlayer ke saath 100% compatible.
+ */
+async function searchJamendo(query: string, limit: number): Promise<Song[]> {
+  if (!JAMENDO_KEY || JAMENDO_KEY.startsWith('YAHAN_') || JAMENDO_KEY.startsWith('YOUR')) {
+    return [];
+  }
+  const res = await axios.get<JamendoResponse>(`${JAMENDO_BASE}/tracks/`, {
+    params: {
+      client_id: JAMENDO_KEY,
+      search: query,
+      limit: Math.min(limit, JAMENDO_FETCH_MAX),
+      // legal-safe: downloadable tracks only
+      audioformat: 'mp31',
+      include: 'musicinfo',
+    },
+    timeout: REQUEST_TIMEOUT_MS,
+  });
+  const songs = (res.data.results ?? [])
+    .map(mapJamendoTrack)
     .filter((s): s is Song => s !== null);
   return dedupeByTitle(songs).slice(0, limit);
 }
@@ -627,23 +776,28 @@ export async function searchSongs(query: string, limit = 30): Promise<Song[]> {
     console.warn('[musicApi] JioSaavn fail:', err);
   }
 
-  // ---- Try 2 + 3 (parallel): Audius direct + iTunes ----
+  // ---- Try 2 + 3 + 4 (parallel): Audius paginated + iTunes(big) + Jamendo ----
   // iTunes ab sirf fallback nahi — uske artist/title se upgrade passes chalte hain
   let audius: Song[] = [];
   let itunes: Song[] = [];
-  const [audiusRes, itunesRes] = await Promise.allSettled([
-    searchAudius(trimmed, limit),
-    searchITunes(trimmed, limit),
+  let jamendo: Song[] = [];
+  const [audiusRes, itunesRes, jamendoRes] = await Promise.allSettled([
+    searchAudiusPaginated(trimmed, AUDIUS_FETCH_MAX),
+    searchITunes(trimmed, ITUNES_FETCH_MAX),
+    searchJamendo(trimmed, JAMENDO_FETCH_MAX),
   ]);
   if (audiusRes.status === 'fulfilled') audius = audiusRes.value;
   else console.warn('[musicApi] Audius fail:', audiusRes.reason);
   if (itunesRes.status === 'fulfilled') itunes = itunesRes.value;
   else console.warn('[musicApi] iTunes fail:', itunesRes.reason);
+  if (jamendoRes.status === 'fulfilled') jamendo = jamendoRes.value;
+  else console.warn('[musicApi] Jamendo fail:', jamendoRes.reason);
 
   // Fast path: direct query se hi kaafi full songs mile → extra calls ki zarurat nahi
   if (audius.length >= AUDIUS_MIN_FULL_SONGS) {
-    logSource(trimmed, 'audius', audius.length, 'full');
-    return audius;
+    const merged = dedupeByTitle([...audius, ...jamendo, ...itunes]).slice(0, limit);
+    logSource(trimmed, 'audius', merged.length, `full (jam=${jamendo.length}, previews=${itunes.length})`);
+    return merged;
   }
 
   // ---- Upgrade passes (parallel): artist expansion + per-song upgrade ----
@@ -657,10 +811,19 @@ export async function searchSongs(query: string, limit = 30): Promise<Song[]> {
   ]);
 
   // Merge order = precision order: direct query > exact upgraded tracks >
-  // artist matches > baaki 30s previews. Full songs isi liye top pe.
+  // artist matches > Jamendo full > baaki 30s previews. Full songs top pe.
+  // NOTE: `upgradeITunesWithAudius` sirf UPGRADE_CAP(6) tak hi upgrade karta hai
+  // (latency deliberate) — baaki itunes previews hi rehte hain, isliye 200-row
+  // list me most entries 30s badge ke saath aayengi (that's honest + intended).
   const upgradedFull = upgraded.filter(s => !s.previewOnly);
   const previews = upgraded.filter(s => s.previewOnly);
-  const merged = dedupeByTitle([...audius, ...upgradedFull, ...expanded, ...previews]).slice(0, limit);
+  const merged = dedupeByTitle([
+    ...audius,
+    ...upgradedFull,
+    ...expanded,
+    ...jamendo,
+    ...previews,
+  ]).slice(0, limit);
 
   if (merged.length === 0) {
     logSource(trimmed, 'none', 0);
@@ -680,7 +843,7 @@ export async function searchSongs(query: string, limit = 30): Promise<Song[]> {
     trimmed,
     source,
     merged.length,
-    `${fullCount} full, ${merged.length - fullCount} 30s (direct=${audius.length}, artist=${expanded.length}, upgraded=${upgradedFull.length})`,
+    `${fullCount} full, ${merged.length - fullCount} 30s (audius=${audius.length}, artist=${expanded.length}, upgraded=${upgradedFull.length}, jamendo=${jamendo.length})`,
   );
   return merged;
 }

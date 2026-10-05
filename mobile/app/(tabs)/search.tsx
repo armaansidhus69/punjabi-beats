@@ -36,8 +36,14 @@ import EmptyState from '../../components/EmptyState';
 import RecentSearchRow from '../../components/RecentSearchRow';
 import SongItem from '../../components/SongItem';
 
-/** FR-1.3: max 30 results */
-const RESULT_LIMIT = 30;
+/**
+ * FR-1.3: max results. 2026-10-05: 30 → 100.
+ * Backend ab Audius paginated (2 pages ~58 unique) + iTunes single call (200)
+ * maangta hai, to 30 pe cap karna wasteful tha. 100 FlatList me smooth hai
+ * (virtualized) aur user ko asli "zyada songs" feel milta hai.
+ * Mood screen apna alag cap (MOOD_LIMIT) rakhti hai — wahan chhota better hai.
+ */
+const RESULT_LIMIT = 100;
 /** Design spec: 400ms debounce (purane CHECKLIST me 300ms likha tha) */
 const DEBOUNCE_MS = 400;
 /** 2 se kam chars pe search nahi chalta — recent searches dikhte hain */

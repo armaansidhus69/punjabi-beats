@@ -33,6 +33,7 @@ import EmptyState from '../components/EmptyState';
 import PlayerControls from '../components/PlayerControls';
 import ProgressBar from '../components/ProgressBar';
 import SongArtwork from '../components/SongArtwork';
+import { handleOpenOnYouTube, isYouTubeMatchConfigured } from '../utils/youtubeLink';
 
 /** Swipe-down close threshold (px aur velocity) */
 const CLOSE_SWIPE_THRESHOLD = 110;
@@ -172,11 +173,25 @@ export default function PlayerScreen() {
         <ProgressBar position={position} duration={duration} onSeek={handleSeek} showTimes />
       </View>
 
-      {/* iTunes 30s preview note (FR-2.8 ke alawa full song nahi milta) */}
+      {/* iTunes 30s preview note (FR-2.8 ke alawa full song nahi milta).
+          Ab YouTube link-out bhi yahan hai — scored match (exact/partial) se
+          full version kholta hai. WebView player NAHI (room sync + background
+          play bachane ke liye — utils/youtubeLink.ts header dekho). */}
       {currentSong.previewOnly ? (
-        <Text style={styles.previewNote}>
-          Preview mode — full song ke liye JioSaavn app use karo
-        </Text>
+        <View style={styles.previewNoteWrap}>
+          <Text style={styles.previewNote}>Preview mode — full song abhi available nahi</Text>
+          {isYouTubeMatchConfigured() ? (
+            <Pressable
+              onPress={() => handleOpenOnYouTube(currentSong)}
+              accessibilityRole="button"
+              accessibilityLabel="YouTube pe full version kholo"
+              style={({ pressed }) => [styles.youtubeButton, pressed && styles.pressed]}
+            >
+              <Ionicons name="logo-youtube" size={18} color={colors.background} />
+              <Text style={styles.youtubeButtonText}>Full version on YouTube</Text>
+            </Pressable>
+          ) : null}
+        </View>
       ) : null}
 
       {/* Volume slider (FR-2.11) — sirf local device, room sync me kabhi broadcast nahi */}
@@ -352,6 +367,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
     marginTop: spacing.sm,
   },
+  previewNoteWrap: { alignItems: 'center', gap: spacing.sm },
+  youtubeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    borderRadius: 999,
+    backgroundColor: colors.primary,
+    marginTop: spacing.xs,
+  },
+  youtubeButtonText: { ...typography.caption, color: colors.background, fontWeight: '700' },
   controls: { marginTop: spacing.xl, marginBottom: spacing.xl },
   /* Volume slider (FR-2.11) */
   volumeRow: {

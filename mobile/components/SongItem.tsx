@@ -10,6 +10,7 @@ import { colors } from '../constants/colors';
 import { typography } from '../constants/typography';
 import { spacing } from '../constants/spacing';
 import { tapFeedback, warningFeedback } from '../utils/haptics';
+import { handleOpenOnYouTube, isYouTubeMatchConfigured } from '../utils/youtubeLink';
 import SongArtwork from './SongArtwork';
 
 interface SongItemProps {
@@ -56,6 +57,21 @@ export default function SongItem({
         <View style={styles.previewBadge}>
           <Text style={styles.previewBadgeText}>30s</Text>
         </View>
+      ) : null}
+
+      {/* YouTube link-out — sirf preview-only gaano pe (full version dhundhne ke liye).
+          WebView player NAHI hai (room sync + background play dono bachate hain —
+          dekhho utils/youtubeLink.ts ka header). Backend env na ho to button chhupta hai. */}
+      {song.previewOnly && isYouTubeMatchConfigured() ? (
+        <Pressable
+          onPress={() => handleOpenOnYouTube(song)}
+          hitSlop={10}
+          accessibilityRole="button"
+          accessibilityLabel={`${song.title} YouTube pe full version kholo`}
+          style={({ pressed }) => [styles.actionButton, pressed && styles.pressed]}
+        >
+          <Ionicons name="logo-youtube" size={20} color={colors.primary} />
+        </Pressable>
       ) : null}
 
       {isActive ? <Ionicons name="volume-medium" size={18} color={colors.primary} /> : null}
