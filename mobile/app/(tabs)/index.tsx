@@ -11,11 +11,14 @@ import { Mood, Song } from '../../types';
 import { MOODS } from '../../constants/moods';
 import { getTrendingSongs } from '../../services/musicApi';
 import { usePlayer } from '../../stores/playerStore';
+import { useLikedSongs } from '../../stores/likedSongsStore';
 import { promptAddSong } from '../../utils/songActions';
 import { useMiniPlayerPadding } from '../../hooks/useMiniPlayerPadding';
 import { colors } from '../../constants/colors';
 import { typography } from '../../constants/typography';
 import { spacing } from '../../constants/spacing';
+import { isFeatureEnabled } from '../../core/featureflags/featureFlags';
+import { useAuthStore } from '../../stores/authStore';
 import EmptyState from '../../components/EmptyState';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import MoodCard from '../../components/MoodCard';
@@ -32,6 +35,9 @@ export default function HomeScreen() {
 
   const playSong = usePlayer(s => s.playSong);
   const currentSongId = usePlayer(s => s.currentSong?.id ?? null);
+  const likedSongs = useLikedSongs(s => s.songs);
+  const toggleLiked = useLikedSongs(s => s.toggleLiked);
+  const authStatus = useAuthStore(s => s.status);
   // SongItem ke '+' se shared prompt — room me ho to "Add to Room Queue"
   // option, warna seedha add-to-playlist sheet (Phase 9)
   const handleAddPress = promptAddSong;
@@ -71,6 +77,10 @@ export default function HomeScreen() {
     router.push(`/mood/${mood.id}`);
   }, []);
 
+  const handleAccountPress = useCallback(() => {
+    router.push(authStatus === 'authenticated' ? '/auth/profile' : '/auth/login');
+  }, [authStatus]);
+
   const listHeader = (
     <View>
       <View style={styles.greetingRow}>
@@ -79,15 +89,32 @@ export default function HomeScreen() {
           <Text style={styles.tagline}>Dil se Punjabi — har mood ke liye</Text>
         </View>
         {/* Phase 14 — Recently played screen ka entry (last 20 history) */}
-        <Pressable
-          onPress={() => router.push('/recent')}
-          accessibilityRole="button"
-          accessibilityLabel="Recently played khole"
-          hitSlop={12}
-          style={({ pressed }) => [styles.historyButton, pressed && styles.pressed]}
-        >
-          <Ionicons name="time-outline" size={22} color={colors.text} />
-        </Pressable>
+        <View style={styles.headerActions}>
+          <Pressable
+            onPress={() => router.push('/recent')}
+            accessibilityRole="button"
+            accessibilityLabel="Recently played khole"
+            hitSlop={12}
+            style={({ pressed }) => [styles.historyButton, pressed && styles.pressed]}
+          >
+            <Ionicons name="time-outline" size={22} color={colors.text} />
+          </Pressable>
+          {isFeatureEnabled('auth_enabled') ? (
+            <Pressable
+              onPress={handleAccountPress}
+              accessibilityRole="button"
+              accessibilityLabel="Account khole"
+              hitSlop={12}
+              style={({ pressed }) => [styles.historyButton, pressed && styles.pressed]}
+            >
+              <Ionicons
+                name={authStatus === 'authenticated' ? 'person' : 'person-outline'}
+                size={22}
+                color={colors.text}
+              />
+            </Pressable>
+          ) : null}
+        </View>
       </View>
 
       <Text style={styles.sectionTitle}>Moods</Text>
@@ -114,6 +141,8 @@ export default function HomeScreen() {
             onPress={handleSongPress}
             isActive={item.id === currentSongId}
             onAddPress={handleAddPress}
+            isLiked={likedSongs.some(song => song.id === item.id)}
+            onLikePress={toggleLiked}
           />
         )}
         ListHeaderComponent={listHeader}
@@ -170,6 +199,7 @@ const styles = StyleSheet.create({
     paddingTop: spacing.md,
   },
   greetingTexts: { flex: 1 },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   historyButton: {
     width: 40,
     height: 40,
@@ -212,4 +242,3 @@ const styles = StyleSheet.create({
   retryText: { ...typography.body, color: colors.background, fontWeight: '700' },
   pressed: { opacity: 0.7 },
 });
-

@@ -130,7 +130,7 @@ export async function findYouTubeAudio(
   try {
     candidates = await search(buildSearchQuery(track), limit);
   } catch (err) {
-    if (__DEV__) {
+    if (typeof __DEV__ !== 'undefined' && __DEV__) {
       console.warn(`[youtubeAudio] search fail (${track.title}):`, err);
     }
     return empty;

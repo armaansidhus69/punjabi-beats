@@ -2,6 +2,8 @@
  * Core data types — poore app me yahi use honge (strict TS, no `any`).
  */
 
+export type SongSource = 'jiosaavn' | 'audius' | 'itunes' | 'jamendo' | 'gaana' | 'youtube_music';
+
 export interface Song {
   id: string;
   title: string;
@@ -11,6 +13,10 @@ export interface Song {
   preview: string;
   /** Duration in milliseconds */
   duration: number;
+  /** Source provider used to fetch this song */
+  source?: SongSource;
+  /** Verome/YouTube Music video id (for stream refresh logic) */
+  videoId?: string;
   /**
    * Sirf 30s preview available hai (iTunes preview limitation — full song nahi).
    * JioSaavn mirror se full song aaye to false rehta hai; SongItem ka "30s"
@@ -180,4 +186,90 @@ export interface RoomMember {
   id: string;
   /** join time pe user ka chuna hua naam (default `Guest-XXXX`) */
   name: string;
+}
+
+/* ---------- Phase 10 (roadmap): Blend — taste-mix shared playlist ---------- */
+
+/** blend_items me denormalized track metadata (jsonb) — playback resolves hota hai */
+export interface BlendTrack {
+  title: string;
+  artistNames: string[];
+  artworkUrl: string;
+  provider: SongSource;
+  /** seconds (Song.duration ms ka second-source hai) */
+  durationSec: number;
+  /** full stream available (previewOnly ka inverse) */
+  playableFull: boolean;
+}
+
+export interface BlendItem {
+  id: string;
+  blendId: string;
+  /** provider canonical song id */
+  trackId: string;
+  /** jis member ka taste data track laaya (null = orphan cleanup) */
+  sourceUserId: string | null;
+  score: number;
+  position: number;
+  track: BlendTrack;
+  origin: 'generated' | 'member';
+  createdAt?: string;
+}
+
+export interface TasteArtist {
+  /** lowercase-normalized display name */
+  name: string;
+  count: number;
+}
+
+export interface TasteSnapshotSong {
+  /** provider canonical song id */
+  id: string;
+  title: string;
+  artistNames: string[];
+  artworkUrl: string;
+  provider: SongSource;
+  durationSec: number;
+  playableFull: boolean;
+  /** liked (2) + playlist occurrences (1) ka combined weight */
+  count: number;
+}
+
+/** Device-side taste payload — users apni hi row upsert karte hain */
+export interface TasteSnapshot {
+  version: 1;
+  /** FNV-1a 64 hex — sorted song-id list ka hash (recompute no-op guard) */
+  libraryHash: string;
+  songs: TasteSnapshotSong[];
+  artists: TasteArtist[];
+}
+
+export type BlendVisibility = 'members' | 'public';
+export type BlendComputeStatus = 'pending' | 'computing' | 'ready' | 'error';
+export type BlendMemberRole = 'owner' | 'member';
+
+export interface Blend {
+  id: string;
+  ownerId: string;
+  name: string;
+  coverUrl: string | null;
+  visibility: BlendVisibility;
+  inviteCode: string;
+  /** ISO timestamptz */
+  inviteExpiresAt: string;
+  algorithmVersion: string;
+  computeStatus: BlendComputeStatus;
+  lastComputedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Row + profiles join data (store me matchPercent client compute karta hai) */
+export interface BlendMember {
+  blendId: string;
+  userId: string;
+  role: BlendMemberRole;
+  joinedAt: string;
+  displayName: string | null;
+  avatarUrl: string | null;
 }

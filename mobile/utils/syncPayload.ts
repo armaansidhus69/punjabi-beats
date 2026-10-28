@@ -6,7 +6,14 @@
  * Apinator / player / store import nahi hai (sirf types) — isliye ye headless
  * test ho sakti hai, aur `services/roomSync.ts` in helpers ko use karta hai.
  */
-import type { ChatMessagePayload, PlayerActionEvent, QueueAddPayload, Song, SyncPayload } from '../types';
+import type {
+  ChatMessagePayload,
+  PlayerActionEvent,
+  QueueAddPayload,
+  Song,
+  SongSource,
+  SyncPayload,
+} from '../types';
 
 /* ---------- Event names (client bind + Vercel /api/publish dono me same) ---------- */
 /** song badla (queue + position + isPlaying ke saath) */
@@ -98,23 +105,40 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
 
-/**
- * Song shape validate + coerce karo. `preview` ke bina song bekaar hai
- * (bajega hi nahi), baaki fields me musicApi jaisa hi fallback.
- */
+const SONG_SOURCES: readonly SongSource[] = [
+  'jiosaavn',
+  'audius',
+  'itunes',
+  'jamendo',
+  'gaana',
+  'youtube_music',
+];
+
+function parseSongSource(value: unknown): SongSource | undefined {
+  return typeof value === 'string' && SONG_SOURCES.includes(value as SongSource)
+    ? (value as SongSource)
+    : undefined;
+}
+
+/** Song shape validate + coerce karo, including source-specific playback identity. */
 function toSong(value: unknown): Song | null {
   if (!isRecord(value)) return null;
   const { id, title, artist, cover, preview } = value;
   if (typeof id !== 'string' || !id) return null;
-  if (typeof preview !== 'string' || !preview) return null;
+  const source = parseSongSource(value.source);
+  const videoId = typeof value.videoId === 'string' && value.videoId ? value.videoId : undefined;
+  const playableWithoutPreview = source === 'youtube_music' && !!videoId;
+  if ((typeof preview !== 'string' || !preview) && !playableWithoutPreview) return null;
   const duration = Number(value.duration);
   return {
     id,
     title: typeof title === 'string' && title ? title : 'Unknown',
     artist: typeof artist === 'string' && artist ? artist : 'Unknown',
     cover: typeof cover === 'string' ? cover : '',
-    preview,
+    preview: typeof preview === 'string' ? preview : '',
     duration: Number.isFinite(duration) && duration > 0 ? duration : 30000,
+    source,
+    videoId,
     // Room sync se aaya song bhi badge/player note sahi dikhaye (field pass-through)
     previewOnly: value.previewOnly === true,
   };

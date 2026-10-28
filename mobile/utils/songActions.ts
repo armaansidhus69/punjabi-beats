@@ -36,6 +36,8 @@ export function promptAddSong(song: Song): void {
               text2: song.title,
             });
           }
+        }).catch(() => {
+          Toast.show({ type: 'error', text1: 'Song abhi available nahi hai', text2: song.title });
         });
       },
     },

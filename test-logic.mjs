@@ -14,6 +14,15 @@
  */
 import { formatDuration, progressRatio } from './mobile/utils/format.ts';
 import { validatePlaylistName, PLAYLIST_NAME_MAX } from './mobile/utils/playlistValidation.ts';
+import { isLikedSong, removeLikedSong, toggleLikedSong } from './mobile/utils/likedSongs.ts';
+import { parsePlaylistImportText, playlistToImportJson } from './mobile/utils/playlistImport.ts';
+import {
+  DEFAULT_FEATURE_FLAGS,
+  getFeatureFlags,
+  isFeatureEnabled,
+  resetFeatureFlags,
+  setFeatureFlag,
+} from './mobile/core/featureflags/featureFlags.ts';
 import {
   buildSyncPayload,
   parseSyncPayload,
@@ -89,10 +98,30 @@ check('no duplicate -> null', validatePlaylistName('Party', ['Chill', 'Bhangra']
 check('duplicate among many', validatePlaylistName('bhangra', ['Chill', 'Party', 'Bhangra']), 'Is naam ki playlist pehle se hai');
 check('PLAYLIST_NAME_MAX', PLAYLIST_NAME_MAX, 40);
 
+/* ================= featureFlags.ts ================= */
+resetFeatureFlags();
+check('feature flags default disabled', Object.values(DEFAULT_FEATURE_FLAGS).every(value => value === false), true);
+check('chat flag default false', isFeatureEnabled('chat_enabled'), false);
+setFeatureFlag('chat_enabled', true);
+check('internal flag override works', isFeatureEnabled('chat_enabled'), true);
+check('flag snapshot is copied', getFeatureFlags().chat_enabled, true);
+resetFeatureFlags();
+check('feature flags reset to disabled', isFeatureEnabled('chat_enabled'), false);
+
 /* ================= syncPayload.ts ================= */
 const songA = { id: 's1', title: 'Lover', artist: 'Diljit', cover: '', preview: 'https://x/a.mp3', duration: 225000 };
 const songB = { id: 's2', title: 'Proper Patola', artist: 'Badshah', cover: '', preview: 'https://x/b.mp3', duration: 252000 };
 const ctx = { senderId: 'devA', position: 5000, sentAt: 100000 };
+
+/* ================= likedSongs.ts ================= */
+const likedOn = toggleLikedSong([songA], songB);
+check('liked toggle adds song to front', likedOn.songs.map(song => song.id), ['s2', 's1']);
+check('liked toggle reports added state', likedOn.liked, true);
+check('liked lookup finds song', isLikedSong(likedOn.songs, 's2'), true);
+const likedOff = toggleLikedSong(likedOn.songs, songB);
+check('liked toggle removes existing song', likedOff.songs.map(song => song.id), ['s1']);
+check('liked toggle reports removed state', likedOff.liked, false);
+check('liked remove is idempotent', removeLikedSong([songA], 'missing').map(song => song.id), ['s1']);
 
 // Event routing (Phase 11: song → song-change, baaki → playback-control)
 check('song -> song-change', syncEventForAction({ type: 'song', song: songA, queue: [songA], position: 0, isPlaying: true, remote: false }), SYNC_EVENT_SONG);
@@ -125,6 +154,14 @@ check('parse garbage string -> null', parseSyncPayload('not-json{'), null);
 check('parse number -> null', parseSyncPayload(42), null);
 check('parse missing senderId -> null', parseSyncPayload({ type: 'play', position: 100 }), null);
 check('parse drops preview-less song', parseSyncPayload(JSON.stringify({ ...JSON.parse(wire), song: { ...songA, preview: '' } })), null);
+const ytSong = { ...songA, preview: '', source: 'youtube_music', videoId: 'yt-1', previewOnly: false };
+const ytWire = JSON.stringify({
+  ...JSON.parse(wire),
+  song: ytSong,
+  queue: [ytSong],
+});
+check('parse YT Music song without preview', parseSyncPayload(ytWire)?.song.videoId, 'yt-1');
+check('parse preserves YT Music source', parseSyncPayload(ytWire)?.song.source, 'youtube_music');
 check('robust parse fired warnings', warnCount > 0, true);
 
 // Echo / latency guards (NFR-3.3 + glitch-storm protection)
@@ -166,6 +203,7 @@ check('parse queue-add garbage -> null', parseQueueAdd('nope{'), null);
 check('parse queue-add missing song -> null', parseQueueAdd({ addedBy: 'x', senderId: 's', sentAt: 1 }), null);
 check('parse queue-add missing senderId -> null', parseQueueAdd({ song: songA, addedBy: 'x' }), null);
 check('parse queue-add preview-less song -> null', parseQueueAdd({ song: { ...songA, preview: '' }, addedBy: 'x', senderId: 's' }), null);
+check('parse queue-add YT Music song', parseQueueAdd({ song: ytSong, addedBy: 'x', senderId: 's' })?.song.videoId, 'yt-1');
 
 // Room chat ('chat-message' — FR-5.12, queue-add jaisa pattern)
 check('chat-message event name', SYNC_EVENT_CHAT_MESSAGE, 'chat-message');
@@ -181,6 +219,23 @@ check('parse chat garbage -> null', parseChatMessage('nope{'), null);
 check('parse chat missing id -> null', parseChatMessage({ text: 'hi', sender: 'A', senderId: 's' }), null);
 check('parse chat missing senderId -> null', parseChatMessage({ id: 'x-1', text: 'hi', sender: 'A' }), null);
 check('parse chat empty text -> null', parseChatMessage({ id: 'x-1', text: '  ', sender: 'A', senderId: 's' }), null);
+
+/* ================= playlistImport.ts ================= */
+const importSong = {
+  id: 'import-song',
+  title: 'Imported Song',
+  artist: 'Imported Artist',
+  cover: '',
+  preview: 'https://example.com/imported.mp3',
+  duration: 185000,
+};
+const importedOne = parsePlaylistImportText(JSON.stringify({ name: 'Road Trip', songs: [importSong] }));
+check('playlist import reads name', importedOne[0]?.name, 'Road Trip');
+check('playlist import reads songs', importedOne[0]?.songs.map(song => song.id), ['import-song']);
+check('playlist import skips incomplete songs', parsePlaylistImportText(JSON.stringify({ name: 'Mix', songs: [importSong, { title: 'Missing audio' }] }))[0].skippedSongs, 1);
+check('playlist import supports playlist arrays', parsePlaylistImportText(JSON.stringify({ playlists: [{ name: 'A', songs: [importSong] }, { name: 'B', tracks: [importSong] }] })).map(item => item.name), ['A', 'B']);
+check('playlist import converts seconds to milliseconds', parsePlaylistImportText(JSON.stringify({ name: 'Seconds', songs: [{ ...importSong, duration: 185 }] }))[0].songs[0].duration, 185000);
+check('playlist export is valid JSON', JSON.parse(playlistToImportJson({ id: 'p', name: 'Export', songs: [importSong], createdAt: 1 })).name, 'Export');
 
 console.warn = realWarn;
 

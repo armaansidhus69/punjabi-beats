@@ -18,14 +18,13 @@ Punjabi Music Streaming mobile app called "Punjabi Beats".
 - Animations: react-native-reanimated v3
 
 ## APIs (All FREE, no key required)
-1. Music Search (PRIMARY): `https://itunes.apple.com/search` (iTunes Search API)
-   - Endpoint: `?term={q}&media=music&entity=song&limit=30&country=IN`
-   - ⚠️ 2026-09-24 UPDATE: saare public JioSaavn mirrors DEAD hain
-     (saavn.dev/saavn.me → NXDOMAIN; sumitkolhe/vij/harsh-patel vercel → 404).
-     iTunes hi reliable free source hai. **country=IN zaroori hai** —
-     IN store perfect Punjabi results deta hai, US store garbage deta hai.
-   - Optional: agar koi JioSaavn mirror revive ho to `EXPO_PUBLIC_JIOSAAVN_BASE`
-     env me set karo — mirror try hota hai, fail pe iTunes (fail-safe).
+1. Music Search (PRIMARY): open-source JioSaavn API
+   - Endpoint: `https://saavn.sumit.co/api/search/songs?query={q}&page={page}&limit=40`
+   - Full Punjabi + Hindi streams, with pagination for larger result lists.
+   - Self-host the MIT-licensed API and set `EXPO_PUBLIC_JIOSAAVN_BASE` for production.
+   - Audius and iTunes IN-store remain fallback sources.
+   - Optional Reverbio-style YouTube/Piped bridge: set `EXPO_PUBLIC_YOUTUBE_MATCH_URL`
+     for metadata search and `EXPO_PUBLIC_PIPED_API` for audio resolution.
 2. Real-time Sync: Apinator (WebSocket + HTTP trigger)
 3. Backend: Vercel Serverless (api/publish.js)
 
@@ -134,7 +133,7 @@ type Playlist = { id: string; name: string; songs: Song[]; createdAt: number };
 ```
 
 ### 5. Error Handling (MANDATORY)
-- iTunes primary (IN store) — JioSaavn mirrors dead; optional mirror env se
+- Open-source JioSaavn primary — Audius and iTunes IN-store fallback se
 - Apinator disconnect → auto-reconnect
 - No internet → show cached songs + offline toast
 - Audio load fail → skip to next song

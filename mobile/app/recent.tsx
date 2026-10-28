@@ -11,6 +11,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Song } from '../types';
 import { getRecentlyPlayed } from '../services/storage';
 import { usePlayer } from '../stores/playerStore';
+import { useLikedSongs } from '../stores/likedSongsStore';
 import { useMiniPlayerPadding } from '../hooks/useMiniPlayerPadding';
 import { colors } from '../constants/colors';
 import { typography } from '../constants/typography';
@@ -26,6 +27,8 @@ export default function RecentlyPlayedScreen() {
 
   const playSong = usePlayer(s => s.playSong);
   const currentSongId = usePlayer(s => s.currentSong?.id ?? null);
+  const likedSongs = useLikedSongs(s => s.songs);
+  const toggleLiked = useLikedSongs(s => s.toggleLiked);
   const contentPadding = useMiniPlayerPadding(spacing.xl);
 
   // Mount pe history laao (screen har baar fresh — wapas aane pe nayi plays dikhein)
@@ -71,7 +74,13 @@ export default function RecentlyPlayedScreen() {
         data={songs}
         keyExtractor={song => song.id}
         renderItem={({ item }) => (
-          <SongItem song={item} onPress={handleSongPress} isActive={item.id === currentSongId} />
+          <SongItem
+            song={item}
+            onPress={handleSongPress}
+            isActive={item.id === currentSongId}
+            isLiked={likedSongs.some(song => song.id === item.id)}
+            onLikePress={toggleLiked}
+          />
         )}
         contentContainerStyle={{ paddingBottom: contentPadding, flexGrow: 1 }}
         showsVerticalScrollIndicator={false}

@@ -3,8 +3,8 @@
 Chhota aur seedha project hai — contributions welcome! 🙌
 
 ## Pehle padho
-- [`docs/REQUIREMENTS.md`](./docs/REQUIREMENTS.md) — FR-ids se features track hote hain
-- [`docs/CHECKLIST.md`](./docs/CHECKLIST.md) — 18 phases ka live status (tick counts update rehte hain)
+- [`mobile/docs/REQUIREMENTS.md`](./mobile/docs/REQUIREMENTS.md) — FR-ids se features track hote hain
+- [`mobile/docs/CHECKLIST.md`](./mobile/docs/CHECKLIST.md) — 18 phases ka live status (tick counts update rehte hain)
 - [`QUICKSTART.md`](./QUICKSTART.md) — run/deploy steps
 
 ## Workflow

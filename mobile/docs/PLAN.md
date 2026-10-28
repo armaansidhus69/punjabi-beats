@@ -197,7 +197,7 @@ Ek complete Punjabi music streaming app jo dost alag-alag shehron se bhi **same 
 
 | Risk | Probability | Impact | Mitigation |
 |---|---|---|---|
-| JioSaavn API band | **CONFIRMED DEAD (2026-09-24)** | High | iTunes IN-store primary use ho raha hai; mirror env-optional |
+| Public JioSaavn host unavailable | Medium | High | Self-host the MIT-licensed API with `EXPO_PUBLIC_JIOSAAVN_BASE`; Audius/iTunes remain fallbacks |
 | Apinator free tier limit | Low | Medium | Cache events, throttle broadcasts |
 | Audio not loading | Low | High | Skip song, log error |
 | AsyncStorage full | Low | Medium | Limit playlists to 50 songs each |

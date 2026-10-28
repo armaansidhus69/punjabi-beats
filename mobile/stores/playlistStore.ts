@@ -7,6 +7,7 @@
 import { create } from 'zustand';
 import { Playlist, Song } from '../types';
 import { getPlaylists, savePlaylists } from '../services/storage';
+import type { ImportedPlaylist } from '../utils/playlistImport';
 
 function generatePlaylistId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -17,6 +18,7 @@ interface PlaylistStore {
   loaded: boolean;
   load: () => Promise<void>;
   createPlaylist: (name: string) => Playlist;
+  importPlaylists: (playlists: ImportedPlaylist[]) => Promise<Playlist[]>;
   deletePlaylist: (id: string) => void;
   /** returns false agar duplicate song ho (FR-4.7) */
   addSongToPlaylist: (playlistId: string, song: Song) => Promise<boolean>;
@@ -49,6 +51,34 @@ export const usePlaylists = create<PlaylistStore>()((set, get) => ({
     set({ playlists: next });
     void savePlaylists(next);
     return playlist;
+  },
+
+  importPlaylists: async imported => {
+    const existing = get().playlists;
+    const usedNames = new Set(existing.map(playlist => playlist.name.trim().toLowerCase()));
+    const created: Playlist[] = [];
+
+    for (const item of imported) {
+      const baseName = item.name.trim() || 'Imported playlist';
+      let name = baseName;
+      let suffix = 2;
+      while (usedNames.has(name.toLowerCase())) {
+        name = `${baseName} (${suffix})`;
+        suffix += 1;
+      }
+      usedNames.add(name.toLowerCase());
+      created.push({
+        id: generatePlaylistId(),
+        name,
+        songs: item.songs,
+        createdAt: Date.now(),
+      });
+    }
+
+    const next = [...existing, ...created];
+    set({ playlists: next });
+    await savePlaylists(next);
+    return created;
   },
 
   deletePlaylist: id => {

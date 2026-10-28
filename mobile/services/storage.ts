@@ -3,11 +3,13 @@
  * Saare reads defensively handle hote hain (corrupt data pe empty fallback).
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Playlist, Song } from '../types';
+import { Playlist, RepeatMode, Song } from '../types';
 
 const PLAYLISTS_KEY = '@pb_playlists';
 const RECENT_KEY = '@pb_recently_played';
 const SEARCHES_KEY = '@pb_recent_searches';
+const PLAYER_STATE_KEY = '@pb_player_state';
+const LIKED_SONGS_KEY = '@pb_liked_songs';
 
 const MAX_RECENT_SONGS = 20;
 
@@ -116,6 +118,37 @@ export async function clearRecentlyPlayed(): Promise<void> {
   }
 }
 
+/* ---------- Liked Songs ---------- */
+
+export async function getLikedSongs(): Promise<Song[]> {
+  try {
+    const raw = await AsyncStorage.getItem(LIKED_SONGS_KEY);
+    if (!raw) return [];
+    const parsed: unknown = JSON.parse(raw);
+    if (isSongArray(parsed)) return parsed;
+    if (Array.isArray(parsed)) {
+      const kept = parsed.filter(isSong);
+      console.warn(
+        `Liked songs data corrupt tha — ${parsed.length - kept.length} invalid row drop ki`,
+      );
+      return kept;
+    }
+    console.warn('Liked songs data corrupt tha — [] reset kiya');
+    return [];
+  } catch (err) {
+    console.warn('Liked songs read failed:', err);
+    return [];
+  }
+}
+
+export async function saveLikedSongs(songs: Song[]): Promise<void> {
+  try {
+    await AsyncStorage.setItem(LIKED_SONGS_KEY, JSON.stringify(songs));
+  } catch (err) {
+    console.warn('Liked songs save failed:', err);
+  }
+}
+
 /* ---------- Recent Searches (Phase 5 — dedupe/cap logic searchStore me hai) ---------- */
 
 function isStringArray(value: unknown): value is string[] {
@@ -147,6 +180,62 @@ export async function clearRecentSearches(): Promise<void> {
     await AsyncStorage.removeItem(SEARCHES_KEY);
   } catch (err) {
     console.warn('Recent searches clear failed:', err);
+  }
+}
+
+/* ---------- Player queue snapshot ---------- */
+
+export interface PersistedPlayerState {
+  queue: Song[];
+  currentSongId: string | null;
+  index: number;
+  position: number;
+  shuffle: boolean;
+  repeat: RepeatMode;
+  volume: number;
+}
+
+function isRepeatMode(value: unknown): value is RepeatMode {
+  return value === 'off' || value === 'all' || value === 'one';
+}
+
+function isPersistedPlayerState(value: unknown): value is PersistedPlayerState {
+  if (typeof value !== 'object' || value === null) return false;
+  const state = value as Partial<PersistedPlayerState>;
+  return (
+    isSongArray(state.queue) &&
+    (state.currentSongId === null || typeof state.currentSongId === 'string') &&
+    typeof state.index === 'number' &&
+    Number.isFinite(state.index) &&
+    typeof state.position === 'number' &&
+    Number.isFinite(state.position) &&
+    state.position >= 0 &&
+    typeof state.shuffle === 'boolean' &&
+    isRepeatMode(state.repeat) &&
+    typeof state.volume === 'number' &&
+    Number.isFinite(state.volume) &&
+    state.volume >= 0 &&
+    state.volume <= 1
+  );
+}
+
+export async function getPersistedPlayerState(): Promise<PersistedPlayerState | null> {
+  try {
+    const raw = await AsyncStorage.getItem(PLAYER_STATE_KEY);
+    if (!raw) return null;
+    const parsed: unknown = JSON.parse(raw);
+    return isPersistedPlayerState(parsed) ? parsed : null;
+  } catch (err) {
+    console.warn('Player state read failed:', err);
+    return null;
+  }
+}
+
+export async function savePersistedPlayerState(state: PersistedPlayerState): Promise<void> {
+  try {
+    await AsyncStorage.setItem(PLAYER_STATE_KEY, JSON.stringify(state));
+  } catch (err) {
+    console.warn('Player state save failed:', err);
   }
 }
 

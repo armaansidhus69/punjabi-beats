@@ -11,6 +11,7 @@ import { Song } from '../../types';
 import { getMoodById } from '../../constants/moods';
 import { getSongsByMood } from '../../services/musicApi';
 import { usePlayer } from '../../stores/playerStore';
+import { useLikedSongs } from '../../stores/likedSongsStore';
 import { promptAddSong } from '../../utils/songActions';
 import { useMiniPlayerPadding } from '../../hooks/useMiniPlayerPadding';
 import { colors } from '../../constants/colors';
@@ -36,6 +37,8 @@ export default function MoodScreen() {
 
   const playSong = usePlayer(s => s.playSong);
   const currentSongId = usePlayer(s => s.currentSong?.id ?? null);
+  const likedSongs = useLikedSongs(s => s.songs);
+  const toggleLiked = useLikedSongs(s => s.toggleLiked);
   // SongItem ke '+' se shared prompt — room me ho to "Add to Room Queue"
   // option, warna seedha add-to-playlist sheet (Phase 9)
   const handleAddPress = promptAddSong;
@@ -100,6 +103,8 @@ export default function MoodScreen() {
             onPress={handleSongPress}
             isActive={item.id === currentSongId}
             onAddPress={handleAddPress}
+            isLiked={likedSongs.some(song => song.id === item.id)}
+            onLikePress={toggleLiked}
           />
         )}
         contentContainerStyle={{ paddingBottom: contentPadding }}
@@ -190,4 +195,3 @@ const styles = StyleSheet.create({
   retryText: { ...typography.body, color: colors.background, fontWeight: '700' },
   pressed: { opacity: 0.7 },
 });
-

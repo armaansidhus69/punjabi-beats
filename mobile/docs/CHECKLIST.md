@@ -41,17 +41,18 @@
 
 ### Music API Service (`services/musicApi.ts`)
 - [x] `searchSongs(query: string): Promise<Song[]>`
-- [x] **Multi-source fallback chain (full songs priority):** JioSaavn mirrors → Audius → iTunes (2026-09-28)
-  - [x] Try 1 `searchJioSaavn` — 5 mirrors, dono paths (`/api/search/songs` + `/search/songs`), parallel + 10 min dead-cache
+- [x] **Multi-source fallback chain (full songs priority):** open-source JioSaavn API → Audius → iTunes (2026-10-25)
+  - [x] Try 1 `searchJioSaavn` — default `saavn.sumit.co`, optional self-host override, paginated up to 100 results
   - [x] Try 2 `searchAudius` — `api.audius.co/v1/tracks/search` (free, no key, full songs 60s+)
+  - [x] Optional Reverbio-style YouTube bridge — metadata search via existing backend + Piped audio resolver when `EXPO_PUBLIC_PIPED_API` is configured
   - [x] Try 3 `searchITunes` — `country=IN`, `entity=song` (sirf 30s preview) + partial Audius top-up
   - [x] **Audio guard** — JioSaavn mirror ke download URL ka HEAD check; zombie mirror (metadata sahi, CDN 404) skip hota hai
   - [x] `previewOnly` flag: sirf iTunes pe `true` → SongItem ka "30s" badge + player note
 - [x] Response mapping (har source ka mapper → common `Song`; JioSaavn ke 3 shapes + `link`/`url` dono)
 - [x] Error handling with fallback (har source ka try/catch + `[musicApi] … → source` console log)
-- [x] Test: `searchSongs('Diljit')` → **Audius, 29 full songs** (23 songs ≥3 min, longest 448s) — `probe-search.mjs` 9/9 PASS
+- [x] Test: `searchSongs('Diljit')` → **JioSaavn full songs** with Audius/iTunes fallback — `probe-search.mjs` live PASS
 - [x] Test: Karan Aujla / Sidhu Moose Wala / Satinder Sartaaj → full songs; `xyzabc` → 0 full (clips filter)
-- [x] JioSaavn mirror status (2026-09-28): 3 dead (404), `saavn-api` → downloadUrl nahi, `jiosaavn-api-2` → metadata + 320kbps link par CDN 404
+- [x] JioSaavn status (2026-10-25): `saavn.sumit.co` returns Punjabi/Hindi metadata plus playable 320kbps URLs; old mirrors remain fallback-only
 
 ### Storage Service (`services/storage.ts`)
 - [x] `getPlaylists(): Promise<Playlist[]>`
@@ -453,3 +454,39 @@ Before releasing:
 - [x] **M5:** Backend deployed (Phase 12) — LIVE `punjabi-beats-api.vercel.app` + probe 3/3
 - [ ] **M6:** APK built (Phase 16)
 - [ ] **M7:** Released! 🎉
+
+---
+
+## ❤️ PHASE 18: Liked Songs / Favorites
+
+### Storage and State
+- [x] Add `@pb_liked_songs` AsyncStorage key
+- [x] Add defensive `getLikedSongs()` and `saveLikedSongs()` helpers
+- [x] Add `likedSongsStore.ts` with `load`, `isLiked`, `toggleLiked`, `removeLiked`, and `clearLiked`
+- [x] Deduplicate liked songs by `song.id`
+- [x] Restore liked songs after app restart
+
+### Song Actions
+- [x] Add optional liked-state props to `components/SongItem.tsx`
+- [x] Add heart button to Home, Search, Mood, Recent, and Playlist song rows
+- [x] Add heart button to the full player for the current song
+- [x] Keep playlist, queue, YouTube, and room actions unchanged
+- [x] Add haptic feedback and accessible labels for like/unlike
+
+### Library and Screen
+- [x] Add a `Liked Songs` entry to `app/(tabs)/library.tsx`
+- [x] Create `app/liked.tsx`
+- [x] Show liked-song count and empty state
+- [x] Support individual playback, Play All, and Shuffle
+- [x] Support removing songs from the Liked Songs screen
+- [x] Preserve MiniPlayer spacing and existing navigation patterns
+
+### Verification
+- [x] Add pure logic coverage for toggle/dedupe behavior
+- [x] Run `npm test`
+- [x] Run `npm run typecheck`
+- [x] Run `npm run lint`
+- [x] Run `npx expo-doctor`
+- [ ] Manually verify save, remove, restart persistence, Play All, and Shuffle
+
+**Phase 18 Complete?** `[~]` (code + automated checks complete; device manual verification remains)

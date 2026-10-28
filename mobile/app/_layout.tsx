@@ -26,7 +26,11 @@ import { initRoomSync } from '../services/roomSync';
 import { hydrateDeadMirrorCache } from '../services/musicApi';
 import TrackPlayer from 'react-native-track-player';
 import { playbackService } from '../services/playbackService';
-import { initializePlayer } from '../stores/playerStore';
+import { useLikedSongs } from '../stores/likedSongsStore';
+import { initializeCore } from '../core/bootstrap';
+import { initializeMedia } from '../core/media/mediaFacade';
+import { useAuthStore } from '../stores/authStore';
+import { handleInitialOAuthCallback } from '../core/auth/authService';
 
 TrackPlayer.registerPlaybackService(() => playbackService);
 
@@ -77,13 +81,19 @@ export default function RootLayout() {
   // listeners + socket state listener register. Idempotent aur missing-env par
   // non-crashing (warning + failed state).
   useEffect(() => {
+    void initializeCore()
+      .then(() => handleInitialOAuthCallback())
+      .then(() => useAuthStore.getState().initialize())
+      .catch(error => console.warn('[auth] initial OAuth callback failed:', error));
     initRoomSync();
     // Dead JioSaavn mirrors AsyncStorage se preload karo — warna pehli search
     // app launch pe ~5s wait karti (5 dead mirrors × 2 paths × timeout).
     void hydrateDeadMirrorCache();
+    void useLikedSongs.getState().load();
     if (Platform.OS !== 'web') {
-      void initializePlayer().catch(err => console.warn('TrackPlayer setup failed:', err));
+      void initializeMedia().catch(err => console.warn('TrackPlayer setup failed:', err));
     }
+    return () => useAuthStore.getState().dispose();
   }, []);
 
   return (

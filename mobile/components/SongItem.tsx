@@ -22,6 +22,9 @@ interface SongItemProps {
   onAddPress?: (song: Song) => void;
   /** diya jaaye tabhi "hatao" (trash) button dikhta hai — playlist detail screen */
   onRemovePress?: (song: Song) => void;
+  /** diya jaaye tabhi heart button dikhta hai — liked songs toggle */
+  isLiked?: boolean;
+  onLikePress?: (song: Song) => void;
 }
 
 export default function SongItem({
@@ -30,34 +33,43 @@ export default function SongItem({
   isActive = false,
   onAddPress,
   onRemovePress,
+  isLiked = false,
+  onLikePress,
 }: SongItemProps) {
   return (
-    <Pressable
-      onPress={() => {
-        tapFeedback();
-        onPress(song);
-      }}
-      accessibilityRole="button"
-      accessibilityLabel={`${song.title} — ${song.artist}`}
-      style={({ pressed }) => [styles.row, isActive && styles.rowActive, pressed && styles.pressed]}
-    >
-      <SongArtwork uri={song.cover} size={45} radius={10} />
+    <View style={[styles.row, isActive && styles.rowActive]}>
+      <Pressable
+        onPress={() => {
+          tapFeedback();
+          onPress(song);
+        }}
+        accessibilityRole="button"
+        accessibilityLabel={`${song.title} — ${song.artist}`}
+        style={({ pressed }) => [styles.mainContent, pressed && styles.pressed]}
+      >
+        <SongArtwork uri={song.cover} size={45} radius={10} />
 
-      <View style={styles.info}>
-        <Text style={[styles.title, isActive && styles.titleActive]} numberOfLines={1}>
-          {song.title}
-        </Text>
-        <Text style={styles.artist} numberOfLines={1}>
-          {song.artist}
-        </Text>
-      </View>
-
-      {/* iTunes 30s preview badge — full-song mirror env enable hone pe gayab */}
-      {song.previewOnly ? (
-        <View style={styles.previewBadge}>
-          <Text style={styles.previewBadgeText}>30s</Text>
+        <View style={styles.info}>
+          <Text style={[styles.title, isActive && styles.titleActive]} numberOfLines={1}>
+            {song.title}
+          </Text>
+          <Text style={styles.artist} numberOfLines={1}>
+            {song.artist}
+          </Text>
         </View>
-      ) : null}
+
+        {song.source === 'youtube_music' && !song.previewOnly ? (
+          <View style={styles.youtubeBadge}>
+            <Text style={styles.youtubeBadgeText}>YT Music</Text>
+          </View>
+        ) : song.previewOnly ? (
+          <View style={styles.previewBadge}>
+            <Text style={styles.previewBadgeText}>30s</Text>
+          </View>
+        ) : null}
+
+        {isActive ? <Ionicons name="volume-medium" size={18} color={colors.primary} /> : null}
+      </Pressable>
 
       {/* YouTube link-out — sirf preview-only gaano pe (full version dhundhne ke liye).
           WebView player NAHI hai (room sync + background play dono bachate hain —
@@ -74,7 +86,25 @@ export default function SongItem({
         </Pressable>
       ) : null}
 
-      {isActive ? <Ionicons name="volume-medium" size={18} color={colors.primary} /> : null}
+      {onLikePress ? (
+        <Pressable
+          onPress={() => {
+            tapFeedback();
+            onLikePress(song);
+          }}
+          hitSlop={10}
+          accessibilityRole="button"
+          accessibilityLabel={isLiked ? `${song.title} liked songs se hatao` : `${song.title} ko like karo`}
+          accessibilityState={{ selected: isLiked }}
+          style={({ pressed }) => [styles.actionButton, pressed && styles.pressed]}
+        >
+          <Ionicons
+            name={isLiked ? 'heart' : 'heart-outline'}
+            size={21}
+            color={isLiked ? colors.primary : colors.subtext}
+          />
+        </Pressable>
+      ) : null}
 
       {onAddPress ? (
         <Pressable
@@ -102,7 +132,7 @@ export default function SongItem({
           <Ionicons name="trash-outline" size={20} color={colors.subtext} />
         </Pressable>
       ) : null}
-    </Pressable>
+    </View>
   );
 }
 
@@ -116,6 +146,13 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   rowActive: { backgroundColor: colors.surface },
+  mainContent: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
   pressed: { opacity: 0.65 },
   info: { flex: 1, gap: 2 },
   title: { ...typography.body, color: colors.text, fontWeight: '600' },
@@ -131,4 +168,13 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
   },
   previewBadgeText: { fontSize: 10, fontWeight: '700', color: colors.primary },
+  youtubeBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    backgroundColor: colors.primary + '22',
+  },
+  youtubeBadgeText: { fontSize: 10, fontWeight: '700', color: colors.primary },
 });

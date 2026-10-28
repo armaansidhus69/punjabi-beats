@@ -4,11 +4,13 @@ Punjabi music app — **Expo React Native** (mobile) + **Vercel serverless** (ro
 broadcast backend). Search Punjabi songs, make playlists, and — the fun part —
 **group rooms jahan sabke devices pe ek hi song sync chalta hai** (Apinator realtime).
 
-> Full development status: [`docs/CHECKLIST.md`](./docs/CHECKLIST.md) · Deep-dive setup: [`QUICKSTART.md`](./QUICKSTART.md) · Spec: [`docs/REQUIREMENTS.md`](./docs/REQUIREMENTS.md)
+> Full development status: [`mobile/docs/CHECKLIST.md`](./mobile/docs/CHECKLIST.md) · Deep-dive setup: [`QUICKSTART.md`](./QUICKSTART.md) · Spec: [`mobile/docs/REQUIREMENTS.md`](./mobile/docs/REQUIREMENTS.md)
 
 ## ✨ Features
 
-- **Search** — multi-source chain (JioSaavn mirrors → Audius → iTunes) se Punjabi songs;
+- **Search** — open-source JioSaavn stream (Punjabi + Hindi) → Audius → optional
+  Reverbio-style YouTube/Piped bridge → iTunes fallback;
+  larger searches page through the catalogue and keep full-song priority;
   **full-song priority** — artist expansion + per-song upgrade se 30s preview bhi full
   me upgrade hota hai; debounced, recent-search chips, empty/no-results states
 - **Moods** — 8 mood cards (Romantic, Sad, Party, …) → curated query se gaane
@@ -35,7 +37,7 @@ broadcast backend). Search Punjabi songs, make playlists, and — the fun part �
 | Audio | react-native-track-player@4.1.2 (native service + notification controls) |
 | Realtime | `@apinator/client` (WebSocket channels) |
 | Backend | Vercel serverless `api/publish.js` + `@apinator/server` (HTTP trigger) |
-| Data | iTunes Search API + Audius (free, no key) · AsyncStorage |
+| Data | Open-source JioSaavn API + Audius (free, no key) + iTunes previews · AsyncStorage |
 
 ## 📂 Project structure
 
@@ -48,7 +50,7 @@ broadcast backend). Search Punjabi songs, make playlists, and — the fun part �
 │   ├── services/           # musicApi, apinator, roomSync, storage
 │   ├── utils/              # syncPayload (wire format), haptics, format
 │   └── constants/          # colors, typography, spacing, moods, layout
-├── docs/                   # CHECKLIST (live status), REQUIREMENTS, PLAN, PROMPT
+├── mobile/docs/            # CHECKLIST (live status), REQUIREMENTS, PLAN, PROMPT
 ├── vercel.json             # backend deploy config
 └── probe-*.mjs             # headless API/self-test scripts (node)
 ```
@@ -75,7 +77,8 @@ npx expo start           # QR scan karo — Expo Go me app chalegi
 | `EXPO_PUBLIC_APINATOR_KEY` | socket key (public) |
 | `EXPO_PUBLIC_PUBLISH_URL` | `https://YOUR-APP.vercel.app/api/publish` (Phase 12 deploy ke baad) |
 | `EXPO_PUBLIC_ITUNES_COUNTRY` | optional, default `IN` |
-| `EXPO_PUBLIC_JIOSAAVN_BASE` | optional mirror (dead mirrors ke liye fallback) |
+| `EXPO_PUBLIC_JIOSAAVN_BASE` | optional self-hosted JioSaavn API override (default: `https://saavn.sumit.co`) |
+| `EXPO_PUBLIC_PIPED_API` | optional live Piped API for YouTube bridge audio resolution |
 
 ### 2) Backend (Vercel) — room sync broadcast ke liye
 
@@ -102,14 +105,14 @@ cd mobile && npx tsc --noEmit   # 0 TypeScript errors (strict mode)
 node probe-publish.mjs          # backend handler test
 ```
 
-Manual/device tests ke liye phase-wise list: [`docs/CHECKLIST.md`](./docs/CHECKLIST.md).
+Manual/device tests ke liye phase-wise list: [`mobile/docs/CHECKLIST.md`](./mobile/docs/CHECKLIST.md).
 
 ## 📚 Development Docs
 
-- [`docs/CHECKLIST.md`](./docs/CHECKLIST.md) — 18-phase live status (tick counts)
-- [`docs/REQUIREMENTS.md`](./docs/REQUIREMENTS.md) — FR/NFR spec (feature ids)
-- [`docs/PLAN.md`](./docs/PLAN.md) — architecture + phase plan
-- [`docs/PROMPT.md`](./docs/PROMPT.md) — original build prompt / UI-UX spec
+- [`mobile/docs/CHECKLIST.md`](./mobile/docs/CHECKLIST.md) — 18-phase live status (tick counts)
+- [`mobile/docs/REQUIREMENTS.md`](./mobile/docs/REQUIREMENTS.md) — FR/NFR spec (feature ids)
+- [`mobile/docs/PLAN.md`](./mobile/docs/PLAN.md) — architecture + phase plan
+- [`mobile/docs/PROMPT.md`](./mobile/docs/PROMPT.md) — original build prompt / UI-UX spec
 
 ## 🤝 Contributing
 

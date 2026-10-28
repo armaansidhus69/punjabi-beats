@@ -24,6 +24,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Song } from '../../types';
 import { searchSongs } from '../../services/musicApi';
 import { usePlayer } from '../../stores/playerStore';
+import { useLikedSongs } from '../../stores/likedSongsStore';
 import { promptAddSong } from '../../utils/songActions';
 import { MAX_RECENT_SEARCHES, useSearch } from '../../stores/searchStore';
 import { useDebounce } from '../../hooks/useDebounce';
@@ -70,6 +71,8 @@ export default function SearchScreen() {
 
   const playSong = usePlayer(s => s.playSong);
   const currentSongId = usePlayer(s => s.currentSong?.id ?? null);
+  const likedSongs = useLikedSongs(s => s.songs);
+  const toggleLiked = useLikedSongs(s => s.toggleLiked);
   // SongItem ke '+' se shared prompt — room me ho to "Add to Room Queue"
   // option, warna seedha add-to-playlist sheet (Phase 9)
   const handleAddPress = promptAddSong;
@@ -270,6 +273,8 @@ export default function SearchScreen() {
             onPress={handleSongPress}
             isActive={item.id === currentSongId}
             onAddPress={handleAddPress}
+            isLiked={likedSongs.some(song => song.id === item.id)}
+            onLikePress={toggleLiked}
           />
         )}
         contentContainerStyle={[

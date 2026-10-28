@@ -7,8 +7,8 @@
 |---|---|---|
 | FR-1.1 | User can search songs by name | P0 |
 | FR-1.2 | User can search by artist name | P0 |
-| FR-1.3 | Search returns max 30 results | P0 |
-| FR-1.4 | iTunes Search API primary (`country=IN`); optional JioSaavn mirror via env | P0 |
+| FR-1.3 | Search returns up to 100 results | P0 |
+| FR-1.4 | Open-source JioSaavn API primary; Audius + iTunes (`country=IN`) fallbacks | P0 |
 | FR-1.5 | Empty search shows helpful message | P1 |
 | FR-1.6 | Recent searches saved (last 10) | P2 |
 
@@ -179,7 +179,7 @@
 ## 5. Assumptions
 
 1. User has internet connection (WiFi or mobile data)
-2. iTunes Search API (free, no key) available rahega — 2026-09-24 pe live verified; saare JioSaavn mirrors dead hain
+2. Open-source JioSaavn API ka public host available rahega; production deployments apna MIT-licensed instance self-host kar sakte hain
 3. Apinator free tier is sufficient
 4. User's phone supports audio playback
 5. User knows at least one Punjabi song name

@@ -1,4 +1,4 @@
-/** Player store (Zustand) — TrackPlayer owns native playback; this store owns app queue/UI state. */
+import { Alert, Linking } from 'react-native';
 import { create } from 'zustand';
 import TrackPlayer, {
   AppKilledPlaybackBehavior,
@@ -8,13 +8,21 @@ import TrackPlayer, {
   State,
 } from 'react-native-track-player';
 import { PlayerActionEvent, PlayerState, RepeatMode, Song } from '../types';
-import { addRecentlyPlayed } from '../services/storage';
+import {
+  addRecentlyPlayed,
+  getPersistedPlayerState,
+  savePersistedPlayerState,
+} from '../services/storage';
+import { resolveSongPlaybackUrl } from '../services/musicApi';
 
 let setupPromise: Promise<void> | null = null;
 let listenersRegistered = false;
 let loadGeneration = 0;
 let loadQueue: Promise<void> = Promise.resolve();
 let requestedTrackId: string | null = null;
+let persistenceReady = false;
+let persistenceTimer: ReturnType<typeof setTimeout> | null = null;
+let restorePromise: Promise<void> | null = null;
 
 /* ---------- Action listener (room sync) ---------- */
 
@@ -46,15 +54,69 @@ function getRepeatTrackMode(mode: RepeatMode): TrackRepeatMode {
   return TrackRepeatMode.Off;
 }
 
-function toTrack(song: Song) {
+function toTrack(song: Song, urlOverride?: string) {
   return {
     id: song.id,
-    url: song.preview,
+    url: urlOverride ?? song.preview,
     title: song.title,
     artist: song.artist,
     artwork: song.cover,
     duration: song.duration / 1000,
   };
+}
+
+interface ResolvedTrack {
+  song: Song;
+  url: string | null;
+}
+
+function schedulePersistedState(): void {
+  if (!persistenceReady || persistenceTimer) return;
+  persistenceTimer = setTimeout(() => {
+    persistenceTimer = null;
+    const state = usePlayer.getState();
+    void savePersistedPlayerState({
+      queue: state.queue,
+      currentSongId: state.currentSong?.id ?? null,
+      index: state.index,
+      position: Math.max(0, state.position),
+      shuffle: state.shuffle,
+      repeat: state.repeat,
+      volume: state.volume,
+    });
+  }, 500);
+}
+
+async function resolveTrack(song: Song, openFallback = true): Promise<ResolvedTrack> {
+  if (song.source !== 'youtube_music' || !song.videoId) {
+    return { song, url: song.preview || null };
+  }
+
+  try {
+    const resolved = await resolveSongPlaybackUrl(song);
+    const duration = resolved.duration ?? song.duration;
+    const resolvedSong =
+      resolved.previewOnly === song.previewOnly && duration === song.duration
+        ? song
+        : { ...song, previewOnly: resolved.previewOnly, duration };
+    if (resolved.url) return { song: resolvedSong, url: resolved.url };
+  } catch (err) {
+    console.warn('[playerStore] Playback lookup failed:', err);
+  }
+
+  if (openFallback) {
+    try {
+      await Linking.openURL(`https://www.youtube.com/watch?v=${song.videoId}`);
+    } catch {
+      // ignore if unable to open browser
+    }
+    Alert.alert(
+      'Song Not Available',
+      'Ye track abhi stream nahi ho pa raha. YouTube pe khol diya gaya hai.',
+    );
+  }
+
+  return { song, url: null };
 }
 
 function shuffleTracks<T>(tracks: T[]): T[] {
@@ -102,6 +164,7 @@ function registerPlaybackListeners(): void {
 
   TrackPlayer.addEventListener(Event.PlaybackProgressUpdated, ({ position, duration }) => {
     usePlayer.setState({ position: position * 1000, duration: duration * 1000 });
+    schedulePersistedState();
   });
 
   TrackPlayer.addEventListener(Event.PlaybackActiveTrackChanged, ({ track }) => {
@@ -113,6 +176,7 @@ function registerPlaybackListeners(): void {
     if (index < 0 || state.currentSong?.id === track.id) return;
     const song = state.queue[index];
     usePlayer.setState({ currentSong: song, index, position: 0, duration: song.duration });
+    schedulePersistedState();
     emitAction({
       type: 'song',
       song,
@@ -125,6 +189,7 @@ function registerPlaybackListeners(): void {
 
   TrackPlayer.addEventListener(Event.PlaybackQueueEnded, ({ position }) => {
     usePlayer.setState({ isPlaying: false, position: position * 1000 });
+    schedulePersistedState();
   });
 
   TrackPlayer.addEventListener(Event.PlaybackError, event => {
@@ -170,7 +235,43 @@ async function ensurePlayerSetup(): Promise<void> {
 }
 
 export function initializePlayer(): Promise<void> {
-  return ensurePlayerSetup();
+  if (!restorePromise) {
+    restorePromise = (async () => {
+      await ensurePlayerSetup();
+      const persisted = await getPersistedPlayerState();
+      persistenceReady = true;
+      if (!persisted || persisted.queue.length === 0) return;
+
+      const index = Math.min(Math.max(0, persisted.index), persisted.queue.length - 1);
+      const currentSong =
+        persisted.queue.find(song => song.id === persisted.currentSongId) ?? persisted.queue[index];
+      usePlayer.setState({
+        queue: persisted.queue,
+        currentSong,
+        index: persisted.queue.findIndex(song => song.id === currentSong.id),
+        isPlaying: false,
+        position: Math.min(persisted.position, currentSong.duration),
+        duration: currentSong.duration,
+        shuffle: persisted.shuffle,
+        repeat: persisted.repeat,
+        volume: persisted.volume,
+      });
+
+      await loadAndPlaySong(currentSong, persisted.queue, {
+        shouldPlay: false,
+        initialPosition: Math.min(persisted.position, currentSong.duration),
+        remote: true,
+      });
+      await TrackPlayer.setRepeatMode(getRepeatTrackMode(persisted.repeat));
+      await TrackPlayer.setVolume(persisted.volume);
+      schedulePersistedState();
+    })().catch(err => {
+      persistenceReady = true;
+      restorePromise = null;
+      throw err;
+    });
+  }
+  return restorePromise;
 }
 
 interface LoadOptions {
@@ -182,7 +283,6 @@ interface LoadOptions {
 async function loadAndPlaySong(
   song: Song,
   queue: Song[],
-  index: number,
   { shouldPlay = true, initialPosition, remote = false }: LoadOptions = {},
 ): Promise<void> {
   const token = ++loadGeneration;
@@ -194,29 +294,64 @@ async function loadAndPlaySong(
       await TrackPlayer.reset();
       if (token !== loadGeneration) return;
       const tracks = usePlayer.getState().shuffle ? shuffleTracks(queue) : queue;
-      const activeTrackIndex = tracks.findIndex(item => item.id === song.id);
-      await TrackPlayer.add(tracks.map(toTrack));
+      const resolvedTracks = await Promise.all(
+        tracks.map(item => resolveTrack(item, item.id === song.id)),
+      );
       if (token !== loadGeneration) return;
-      await TrackPlayer.skip(activeTrackIndex >= 0 ? activeTrackIndex : index);
+      const resolvedById = new Map(resolvedTracks.map(item => [item.song.id, item.song] as const));
+      usePlayer.setState(state => ({
+        queue: state.queue.map(item => resolvedById.get(item.id) ?? item),
+        currentSong: state.currentSong
+          ? resolvedById.get(state.currentSong.id) ?? state.currentSong
+          : state.currentSong,
+      }));
+      const playableTracks = resolvedTracks.filter(
+        (item): item is ResolvedTrack & { url: string } => Boolean(item.url),
+      );
+      let activeTrackIndex = playableTracks.findIndex(item => item.song.id === song.id);
+      if (activeTrackIndex < 0) {
+        const selectedIndex = resolvedTracks.findIndex(item => item.song.id === song.id);
+        const nextTrack = resolvedTracks.slice(selectedIndex + 1).find(item => item.url)
+          ?? (usePlayer.getState().repeat === 'all' ? playableTracks[0] : undefined);
+        if (!nextTrack) {
+          requestedTrackId = null;
+          usePlayer.setState({ isPlaying: false });
+          return;
+        }
+        activeTrackIndex = playableTracks.findIndex(item => item.song.id === nextTrack.song.id);
+      }
+      const activeSong = playableTracks[activeTrackIndex].song;
+      const position = activeSong.id === song.id ? initialPosition ?? 0 : 0;
+      requestedTrackId = activeSong.id;
+      usePlayer.setState({
+        currentSong: activeSong,
+        index: queue.findIndex(item => item.id === activeSong.id),
+        position,
+        duration: activeSong.duration,
+      });
+      await TrackPlayer.add(playableTracks.map(item => toTrack(item.song, item.url)));
+      if (token !== loadGeneration) return;
+      await TrackPlayer.skip(activeTrackIndex);
       if (token !== loadGeneration) return;
       const activeTrack = await TrackPlayer.getActiveTrack();
-      if (activeTrack?.id === song.id) requestedTrackId = null;
+      if (activeTrack?.id === activeSong.id) requestedTrackId = null;
       await TrackPlayer.setRepeatMode(
         getRepeatTrackMode(usePlayer.getState().repeat),
       );
       const savedVolume = usePlayer.getState().volume;
       if (savedVolume !== 1) await TrackPlayer.setVolume(savedVolume);
-      if (initialPosition && initialPosition > 0) {
-        await TrackPlayer.seekTo(initialPosition / 1000);
+      if (position > 0) {
+        await TrackPlayer.seekTo(position / 1000);
       }
       if (token !== loadGeneration) return;
       if (shouldPlay) await TrackPlayer.play();
 
+      const state = usePlayer.getState();
       emitAction({
         type: 'song',
-        song,
-        queue: usePlayer.getState().queue,
-        position: initialPosition ?? 0,
+        song: state.currentSong ?? song,
+        queue: state.queue,
+        position,
         isPlaying: shouldPlay,
         remote,
       });
@@ -246,7 +381,7 @@ interface PlayerActions {
    * Queue ke end pe song add (room 'queue-add' ke liye). Koi PlayerActionEvent
    * emit NAHI hota — broadcast roomSync ka alag 'queue-add' event karta hai
    * (warna 'song' event pura queue replace kar deta). Dedupe: id pehle se
-   * queue me ho to false (spec: already present → skip).
+   * queue me ho to false (spec: already present → skip). Unavailable → reject.
    */
   addToQueue: (song: Song) => Promise<boolean>;
   play: (options?: PlaybackOptions) => Promise<void>;
@@ -286,8 +421,9 @@ export const usePlayer = create<PlayerStore>()((set, get) => ({
       position: options?.initialPosition ?? 0,
       duration: song.duration,
     });
+    schedulePersistedState();
     void addRecentlyPlayed(song);
-    await loadAndPlaySong(song, nextQueue, index, {
+    await loadAndPlaySong(song, nextQueue, {
       shouldPlay,
       initialPosition: options?.initialPosition,
       remote,
@@ -296,11 +432,20 @@ export const usePlayer = create<PlayerStore>()((set, get) => ({
 
   addToQueue: async song => {
     if (get().queue.some(item => item.id === song.id)) return false;
-    // Store pehle (UI turant update) + native queue ke end pe track append
-    set({ queue: [...get().queue, song] });
+    // Queue-only action: link-out nahi, unavailable track ko success mat bolo.
+    const resolved = await resolveTrack(song, false);
+    if (!resolved.url) throw new Error('Track URL unavailable');
+    let added = false;
+    set(state => {
+      if (state.queue.some(item => item.id === resolved.song.id)) return state;
+      added = true;
+      return { queue: [...state.queue, resolved.song] };
+    });
+    if (!added) return false;
+    schedulePersistedState();
     try {
       await ensurePlayerSetup();
-      await TrackPlayer.add(toTrack(song));
+      await TrackPlayer.add(toTrack(resolved.song, resolved.url));
     } catch (err) {
       console.warn('addToQueue: TrackPlayer add failed:', err);
     }
@@ -316,6 +461,7 @@ export const usePlayer = create<PlayerStore>()((set, get) => ({
       if (!isPlaying) {
         await TrackPlayer.play();
         set({ isPlaying: true });
+        schedulePersistedState();
       }
       if (options?.seekTo !== undefined) await get().seek(options.seekTo, { remote });
       emitAction({ type: 'play', remote });
@@ -333,6 +479,7 @@ export const usePlayer = create<PlayerStore>()((set, get) => ({
       if (isPlaying) {
         await TrackPlayer.pause();
         set({ isPlaying: false });
+        schedulePersistedState();
       }
       if (options?.seekTo !== undefined) await get().seek(options.seekTo, { remote });
       emitAction({ type: 'pause', remote });
@@ -379,6 +526,7 @@ export const usePlayer = create<PlayerStore>()((set, get) => ({
     const { currentSong } = get();
     const remote = options?.remote === true;
     set({ position: positionMs });
+    schedulePersistedState();
     try {
       await ensurePlayerSetup();
       await TrackPlayer.seekTo(positionMs / 1000);
@@ -391,6 +539,7 @@ export const usePlayer = create<PlayerStore>()((set, get) => ({
   toggleShuffle: () => {
     const shuffle = !get().shuffle;
     set({ shuffle });
+    schedulePersistedState();
     void reorderUpcoming(shuffle).catch(err => console.warn('Shuffle update failed:', err));
   },
 
@@ -399,6 +548,7 @@ export const usePlayer = create<PlayerStore>()((set, get) => ({
     const currentIndex = order.indexOf(get().repeat);
     const repeat = order[(currentIndex + 1) % order.length];
     set({ repeat });
+    schedulePersistedState();
     void ensurePlayerSetup()
       .then(() => TrackPlayer.setRepeatMode(getRepeatTrackMode(repeat)))
       .catch(err => console.warn('Repeat mode update failed:', err));
@@ -407,6 +557,7 @@ export const usePlayer = create<PlayerStore>()((set, get) => ({
   setVolume: volume => {
     const clamped = Math.min(1, Math.max(0, volume));
     set({ volume: clamped });
+    schedulePersistedState();
     void ensurePlayerSetup()
       .then(() => TrackPlayer.setVolume(clamped))
       .catch(err => console.warn('Volume set failed:', err));

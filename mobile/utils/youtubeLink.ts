@@ -30,7 +30,7 @@ const MATCH_URL = process.env.EXPO_PUBLIC_YOUTUBE_MATCH_URL ?? '';
 
 /** .env.example placeholder chhoda hua ho to feature gracefully chhup jaata hai */
 function isPlaceholder(value: string): boolean {
-  return value.length === 0 || value.startsWith('YAHAN_') || value.startsWith('YOUR');
+  return value.length === 0 || /YOUR-|YAHAN_/i.test(value);
 }
 
 /** Link-out button dikhana hai ya nahi (env configured hai?) */

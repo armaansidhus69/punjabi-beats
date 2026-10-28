@@ -26,6 +26,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { usePlayer } from '../stores/playerStore';
+import { useLikedSongs } from '../stores/likedSongsStore';
 import { colors } from '../constants/colors';
 import { typography } from '../constants/typography';
 import { spacing } from '../constants/spacing';
@@ -34,6 +35,7 @@ import PlayerControls from '../components/PlayerControls';
 import ProgressBar from '../components/ProgressBar';
 import SongArtwork from '../components/SongArtwork';
 import { handleOpenOnYouTube, isYouTubeMatchConfigured } from '../utils/youtubeLink';
+import { successFeedback, warningFeedback } from '../utils/haptics';
 
 /** Swipe-down close threshold (px aur velocity) */
 const CLOSE_SWIPE_THRESHOLD = 110;
@@ -54,6 +56,8 @@ export default function PlayerScreen() {
   const duration = usePlayer(s => s.duration);
   const shuffle = usePlayer(s => s.shuffle);
   const repeat = usePlayer(s => s.repeat);
+  const likedSongs = useLikedSongs(s => s.songs);
+  const toggleLiked = useLikedSongs(s => s.toggleLiked);
 
   const togglePlay = usePlayer(s => s.togglePlay);
   const playNext = usePlayer(s => s.playNext);
@@ -63,6 +67,15 @@ export default function PlayerScreen() {
   const cycleRepeat = usePlayer(s => s.cycleRepeat);
   const volume = usePlayer(s => s.volume);
   const setVolume = usePlayer(s => s.setVolume);
+
+  const isLiked = currentSong ? likedSongs.some(song => song.id === currentSong.id) : false;
+
+  const handleToggleLiked = useCallback(() => {
+    if (!currentSong) return;
+    const liked = toggleLiked(currentSong);
+    if (liked) successFeedback();
+    else warningFeedback();
+  }, [currentSong, toggleLiked]);
 
   /* ---------- Album art rotation (sirf playing me ghoomta hai) ---------- */
   const spin = useRef(new Animated.Value(0)).current;
@@ -143,7 +156,12 @@ export default function PlayerScreen() {
       style={[styles.container, { paddingTop: insets.top + spacing.sm }]}
       {...panResponder.panHandlers}
     >
-      <PlayerHeader onClose={close} onShare={handleShare} />
+      <PlayerHeader
+        onClose={close}
+        onShare={handleShare}
+        onLike={handleToggleLiked}
+        isLiked={isLiked}
+      />
 
       {/* Drag handle - swipe down ka visual hint (FR-6.6) */}
       <View style={styles.handle} />
@@ -223,8 +241,18 @@ export default function PlayerScreen() {
 
 
 
-/** Header — chevron down se close (modal feel) + share (Phase 14, optional) */
-function PlayerHeader({ onClose, onShare }: { onClose: () => void; onShare?: () => void }) {
+/** Header — close + liked toggle + share actions */
+function PlayerHeader({
+  onClose,
+  onShare,
+  onLike,
+  isLiked = false,
+}: {
+  onClose: () => void;
+  onShare?: () => void;
+  onLike?: () => void;
+  isLiked?: boolean;
+}) {
   return (
     <View style={styles.header}>
       <Pressable
@@ -239,19 +267,35 @@ function PlayerHeader({ onClose, onShare }: { onClose: () => void; onShare?: () 
       <View style={styles.headerCenter}>
         <Text style={styles.headerLabel}>Now Playing</Text>
       </View>
-      {onShare ? (
-        <Pressable
-          onPress={onShare}
-          accessibilityRole="button"
-          accessibilityLabel="Song share karo"
-          hitSlop={12}
-          style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}
-        >
-          <Ionicons name="share-outline" size={20} color={colors.text} />
-        </Pressable>
-      ) : (
-        <View style={styles.iconButton} />
-      )}
+      <View style={styles.headerActions}>
+        {onLike ? (
+          <Pressable
+            onPress={onLike}
+            accessibilityRole="button"
+            accessibilityLabel={isLiked ? 'Liked songs se hatao' : 'Liked songs me add karo'}
+            accessibilityState={{ selected: isLiked }}
+            hitSlop={12}
+            style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}
+          >
+            <Ionicons
+              name={isLiked ? 'heart' : 'heart-outline'}
+              size={21}
+              color={isLiked ? colors.primary : colors.text}
+            />
+          </Pressable>
+        ) : null}
+        {onShare ? (
+          <Pressable
+            onPress={onShare}
+            accessibilityRole="button"
+            accessibilityLabel="Song share karo"
+            hitSlop={12}
+            style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}
+          >
+            <Ionicons name="share-outline" size={20} color={colors.text} />
+          </Pressable>
+        ) : null}
+      </View>
     </View>
   );
 }
@@ -332,6 +376,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
   },
   headerCenter: { flex: 1, alignItems: 'center' },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   headerLabel: { ...typography.caption, color: colors.subtext, letterSpacing: 1.5 },
   iconButton: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center' },
   handle: {

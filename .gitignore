@@ -15,6 +15,10 @@ tsc-out.txt
 tsc.log
 .expo/
 
+# Session-local agent files (chat attachments, inbox, scratch notes)
+.opencode/
+.commit-msg.txt
+
 # OS junk
 .DS_Store
 Thumbs.db
