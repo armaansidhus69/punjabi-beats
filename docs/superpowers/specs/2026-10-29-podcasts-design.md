@@ -103,8 +103,8 @@ export interface PodcastEpisode {
 - `@pb_podcast_shows` — saved shows (`PodcastShow[]`)
 - `@pb_podcast_progress` — map `episodeId → { positionMs, durationMs, played,
   updatedAt }`; upserted on position events (throttled ~10s / on pause)
-- `@pb_podcast_recent_searches` — reuse searches? No: same `@pb_recent_searches`
-  key is fine (podcast queries are still queries).
+- `@pb_podcast_recent_searches` — none: podcast queries write into the shared
+  `@pb_recent_searches` key (they are still queries).
 
 **Player integration:** `episodeToSong(ep) → Song { id: ep.id, title, artist:
 showTitle, cover: artworkUrl, preview: audioUrl, duration: durationMs,
@@ -117,9 +117,8 @@ in the episode screen/store, not a player change.
 `!played && positionMs > 0`, most recent `updatedAt` first, max 5.
 
 **Played policy (pure, testable):** episode counts played when
-`positionMs ≥ 0.95 × durationMs` (durationMs > 0), or user action "mark played";
-sending this state = append + row badge. Automatic only; no manual UI in v1
-beyond visible badge (keep surface small).
+`positionMs ≥ 0.95 × durationMs` (durationMs > 0). Badge is visible on rows;
+no manual "mark played" UI in v1 (keep surface small).
 
 ## Error handling
 
@@ -136,8 +135,7 @@ beyond visible badge (keep surface small).
   unknown duration formats (`300`, `1:02:03`), CDATA descriptions — all in the
   parser test with deterministic outputs.
 - `episodeToSong` mapping invariants (full-play, id = url hash).
-- `progress.rs` policy boundaries (94.9% / 95% / duration 0).
-- Label helpers.
+- `progress.ts` policy boundaries (94.9% / 95% / duration 0).
 - No network in tests (fetch layer is service-level, covered by probes).
 
 ## Roadmap mapping (after implementation)
