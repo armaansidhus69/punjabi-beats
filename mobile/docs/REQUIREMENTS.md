@@ -111,6 +111,18 @@
 | FR-10.5 | Ledger capped (1000), versioned, guest-compatible local storage | P1 |
 | FR-10.6 | Derived raw counters + consumer-time weights (`tasteSongScore`/`artistStats`) for 13b | P1 |
 
+### FR-11: AI Playlist V1 *(Phase 13b — production roadmap; Gemini server key, flag off default)*
+| ID | Requirement | Priority |
+|---|---|---|
+| FR-11.1 | Prompt input → server generation (`api/ai-playlist.js`, Gemini free tier, key sirf Vercel env — NFR-4.1) | P1 |
+| FR-11.2 | Full-source resolve via existing search chain; preview list remove/refine (follow-up note)/regenerate | P1 |
+| FR-11.3 | Play All + save-as-playlist (existing playlistStore reuse) | P1 |
+| FR-11.4 | AI disclosure strip har result pe visible (hamesha) | P1 |
+| FR-11.5 | Rate limits: server 2-window limiter (10/day + 4/hour per device) + client echo | P1 |
+| FR-11.6 | Prompt history local `@pb_ai_prompts` cap 10 (dedupe, sirf prompt/refine store — tracks nahi) | P2 |
+| FR-11.7 | Feature gated behind `ai_playlist_enabled` flag (default off, `EXPO_PUBLIC_AI_PLAYLIST_ENABLED` opt-in) | P1 |
+| FR-11.8 | Minimum 3 playable resolved tracks warna `not_enough` error (honest partial results nahi) | P2 |
+
 ---
 
 ## 2. Non-Functional Requirements

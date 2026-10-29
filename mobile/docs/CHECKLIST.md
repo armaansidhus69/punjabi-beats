@@ -562,4 +562,38 @@ Before releasing:
 - [x] `npx tsc --noEmit` 0 · `npm run lint` 0 · root `npm test` green
 - [ ] Manual: runtime pe signal appends + stats growth check (device run)
 
-**Phase 20 Complete?** `[~]` (code + automated checks complete; device runtime check pending — koi deploy nahi chahiye)
+**Phase 20 Complete?** `[~]` (code + automated checks complete; device runtime check pending - koi deploy nahi chahiye)
+
+---
+
+## 🏳️ PHASE 21: AI Playlist V1 (Roadmap 13b)
+
+> Spec `docs/superpowers/specs/2026-10-29-ai-playlist-design.md` + plan
+> `docs/superpowers/plans/2026-10-30-ai-playlist-plan.md`. FR ids
+> REQUIREMENTS.md FR-11 me. 13a taste stats ka pehla consumer.
+
+### Server (Vercel)
+- [x] `api/_aiPlaylistCore.js` pure helpers — `buildAiPrompt` (user text quoted-slot isolation), `parseAiResponse` (validate/dedupe/cap 15), 2-window `rateLimitBucket` (10/day + 4/hour per device), `buildGeminiRequest`/`extractGeminiText`
+- [x] `api/ai-playlist.js` handler — POST guard, fail-closed `no_key` 400, 429 rate limit + Retry-After, 20s AbortController, `responseMimeType: application/json`, 502 upstream
+- [x] `GEMINI_MODEL` override (default `gemini-2.5-flash`)
+
+### Client Core and Service
+- [x] `core/ai/playlist.ts` pure — `sanitizeAiTracks`, `normalizeName` (feat/remix/bracket strip), `matchScore` tiers (exact → substring → token overlap), `planMatchedRows`/`dedupePlanRows`/`countPlayable` (`AI_MIN_PLAYABLE = 3`), history merge cap 10
+- [x] `services/aiPlaylistService.ts` — `generatePlaylist` (server POST 25s, taste context 13a `compactTaste`, deviceId), `resolveCandidates` (search chain + previewOnly drop), `AiPlaylistError` class + `describeAiPlaylistError` Hinglish strings, history load/append
+
+### Store and Screen
+- [x] `stores/aiPlaylistStore.ts` — generate/refine/removeRow/playAll/saveAsPlaylist (playlistStore reuse, name `AI: {prompt}`), quota echo, toast+haptics
+- [x] `app/ai-playlist.tsx` — prompt input (max 240), history chips, disclosure strip hamesha, preview rows (matched mark + remove), refine composer, Play All / Save
+- [x] `components/AiPlaylistGate.tsx` — `ai_playlist_enabled` flag guard (PodcastGate pattern)
+- [x] Library card #4 — `app/(tabs)/library.tsx`
+- [x] `@pb_ai_prompts` storage keys (`services/storage.ts`)
+
+### Verification
+- [x] `test-ai-playlist.mjs` — 10 assertions (server core: guards/prompt isolation/gemini shapes/parse/rate windows; client core: sanitize/match tiers/plan dedupe/history cap)
+- [x] Wired root + mobile test chains (`test:ai`)
+- [x] `probe-ai-playlist.mjs` — local handler self-test (405/no_key/400/rate 429/Retry-After) + `--live` mode
+- [x] `npx tsc --noEmit` 0 · `npm run lint` 0 · root `npm test` green
+- [ ] Manual: `GEMINI_API_KEY` Vercel env me set + `npx vercel` deploy (USER — deploy order rule)
+- [ ] Manual: `EXPO_PUBLIC_AI_PLAYLIST_ENABLED=true` mobile/.env + screen se generation pass (device)
+
+**Phase 21 Complete?** `[~]` (code + automated checks complete; Gemini key setup + deploy + device pass remain)

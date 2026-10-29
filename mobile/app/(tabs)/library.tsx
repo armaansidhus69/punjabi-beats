@@ -118,6 +118,11 @@ export default function LibraryScreen() {
     router.push('/podcast');
   }, []);
 
+  const handleAiPlaylistPress = useCallback(() => {
+    tapFeedback();
+    router.push('/ai-playlist');
+  }, []);
+
   const isEmpty = playlists.length === 0;
 
   return (
@@ -218,6 +223,23 @@ export default function LibraryScreen() {
         <View style={styles.likedInfo}>
           <Text style={styles.likedTitle}>Podcasts</Text>
           <Text style={styles.likedSubtitle}>Sunno — shows ke full episodes</Text>
+        </View>
+        <Ionicons name="chevron-forward" size={20} color={colors.subtext} />
+      </Pressable>
+
+      {/* Phase 13b: AI Playlist entry (flag gate screen ke andar hai) */}
+      <Pressable
+        onPress={handleAiPlaylistPress}
+        accessibilityRole="button"
+        accessibilityLabel="AI Playlist kholo"
+        style={({ pressed }) => [styles.likedCard, pressed && styles.pressed]}
+      >
+        <View style={styles.likedIcon}>
+          <Ionicons name="sparkles-outline" size={22} color={colors.primary} />
+        </View>
+        <View style={styles.likedInfo}>
+          <Text style={styles.likedTitle}>AI Playlist</Text>
+          <Text style={styles.likedSubtitle}>Prompt likho — AI mix banaye</Text>
         </View>
         <Ionicons name="chevron-forward" size={20} color={colors.subtext} />
       </Pressable>

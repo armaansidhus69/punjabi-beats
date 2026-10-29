@@ -376,14 +376,29 @@
   > eslint 0 · root `npm test` green (9 new `test-signals.mjs` assertions).
   > Consumer (playlist/assistant UI + LLM) = 13b`.
 
+  > **2026-10-29 [~] status (AI playlist v1 13b)**: coded per
+  > `docs/superpowers/specs/2026-10-29-ai-playlist-design.md` +
+  > `docs/superpowers/plans/2026-10-30-ai-playlist-plan.md`. Server
+  > `api/ai-playlist.js` + pure `api/_aiPlaylistCore.js` (prompt isolation,
+  > response parser, 2-window limiter 10/day + 4/hour — `GEMINI_API_KEY`
+  > Vercel env, `GEMINI_MODEL` override, fail-closed `no_key`). Client:
+  > pure `core/ai/playlist.ts` (sanitize + fuzzy resolve tiers), service
+  > `services/aiPlaylistService.ts` (13a taste context, `AiPlaylistError`
+  > codes), store `stores/aiPlaylistStore.ts`, screen `app/ai-playlist.tsx`
+  > (disclosure strip hamesha on) + Library card #4. History
+  > `@pb_ai_prompts` cap 10. Flag `ai_playlist_enabled` default off. Tests
+  > `test-ai-playlist.mjs` (10 assertions) + `probe-ai-playlist.mjs` (local
+  > handler checks / `--live` mode). Assistant rows 13c pending — genuinely
+  > `[ ]`.
+
 ### AI playlist and assistant
 
-- [ ] Prompt input/history
-- [ ] Generated playlist with add/remove/refine/regenerate/save/report
-- [ ] AI disclosure and rate limits
+- [~] Prompt input/history *(13b v1: prompt input + history chips @pb_ai_prompts cap 10)*
+- [~] Generated playlist with add/remove/refine/regenerate/save/report *(13b v1: preview remove/refine/Play All/save; "report" per-row reason string only — deep report 13c)*
+- [~] AI disclosure and rate limits *(13b v1: disclosure strip + 10/day+4/hour limiter)*
 - [ ] Assistant conversation and commands
 - [ ] Search, play, stop/cancel, and create-playlist commands
-- [ ] Prompt/output safety
+- [ ] Prompt/output safety *(13b v1 partial: user text instruction se isolated; full safety pass 13c)*
 - [ ] No private user data in model logs
 
 ## Phase 14 — Premium and payments

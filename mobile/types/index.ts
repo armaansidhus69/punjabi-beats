@@ -470,3 +470,35 @@ export interface TasteStats {
   songs: TasteStatsMap;
   queries: QueryTally;
 }
+
+/* ---------- Phase 13b (roadmap): AI playlist v1 (Gemini server key) ---------- */
+
+/** Gemini se aaya track ref — sirf Naam, koi URL nahi (client resolve karega) */
+export interface AiTrackRef {
+  title: string;
+  artist: string;
+  /** LLM ka optional "kyun ye pick" — v1 sirf frontend hint (spec 2) */
+  reason?: string;
+}
+
+/** Ek AI candidate + uska resolved Song (null = match nahi mila, row drop) */
+export interface AiPlanRow {
+  track: AiTrackRef;
+  song: Song | null;
+}
+
+/** @pb_ai_prompts entry — sirf user prompt yaad, output tracks NAHI */
+export interface AiPromptHistoryEntry {
+  prompt: string;
+  refineText?: string;
+  /** ISO */
+  ts: string;
+}
+
+export type AiPlaylistErrorCode =
+  | 'no_key'
+  | 'rate_limited'
+  | 'upstream'
+  | 'not_enough'
+  | 'network'
+  | 'bad_request';

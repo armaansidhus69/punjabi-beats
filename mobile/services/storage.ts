@@ -3,7 +3,7 @@
  * Saare reads defensively handle hote hain (corrupt data pe empty fallback).
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Playlist, RepeatMode, Song, PodcastShow, PodcastProgressEntry, SignalsLedger, TasteStats } from '../types';
+import { Playlist, RepeatMode, Song, PodcastShow, PodcastProgressEntry, SignalsLedger, TasteStats, AiPromptHistoryEntry } from '../types';
 
 const PLAYLISTS_KEY = '@pb_playlists';
 const RECENT_KEY = '@pb_recently_played';
@@ -398,5 +398,27 @@ export async function saveTasteStatsRaw(stats: TasteStats): Promise<void> {
     await AsyncStorage.setItem(TASTE_STATS_KEY, JSON.stringify(stats));
   } catch (err) {
     console.warn('Taste stats write failed:', err);
+  }
+}
+
+/* ---------- AI playlist prompt history (Phase 13b — cap service-side) ---------- */
+
+const AI_PROMPT_HISTORY_KEY = '@pb_ai_prompts';
+
+export async function getAiPromptHistoryRaw(): Promise<unknown> {
+  try {
+    const raw = await AsyncStorage.getItem(AI_PROMPT_HISTORY_KEY);
+    return raw ? (JSON.parse(raw) as unknown) : null;
+  } catch (err) {
+    console.warn('AI prompt history read failed:', err);
+    return null;
+  }
+}
+
+export async function saveAiPromptHistory(history: AiPromptHistoryEntry[]): Promise<void> {
+  try {
+    await AsyncStorage.setItem(AI_PROMPT_HISTORY_KEY, JSON.stringify(history));
+  } catch (err) {
+    console.warn('AI prompt history write failed:', err);
   }
 }
