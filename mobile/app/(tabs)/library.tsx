@@ -108,6 +108,11 @@ export default function LibraryScreen() {
     router.push('/blend');
   }, []);
 
+  const handleJamPress = useCallback(() => {
+    tapFeedback();
+    router.push('/jam');
+  }, []);
+
   const isEmpty = playlists.length === 0;
 
   return (
@@ -174,6 +179,23 @@ export default function LibraryScreen() {
         <View style={styles.likedInfo}>
           <Text style={styles.likedTitle}>Blends</Text>
           <Text style={styles.likedSubtitle}>Dost ke taste se shared mix</Text>
+        </View>
+        <Ionicons name="chevron-forward" size={20} color={colors.subtext} />
+      </Pressable>
+
+      {/* Phase 11: Jam / Listening Party entry */}
+      <Pressable
+        onPress={handleJamPress}
+        accessibilityRole="button"
+        accessibilityLabel="Jam rooms kholo"
+        style={({ pressed }) => [styles.likedCard, pressed && styles.pressed]}
+      >
+        <View style={styles.likedIcon}>
+          <Ionicons name="people-circle-outline" size={22} color={colors.primary} />
+        </View>
+        <View style={styles.likedInfo}>
+          <Text style={styles.likedTitle}>Jam Rooms</Text>
+          <Text style={styles.likedSubtitle}>Group suno — Jam & Listening Party</Text>
         </View>
         <Ionicons name="chevron-forward" size={20} color={colors.subtext} />
       </Pressable>

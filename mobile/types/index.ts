@@ -273,3 +273,90 @@ export interface BlendMember {
   displayName: string | null;
   avatarUrl: string | null;
 }
+
+/* ---------- Phase 11 (roadmap): Jam + Listening Party — server-authoritative rooms ---------- */
+
+export type RoomType = 'jam' | 'listening_party';
+export type RoomStatus = 'active' | 'paused' | 'closed' | 'expired';
+export type RoomRole = 'owner' | 'co_host' | 'moderator' | 'participant' | 'listener';
+
+/** room_playback_state.track / room_queue_items.track (denormalized jsonb) */
+export interface JamTrack {
+  title: string;
+  artistNames: string[];
+  artworkUrl: string;
+  provider: SongSource;
+  durationSec: number;
+  playableFull: boolean;
+}
+
+export interface JamRoom {
+  id: string;
+  ownerId: string;
+  type: RoomType;
+  title: string;
+  coverUrl: string | null;
+  visibility: 'private_invite' | 'public';
+  inviteCode: string;
+  maxParticipants: number;
+  scheduledStart: string | null;
+  scheduledEnd: string | null;
+  status: RoomStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface JamMember {
+  roomId: string;
+  userId: string;
+  role: RoomRole;
+  joinedAt: string;
+  /** presence heartbeat — stale > 90s = offline render */
+  lastSeenAt: string;
+  /** chat mute (moderation) — null = not muted */
+  mutedUntil: string | null;
+  displayName: string | null;
+  avatarUrl: string | null;
+}
+
+/** room_playback_state — ONE row per room (server-authoritative) */
+export interface JamPlaybackState {
+  roomId: string;
+  trackId: string | null;
+  track: JamTrack | null;
+  positionMs: number;
+  isPlaying: boolean;
+  /** queue-mutations counter (server-side bump) */
+  queueVersion: number;
+  /** playback/queue state counter — monotonic, server-side bump */
+  stateVersion: number;
+  updatedBy: string | null;
+  /** server clock ISO of last write — predicted position iska use karta hai */
+  updatedAt: string;
+}
+
+export interface JamQueueItem {
+  id: string;
+  roomId: string;
+  trackId: string;
+  track: JamTrack;
+  addedBy: string | null;
+  position: number;
+  /** null = pending; set = consumed */
+  playedAt: string | null;
+  createdAt: string;
+}
+
+export type JamMessageKind = 'chat' | 'reaction_log' | 'system';
+
+export interface JamMessage {
+  id: string;
+  roomId: string;
+  userId: string | null;
+  kind: JamMessageKind;
+  /** chat text ya reaction emoji (1–500 chars) */
+  body: string;
+  trackId: string | null;
+  replyToId: string | null;
+  createdAt: string;
+}

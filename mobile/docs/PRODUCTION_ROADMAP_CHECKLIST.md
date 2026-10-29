@@ -288,22 +288,37 @@
 
 ### Room types
 
-- [ ] Private Jam
-- [ ] Host-controlled listening party
-- [ ] Scheduled live event
-- [ ] Event page, creator/artist host, moderation, and access rules
+- [~] Private Jam
+- [~] Host-controlled listening party
+- [ ] Scheduled live event *(v1 scope se bahar — Phases 14/15 overlap me plan)*
+- [ ] Event page, creator/artist host, moderation, and access rules *(wahi defer)*
 
 ### Room model
 
-- [ ] `rooms`
-- [ ] `room_members`
-- [ ] `room_playback_state`
-- [ ] Owner/co-host/moderator/participant/listener roles
-- [ ] Server-authoritative playback state and versioning
-- [ ] WebSocket room events
-- [ ] Reconnection and state-version recovery
-- [ ] Host disconnect/co-host promotion
-- [ ] Room close and empty-room expiry
+- [~] `rooms`
+- [~] `room_members`
+- [~] `room_playback_state`
+- [~] Owner/co-host/moderator/participant/listener roles
+- [~] Server-authoritative playback state and versioning
+- [~] WebSocket room events
+- [~] Reconnection and state-version recovery
+- [~] Host disconnect/co-host promotion
+- [~] Room close and empty-room expiry
+
+  > **2026-10-29 [~] status**: feature coded behind `jam_enabled` (default
+  > off) per `docs/superpowers/specs/2026-10-29-jam-rooms-design.md` +
+  > `docs/superpowers/plans/2026-10-29-jam-rooms-plan.md`. Sources: migration
+  > `supabase/migrations/003_rooms.sql` (5 tables + RLS + `fn_join_room` RPC),
+  > Edge Function `supabase/functions/room-control/` (service-role, version
+  > bumps) + `_shared/room-permissions.ts` parity copy, cron
+  > `supabase/cron/rooms-hourly-expiry.sql`, realtime
+  > `mobile/services/jamRealtime.ts`, screens `mobile/app/jam/*` +
+  > `mobile/components/{JamGate,AddSongSearchModal}.tsx`, pure logic
+  > `mobile/core/room/*`. Live event rows intentionally `[ ]` (spec defer).
+  > Gates pass: tsc 0 · eslint 0 · root `npm test` green (20 new
+  > `test-jam.mjs` assertions + permissions parity guard). Pending: apply
+  > migration + deploy `room-control` + cron SQL + `jam_enabled` flag +
+  > 2-device manual pass — boxes flip to `[x]` only after that.
 
 ## Phase 12 — Podcasts, audiobooks, and video
 

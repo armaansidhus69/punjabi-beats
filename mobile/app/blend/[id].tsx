@@ -6,7 +6,6 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
   Alert,
   FlatList,
   Modal,
@@ -16,18 +15,17 @@ import {
   Text,
   TextInput,
   View,
-  Keyboard,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import Toast from 'react-native-toast-message';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import BlendGate from '../../components/BlendGate';
+import AddSongSearchModal from '../../components/AddSongSearchModal';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import EmptyState from '../../components/EmptyState';
-import type { BlendItem, Song } from '../../types';
+import type { BlendItem } from '../../types';
 import { getCurrentUser } from '../../core/auth/authService';
-import { searchSongs } from '../../services/musicApi';
 import { blendShareText, updateBlend } from '../../services/blendService';
 import { useBlends } from '../../stores/blendStore';
 import { usePlayer } from '../../stores/playerStore';
@@ -287,7 +285,7 @@ export default function BlendDetailScreen() {
           }}
         />
 
-        <AddSongsModal
+        <AddSongSearchModal
           visible={addSongsVisible}
           onClose={() => setAddSongsVisible(false)}
           onAdd={song =>
@@ -476,108 +474,6 @@ function RenameModal({
   );
 }
 
-function AddSongsModal({
-  visible,
-  onClose,
-  onAdd,
-}: {
-  visible: boolean;
-  onClose: () => void;
-  onAdd: (song: Song) => Promise<void>;
-}) {
-  const [query, setQuery] = useState('');
-  const [results, setResults] = useState<Song[]>([]);
-  const [searching, setSearching] = useState(false);
-  const [addingId, setAddingId] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (visible) return;
-    setQuery('');
-    setResults([]);
-  }, [visible]);
-
-  // Debounced search (400ms) — searchSongs khud multi-source fallback chain
-  useEffect(() => {
-    if (!visible) return;
-    const q = query.trim();
-    if (q.length === 0) {
-      setResults([]);
-      setSearching(false);
-      return;
-    }
-    const timer = setTimeout(() => {
-      setSearching(true);
-      void searchSongs(q, 15)
-        .then(found => setResults(found.filter(song => !song.previewOnly)))
-        .catch(() => setResults([]))
-        .finally(() => setSearching(false));
-    }, 400);
-    return () => clearTimeout(timer);
-  }, [query, visible]);
-
-  return (
-    <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
-      <View style={st.addRoot}>
-        <View style={st.addHeader}>
-          <Text style={{ ...typography.h1, color: colors.text }}>Add songs</Text>
-          <Pressable onPress={onClose} accessibilityRole="button" hitSlop={12}>
-            <Ionicons name="close" size={24} color={colors.text} />
-          </Pressable>
-        </View>
-        <TextInput
-          style={st.input}
-          value={query}
-          onChangeText={setQuery}
-          placeholder="Search Punjabi songs…"
-          placeholderTextColor={colors.subtext}
-          autoCapitalize="none"
-          autoCorrect={false}
-          returnKeyType="done"
-          onSubmitEditing={Keyboard.dismiss}
-        />
-        {searching ? (
-          <ActivityIndicator color={colors.primary} style={st.spinner} />
-        ) : (
-          <FlatList
-            data={results}
-            keyExtractor={song => song.id}
-            keyboardShouldPersistTaps="handled"
-            ListEmptyComponent={
-              <Text style={st.addEmpty}>
-                {query.trim().length === 0
-                  ? 'Upar search karo — full playable tracks add ho sakte hain.'
-                  : 'Koi full-playable result nahi mila.'}
-              </Text>
-            }
-            renderItem={({ item }) => (
-              <View style={st.addRow}>
-                <Text style={st.addRowText} numberOfLines={1}>
-                  {item.title} · {item.artist}
-                </Text>
-                <Pressable
-                  onPress={() => {
-                    setAddingId(item.id);
-                    void onAdd(item).finally(() => setAddingId(null));
-                  }}
-                  accessibilityRole="button"
-                  accessibilityLabel={`${item.title} blend me add karo`}
-                  style={({ pressed }) => [st.addButtonItem, pressed && { opacity: 0.7 }]}
-                >
-                  {addingId === item.id ? (
-                    <ActivityIndicator size="small" color={colors.primary} />
-                  ) : (
-                    <Ionicons name="add" size={22} color={colors.primary} />
-                  )}
-                </Pressable>
-              </View>
-            )}
-          />
-        )}
-      </View>
-    </Modal>
-  );
-}
-
 /* ---------- styles ---------- */
 
 const styles = StyleSheet.create({
@@ -707,23 +603,4 @@ const st = StyleSheet.create({
     backgroundColor: colors.card,
   },
   modalButtonPrimary: { backgroundColor: colors.primary },
-  addRoot: { flex: 1, backgroundColor: colors.background, paddingTop: spacing.xl },
-  addHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.md,
-  },
-  spinner: { marginTop: spacing.xl },
-  addRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-  },
-  addRowText: { ...typography.body, color: colors.text, flex: 1 },
-  addButtonItem: { padding: spacing.xs },
-  addEmpty: { ...typography.caption, color: colors.subtext, textAlign: 'center', padding: spacing.xl },
 });
