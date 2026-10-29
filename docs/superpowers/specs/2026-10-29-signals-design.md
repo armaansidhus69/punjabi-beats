@@ -66,6 +66,8 @@ interface PlaySignal {
   name: SignalName;
   /** search_query pe null */
   songId: string | null;
+  /** search_query pe raw query (stats tally seed); baaki pe null */
+  query: string | null;
   artistNames: string[];   // song.artist comma-split lowercase (blend parity)
   provider: SongSource | null;
   durationMs: number;      // static events pe 0
