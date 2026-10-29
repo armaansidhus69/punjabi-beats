@@ -356,10 +356,25 @@
 
 ### Data foundation
 
-- [ ] Play history and skips
-- [ ] Likes/saves and playlist changes
-- [ ] Search behavior and room activity
-- [ ] User preference signals
+- [~] Play history and skips
+- [~] Likes/saves and playlist changes
+- [~] Search behavior and room activity *(search queries recorded; room = reaction_log DB-level + play_start remote tag — v1 count nahi)*
+- [~] User preference signals *(raw counters + consumer-time weights)*
+
+  > **2026-10-29 [~] status (Data foundation 13a)**: signals
+  > coded local-first per `docs/superpowers/specs/2026-10-29-signals-design.md`
+  > + `docs/superpowers/plans/2026-10-30-signals-plan.md`. Sources: pure core
+  > `mobile/core/signals/{schema,skip,stats}.ts` (ledger schema + 30s/80%/95%
+  > policy + raw-counter aggregation), service `mobile/services/signalsService.ts`
+  > (analytics facade sink — stub pehli baar live, boot pe wired via
+  > `core/bootstrap.ts`), player wiring `stores/playerStore.ts`
+  > (play_start + outgoing-track classify, remote/auto-advance suppression),
+  > store emit call sites (search/liked/playlist). Keys `@pb_play_signals`
+  > (cap 1000, versioned envelope) + `@pb_taste_stats` (raw counters; weights
+  > consumer-time pure). Guest-compatible, koi backend nahi; AI playlist rows
+  > above genuinely `[ ]` (13b — LLM call, server key). Gates pass: tsc 0 ·
+  > eslint 0 · root `npm test` green (9 new `test-signals.mjs` assertions).
+  > Consumer (playlist/assistant UI + LLM) = 13b`.
 
 ### AI playlist and assistant
 

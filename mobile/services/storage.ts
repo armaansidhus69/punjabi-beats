@@ -3,7 +3,7 @@
  * Saare reads defensively handle hote hain (corrupt data pe empty fallback).
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Playlist, RepeatMode, Song, PodcastShow, PodcastProgressEntry } from '../types';
+import { Playlist, RepeatMode, Song, PodcastShow, PodcastProgressEntry, SignalsLedger, TasteStats } from '../types';
 
 const PLAYLISTS_KEY = '@pb_playlists';
 const RECENT_KEY = '@pb_recently_played';
@@ -357,5 +357,46 @@ export async function savePodcastProgressEntry(
     await AsyncStorage.setItem(PODCAST_PROGRESS_KEY, JSON.stringify(map));
   } catch (err) {
     console.warn('Podcast progress write failed:', err);
+  }
+}
+
+/* ---------- Play signals (Phase 13a — signalsService ke liye raw keys) ---------- */
+
+const PLAY_SIGNALS_KEY = '@pb_play_signals';
+const TASTE_STATS_KEY = '@pb_taste_stats';
+
+export async function getPlaySignalsLedger(): Promise<unknown> {
+  try {
+    const raw = await AsyncStorage.getItem(PLAY_SIGNALS_KEY);
+    return raw ? (JSON.parse(raw) as unknown) : null;
+  } catch (err) {
+    console.warn('Play signals read failed:', err);
+    return null;
+  }
+}
+
+export async function savePlaySignalsLedger(ledger: SignalsLedger): Promise<void> {
+  try {
+    await AsyncStorage.setItem(PLAY_SIGNALS_KEY, JSON.stringify(ledger));
+  } catch (err) {
+    console.warn('Play signals write failed:', err);
+  }
+}
+
+export async function getTasteStatsRaw(): Promise<unknown> {
+  try {
+    const raw = await AsyncStorage.getItem(TASTE_STATS_KEY);
+    return raw ? (JSON.parse(raw) as unknown) : null;
+  } catch (err) {
+    console.warn('Taste stats read failed:', err);
+    return null;
+  }
+}
+
+export async function saveTasteStatsRaw(stats: TasteStats): Promise<void> {
+  try {
+    await AsyncStorage.setItem(TASTE_STATS_KEY, JSON.stringify(stats));
+  } catch (err) {
+    console.warn('Taste stats write failed:', err);
   }
 }

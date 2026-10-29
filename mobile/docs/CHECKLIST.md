@@ -531,3 +531,35 @@ Before releasing:
 - [ ] Manual device pass — search, play full episode, kill-app resume, 95% played badge, save/unsave (flag `EXPO_PUBLIC_PODCASTS_ENABLED=true`)
 
 **Phase 19 Complete?** `[~]` (code + automated checks complete; manual device pass with `EXPO_PUBLIC_PODCASTS_ENABLED=true` remains — koi server deploy nahi chahiye)
+
+---
+
+## 📊 PHASE 20: Play Signals / Data Foundation (Roadmap 13a)
+
+> Spec `docs/superpowers/specs/2026-10-29-signals-design.md` + plan
+> `docs/superpowers/plans/2026-10-30-signals-plan.md`. FR ids REQUIREMENTS.md
+> FR-10 me. Invisible plumbing — koi screen change nahi, koi backend nahi.
+
+### Pure Core
+- [x] `core/signals/schema.ts` — `SIGNALS_VERSION`, `buildSignal` (fnv1a id), `isSignalName` guard, `normalizeLedger` (version mismatch + partial corruption), `pushSignal` cap 1000 oldest-drop
+- [x] `core/signals/skip.ts` — 30s floor / 80% neutral / 95% complete, `classifyPlayback` (remote + !manual exclusion)
+- [x] `core/signals/stats.ts` — `applySignal`/`aggregateSignals` raw counters (likes/playlistAdds net clamp), `tasteSongScore` flat weights, `artistStatsFromSignals` (blend TasteArtist parity), `topSongIds` (13b seed)
+
+### Service and Boot
+- [x] `services/signalsService.ts` — analytics sink bridge, `@pb_play_signals` + `@pb_taste_stats` keys, persisted history 250ms debounced queue, `loadSignals()` restore, `getTasteStats`/`getRecentSignals` (13b consumers)
+- [x] `core/bootstrap.ts` — analytics facade live (`enabled: true` + sink) + ledger restore step (Phase 0 stub ka pehla real wiring)
+
+### Player and Store Wiring
+- [x] `playerStore` — play_start emit (remote tagged), outgoing-track classify in `PlaybackActiveTrackChanged`, `manualAdvancePending`/`autoAdvancePending`/`lastSongRemote` flags (failure skip suppressed)
+- [x] `searchStore.addRecentSearch` → `search_query` (≥2 chars)
+- [x] `likedSongsStore.toggleLiked` → `song_like`/`song_unlike`
+- [x] `playlistStore add/remove` → `playlist_add`/`playlist_remove`
+
+### Verification
+- [x] `test-signals.mjs` — 9 assertions (schema guard, policy boundaries, remote exclusion, net clamp, weights, cap oldest-drop, version/corruption guards, rebuild determinism)
+- [x] Wired root + mobile test chains (`test:signals`)
+- [x] `test-player.mjs` playerStore dependency-contract mock update (analytics + skip)
+- [x] `npx tsc --noEmit` 0 · `npm run lint` 0 · root `npm test` green
+- [ ] Manual: runtime pe signal appends + stats growth check (device run)
+
+**Phase 20 Complete?** `[~]` (code + automated checks complete; device runtime check pending — koi deploy nahi chahiye)

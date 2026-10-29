@@ -6,6 +6,7 @@
  * key (@pb_recent_searches) dono taraf se share hoti hai.
  */
 import { create } from 'zustand';
+import { trackEvent } from '../core/analytics/analytics';
 import {
   clearRecentSearches as clearStoredRecentSearches,
   getRecentSearches,
@@ -60,6 +61,7 @@ export const useSearch = create<SearchStore>()((set, get) => ({
 
     set({ recentSearches: next });
     persistence(next);
+    if (trimmed.length >= 2) trackEvent('search_query', { query: trimmed }); // Phase 13a
   },
 
   removeRecentSearch: query => {

@@ -101,6 +101,16 @@
 | FR-9.6 | User can save/unsave shows (local, guest-compatible) | P2 |
 | FR-9.7 | Feature gated behind `podcasts_enabled` flag (default off) | P1 |
 
+### FR-10: Play Signals / Data Foundation *(Phase 13a — production roadmap; local-only, guest-compatible)*
+| ID | Requirement | Priority |
+|---|---|---|
+| FR-10.1 | Track play start / complete / skip signals (95%+ = complete, <80% manual = skip) | P1 |
+| FR-10.2 | Like/unlike + playlist add/remove taste signals | P2 |
+| FR-10.3 | Search queries (≥2 chars) recorded as seed tally | P2 |
+| FR-10.4 | Remote (room-follow) plays excluded from taste stats | P1 |
+| FR-10.5 | Ledger capped (1000), versioned, guest-compatible local storage | P1 |
+| FR-10.6 | Derived raw counters + consumer-time weights (`tasteSongScore`/`artistStats`) for 13b | P1 |
+
 ---
 
 ## 2. Non-Functional Requirements

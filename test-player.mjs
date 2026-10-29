@@ -134,6 +134,8 @@ function playerHarness({ previews = [], fullStreams = [], persistedState = null 
       getPersistedPlayerState: async () => persistedState,
       savePersistedPlayerState: async () => {},
     },
+    '../core/analytics/analytics': { trackEvent: () => {} },
+    '../core/signals/skip': loadModule('./mobile/core/signals/skip.ts', {}),
   });
   store.setPlayerActionListener(event => events.push(event));
   return {

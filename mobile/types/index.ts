@@ -401,3 +401,72 @@ export interface PodcastProgressEntry {
   artworkUrl: string;
   audioUrl: string;
 }
+
+/* ---------- Phase 13a (roadmap): AI & recommendations — signals data foundation ---------- */
+
+export type SignalName =
+  | 'play_start'
+  | 'play_complete'
+  | 'play_skip'
+  | 'song_like'
+  | 'song_unlike'
+  | 'playlist_add'
+  | 'playlist_remove'
+  | 'search_query';
+
+/** @pb_play_signals ledger ki entry (schema guard core/signals/schema.ts) */
+export interface PlaySignal {
+  /** fnv1a64Hex([name, songId ?? query, ts]) — debug/dedupe */
+  id: string;
+  name: SignalName;
+  /** search_query pe null */
+  songId: string | null;
+  /** search_query pe raw query (>= 2 chars — stats tally seed); baaki null */
+  query: string | null;
+  /** song.artist comma-split lowercase (blend TasteArtist parity) */
+  artistNames: string[];
+  provider: SongSource | null;
+  /** static events pe 0 */
+  durationMs: number;
+  positionMs: number;
+  /** 0..100 pure math (durationMs <= 0 → 0) */
+  completedPct: number;
+  /** track-complete / queue-end coordinate pe */
+  ended: boolean;
+  /** user-initiated action (skip classification me) */
+  manual: boolean;
+  /** room-follow play (taste stats se EXCLUDE) */
+  remote: boolean;
+  /** ISO */
+  ts: string;
+}
+
+/** @pb_play_signals envelope — version mismatch pe content discard */
+export interface SignalsLedger {
+  version: number;
+  /** oldest-first order, newest last */
+  signals: PlaySignal[];
+}
+
+/** lowercase query → latest raw form (search behavior seed tally) */
+export type QueryTally = Record<string, string>;
+
+/** @pb_taste_stats raw counters — weights consumer-time pure lagte hain */
+export interface TasteSongStats {
+  plays: number;
+  completions: number;
+  skips: number;
+  /** song_like NET song_unlike (>= 0 clamp) */
+  likes: number;
+  /** playlist_add NET playlist_remove (>= 0 clamp) */
+  playlistAdds: number;
+  /** latest contributing signal ka ISO */
+  lastTs: string;
+}
+
+export type TasteStatsMap = Record<string, TasteSongStats>;
+
+export interface TasteStats {
+  songs: TasteStatsMap;
+  queries: QueryTally;
+}

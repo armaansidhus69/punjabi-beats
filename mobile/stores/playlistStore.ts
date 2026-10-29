@@ -7,6 +7,7 @@
 import { create } from 'zustand';
 import { Playlist, Song } from '../types';
 import { getPlaylists, savePlaylists } from '../services/storage';
+import { trackEvent } from '../core/analytics/analytics';
 import type { ImportedPlaylist } from '../utils/playlistImport';
 
 function generatePlaylistId(): string {
@@ -96,10 +97,20 @@ export const usePlaylists = create<PlaylistStore>()((set, get) => ({
     const next = get().playlists.map(p => (p.id === playlistId ? updated : p));
     set({ playlists: next });
     await savePlaylists(next);
+    // Phase 13a — playlist add taste signal
+    trackEvent('playlist_add', {
+      songId: song.id,
+      artistNames: song.artist,
+      provider: song.source ?? null,
+      durationMs: song.duration,
+    });
     return true;
   },
 
   removeSongFromPlaylist: (playlistId, songId) => {
+    const removed = get().playlists
+      .find(p => p.id === playlistId)
+      ?.songs.find(s => s.id === songId);
     const next = get().playlists.map(p =>
       p.id === playlistId
         ? { ...p, songs: p.songs.filter(s => s.id !== songId) }
@@ -107,6 +118,15 @@ export const usePlaylists = create<PlaylistStore>()((set, get) => ({
     );
     set({ playlists: next });
     void savePlaylists(next);
+    if (removed) {
+      // Phase 13a — playlist remove net-counter hai (add ka minus)
+      trackEvent('playlist_remove', {
+        songId: removed.id,
+        artistNames: removed.artist,
+        provider: removed.source ?? null,
+        durationMs: removed.duration,
+      });
+    }
   },
 
   openAddSheet: song => {

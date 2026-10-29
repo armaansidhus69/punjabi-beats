@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { Song } from '../types';
 import { getLikedSongs, saveLikedSongs } from '../services/storage';
 import { isLikedSong, removeLikedSong, toggleLikedSong } from '../utils/likedSongs';
+import { trackEvent } from '../core/analytics/analytics';
 
 interface LikedSongsStore {
   songs: Song[];
@@ -50,6 +51,13 @@ export const useLikedSongs = create<LikedSongsStore>()((set, get) => ({
     const result = toggleLikedSong(get().songs, song);
     set({ songs: result.songs });
     persist(result.songs);
+    // Phase 13a — like/unlike taste signal (haptics/screen se koi extra call nahi)
+    trackEvent(result.liked ? 'song_like' : 'song_unlike', {
+      songId: song.id,
+      artistNames: song.artist,
+      provider: song.source ?? null,
+      durationMs: song.duration,
+    });
     return result.liked;
   },
 

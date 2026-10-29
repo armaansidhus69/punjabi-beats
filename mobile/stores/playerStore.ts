@@ -8,6 +8,8 @@ import TrackPlayer, {
   State,
 } from 'react-native-track-player';
 import { PlayerActionEvent, PlayerState, RepeatMode, Song } from '../types';
+import { trackEvent } from '../core/analytics/analytics';
+import { classifyPlayback } from '../core/signals/skip';
 import {
   addRecentlyPlayed,
   getPersistedPlayerState,
@@ -20,6 +22,10 @@ let listenersRegistered = false;
 let loadGeneration = 0;
 let loadQueue: Promise<void> = Promise.resolve();
 let requestedTrackId: string | null = null;
+// Phase 13a signal flags — next `PlaybackActiveTrackChanged` consume karta hai
+let manualAdvancePending = false; // user pressed next/prev
+let autoAdvancePending = false; // load/playback failure auto-skip → no signal
+let lastSongRemote = false; // room-follow playback — taste exclude
 let persistenceReady = false;
 let persistenceTimer: ReturnType<typeof setTimeout> | null = null;
 let restorePromise: Promise<void> | null = null;
@@ -46,6 +52,38 @@ function emitAction(event: PlayerActionEvent): void {
 
 function canAutoSkip(): boolean {
   return usePlayer.getState().queue.length > 1;
+}
+
+/**
+ * Phase 13a — outgoing track ka play/skip/complete classify (pure ho relay).
+ * remote/advance flags ka exact ek consumption; song badalne par reset.
+ */
+function emitOutgoingSignal(song: Song, positionMs: number, durationMs: number): void {
+  if (lastSongRemote) {
+    manualAdvancePending = false;
+    autoAdvancePending = false;
+    return; // room-follow — taste signal me ginta hi nahi (spec)
+  }
+  if (autoAdvancePending) {
+    // failure skip — user ki pasand nahi, koi signal nahi
+    autoAdvancePending = false;
+    manualAdvancePending = false;
+    return;
+  }
+  const manual = manualAdvancePending;
+  manualAdvancePending = false;
+  const ended = !manual;
+  const name = classifyPlayback({ durationMs, positionMs, ended, manual });
+  if (name === null) return;
+  trackEvent(name, {
+    songId: song.id,
+    artistNames: song.artist,
+    provider: song.source ?? null,
+    durationMs,
+    positionMs,
+    ended,
+    manual,
+  });
 }
 
 function getRepeatTrackMode(mode: RepeatMode): TrackRepeatMode {
@@ -172,6 +210,11 @@ function registerPlaybackListeners(): void {
     if (requestedTrackId && track.id !== requestedTrackId) return;
     if (track.id === requestedTrackId) requestedTrackId = null;
     const state = usePlayer.getState();
+    // Phase 13a — outgoing track ka classify in setState se PEHLE (position
+    // abhi purane track ka hai; badalne ke baad state 0 ho jati)
+    if (state.currentSong && state.currentSong.id !== track.id) {
+      emitOutgoingSignal(state.currentSong, state.position, state.duration);
+    }
     const index = state.queue.findIndex(song => song.id === track.id);
     if (index < 0 || state.currentSong?.id === track.id) return;
     const song = state.queue[index];
@@ -194,8 +237,10 @@ function registerPlaybackListeners(): void {
 
   TrackPlayer.addEventListener(Event.PlaybackError, event => {
     console.warn('TrackPlayer playback error:', event.message);
-    if (canAutoSkip()) void usePlayer.getState().playNext();
-    else usePlayer.setState({ isPlaying: false });
+    if (canAutoSkip()) {
+      autoAdvancePending = true; // failure auto-skip — outgoing me koi signal nahi
+      void usePlayer.getState().playNext();
+    } else usePlayer.setState({ isPlaying: false });
   });
 }
 
@@ -286,6 +331,7 @@ async function loadAndPlaySong(
   { shouldPlay = true, initialPosition, remote = false }: LoadOptions = {},
 ): Promise<void> {
   const token = ++loadGeneration;
+  lastSongRemote = remote; // direct restore path (initializePlayer) bhi set
   const run = loadQueue.catch(() => undefined).then(async () => {
     if (token !== loadGeneration) return;
     try {
@@ -358,8 +404,10 @@ async function loadAndPlaySong(
     } catch (err) {
       if (token !== loadGeneration) return;
       console.warn('TrackPlayer load failed:', err);
-      if (canAutoSkip()) void usePlayer.getState().playNext();
-      else usePlayer.setState({ isPlaying: false });
+      if (canAutoSkip()) {
+        autoAdvancePending = true; // load-failure skip — signal suppress
+        void usePlayer.getState().playNext();
+      } else usePlayer.setState({ isPlaying: false });
     }
   });
   loadQueue = run;
@@ -410,6 +458,7 @@ export const usePlayer = create<PlayerStore>()((set, get) => ({
 
   playSong: async (song, queue = [], options) => {
     const remote = options?.remote === true;
+    lastSongRemote = remote; // Phase 13a — outgoing classify isi se exclude
     const nextQueue = queue.length > 0 ? queue : [song];
     const index = Math.max(0, nextQueue.findIndex(item => item.id === song.id));
     const shouldPlay = options?.startPaused !== true;
@@ -420,6 +469,15 @@ export const usePlayer = create<PlayerStore>()((set, get) => ({
       isPlaying: shouldPlay,
       position: options?.initialPosition ?? 0,
       duration: song.duration,
+    });
+    // Phase 13a — play_start signal (remote room-follow bhi record, stats me nahi)
+    trackEvent('play_start', {
+      songId: song.id,
+      artistNames: song.artist,
+      provider: song.source ?? null,
+      durationMs: song.duration,
+      positionMs: options?.initialPosition ?? 0,
+      remote,
     });
     schedulePersistedState();
     void addRecentlyPlayed(song);
@@ -504,9 +562,11 @@ export const usePlayer = create<PlayerStore>()((set, get) => ({
       return;
     }
     requestedTrackId = null;
+    manualAdvancePending = true; // Phase 13a — next track-change consume
     try {
       await TrackPlayer.skipToNext();
     } catch (err) {
+      manualAdvancePending = false;
       if (repeat !== 'all') set({ isPlaying: false, position: get().duration });
       else console.warn('Skip to next failed:', err);
     }
@@ -515,9 +575,11 @@ export const usePlayer = create<PlayerStore>()((set, get) => ({
   playPrev: async () => {
     if (!get().currentSong) return;
     requestedTrackId = null;
+    manualAdvancePending = true; // Phase 13a — next track-change consume
     try {
       await TrackPlayer.skipToPrevious();
     } catch (err) {
+      manualAdvancePending = false;
       console.warn('Skip to previous failed:', err);
     }
   },

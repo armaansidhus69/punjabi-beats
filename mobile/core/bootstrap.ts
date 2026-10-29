@@ -7,6 +7,7 @@ import { configureErrorReporting } from './errors/errorReporting';
 import { initializeDeepLinkRouter } from './navigation/deepLinkRouter';
 import { initializeNotifications } from './notifications/notificationManager';
 import { initializeFeatureFlags } from './featureflags/featureFlags';
+import { recordSignal, loadSignals } from '../services/signalsService';
 
 /**
  * Phase 0 bootstrap is deliberately best-effort. A foundation service must not
@@ -26,7 +27,13 @@ export async function initializeCore(): Promise<void> {
     ['supabase auth session', initializeAuthSession],
     ['deep links', initializeDeepLinkRouter],
     ['notifications', initializeNotifications],
-    ['analytics', () => configureAnalytics({ enabled: false })],
+    // Phase 13a — analytics sink ab signals ledger me live (local-only)
+    ['analytics', () =>
+      configureAnalytics({
+        enabled: true,
+        sink: event => recordSignal(event.name, event.properties),
+      })],
+    ['signals ledger restore', loadSignals],
     ['error reporting', () => configureErrorReporting(null)],
   ];
 
