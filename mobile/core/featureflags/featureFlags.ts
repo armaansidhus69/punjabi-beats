@@ -40,6 +40,12 @@ export function initializeFeatureFlags(): void {
   if (process.env.EXPO_PUBLIC_AUTH_ENABLED === 'true') {
     currentFlags = { ...currentFlags, auth_enabled: true };
   }
+  if (process.env.EXPO_PUBLIC_BLEND_ENABLED === 'true') {
+    currentFlags = { ...currentFlags, blend_enabled: true };
+  }
+  if (process.env.EXPO_PUBLIC_JAM_ENABLED === 'true') {
+    currentFlags = { ...currentFlags, jam_enabled: true };
+  }
 }
 
 export function isFeatureEnabled(flag: FeatureFlagName): boolean {
