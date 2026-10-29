@@ -391,15 +391,32 @@
   > handler checks / `--live` mode). Assistant rows 13c pending — genuinely
   > `[ ]`.
 
+  > **2026-10-29 [~] status (Assistant v1 13c)**: coded per
+  > `docs/superpowers/specs/2026-10-29-ai-assistant-design.md` +
+  > `docs/superpowers/plans/2026-10-30-ai-assistant-plan.md`. Server
+  > `api/ai-assistant.js` + pure `api/_aiAssistantCore.js` (intent protocol
+  > `search/play/pause/next/prev/queue_add/create_playlist/chat`, turns
+  > isolation, custom-limits `rateLimitBucket` 20/day + 5/hour — same
+  > `GEMINI_API_KEY`). Client: pure `core/ai/assistant.ts` (quick commands
+  > OFFLINE match + validator second guard), service
+  > `services/aiAssistantService.ts` (execution playerStore/playlistStore
+  > local — playback server nahi jaata), store `assistantStore.ts`
+  > (`@pb_ai_chat` cap 20, failed-retry), screen `app/ai-assistant.tsx`
+  > (disclosure + quota pill + result cards) + `AiAssistantGate`
+  > (`ai_assistant_enabled` default off) + Library card #5. Privacy:
+  > context sirf top-5 artist names + apne turns; ids/queries/ledger nahi.
+  > Tests `test-ai-assistant.mjs` (8) + `probe-ai-assistant.mjs`. Voice +
+  > agent loop abhi `[ ]`.
+
 ### AI playlist and assistant
 
 - [~] Prompt input/history *(13b v1: prompt input + history chips @pb_ai_prompts cap 10)*
 - [~] Generated playlist with add/remove/refine/regenerate/save/report *(13b v1: preview remove/refine/Play All/save; "report" per-row reason string only — deep report 13c)*
 - [~] AI disclosure and rate limits *(13b v1: disclosure strip + 10/day+4/hour limiter)*
-- [ ] Assistant conversation and commands
-- [ ] Search, play, stop/cancel, and create-playlist commands
-- [ ] Prompt/output safety *(13b v1 partial: user text instruction se isolated; full safety pass 13c)*
-- [ ] No private user data in model logs
+- [~] Assistant conversation and commands *(13c v1: chat + search/play/transport/queue/create_playlist intent protocol; agent-loop/dream 13.4 [ ])*
+- [~] Search, play, stop/cancel, and create-playlist commands *(13c v1: sab live (stop=pause); cancel nahi — [ ])*
+- [~] Prompt/output safety *(13b+13c: user text instruction se isolated, args whitelist + client second guard; full red-team pass [ ])*
+- [~] No private user data in model logs *(13c v1: context sirf coarse artist names + user apne chat turns; ledger/ids/timestamps kabhi nahi — model-log retention server-side [ ])*
 
 ## Phase 14 — Premium and payments
 

@@ -3,7 +3,7 @@
  * Saare reads defensively handle hote hain (corrupt data pe empty fallback).
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Playlist, RepeatMode, Song, PodcastShow, PodcastProgressEntry, SignalsLedger, TasteStats, AiPromptHistoryEntry } from '../types';
+import { Playlist, RepeatMode, Song, PodcastShow, PodcastProgressEntry, SignalsLedger, TasteStats, AiPromptHistoryEntry, AssistantMessage } from '../types';
 
 const PLAYLISTS_KEY = '@pb_playlists';
 const RECENT_KEY = '@pb_recently_played';
@@ -420,5 +420,27 @@ export async function saveAiPromptHistory(history: AiPromptHistoryEntry[]): Prom
     await AsyncStorage.setItem(AI_PROMPT_HISTORY_KEY, JSON.stringify(history));
   } catch (err) {
     console.warn('AI prompt history write failed:', err);
+  }
+}
+
+/* ---------- AI assistant chat (Phase 13c — cap store-side) ---------- */
+
+const AI_CHAT_HISTORY_KEY = '@pb_ai_chat';
+
+export async function getAiChatHistoryRaw(): Promise<unknown> {
+  try {
+    const raw = await AsyncStorage.getItem(AI_CHAT_HISTORY_KEY);
+    return raw ? (JSON.parse(raw) as unknown) : null;
+  } catch (err) {
+    console.warn('AI chat history read failed:', err);
+    return null;
+  }
+}
+
+export async function saveAiChatHistory(messages: AssistantMessage[]): Promise<void> {
+  try {
+    await AsyncStorage.setItem(AI_CHAT_HISTORY_KEY, JSON.stringify(messages));
+  } catch (err) {
+    console.warn('AI chat history write failed:', err);
   }
 }

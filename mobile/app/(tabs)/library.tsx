@@ -123,6 +123,11 @@ export default function LibraryScreen() {
     router.push('/ai-playlist');
   }, []);
 
+  const handleAiAssistantPress = useCallback(() => {
+    tapFeedback();
+    router.push('/ai-assistant');
+  }, []);
+
   const isEmpty = playlists.length === 0;
 
   return (
@@ -240,6 +245,23 @@ export default function LibraryScreen() {
         <View style={styles.likedInfo}>
           <Text style={styles.likedTitle}>AI Playlist</Text>
           <Text style={styles.likedSubtitle}>Prompt likho — AI mix banaye</Text>
+        </View>
+        <Ionicons name="chevron-forward" size={20} color={colors.subtext} />
+      </Pressable>
+
+      {/* Phase 13c: AI Assistant entry (flag gate screen ke andar hai) */}
+      <Pressable
+        onPress={handleAiAssistantPress}
+        accessibilityRole="button"
+        accessibilityLabel="AI Assistant kholo"
+        style={({ pressed }) => [styles.likedCard, pressed && styles.pressed]}
+      >
+        <View style={styles.likedIcon}>
+          <Ionicons name="chatbubbles-outline" size={22} color={colors.primary} />
+        </View>
+        <View style={styles.likedInfo}>
+          <Text style={styles.likedTitle}>AI Assistant</Text>
+          <Text style={styles.likedSubtitle}>Chat karo — gaane chalao, dhoondo</Text>
         </View>
         <Ionicons name="chevron-forward" size={20} color={colors.subtext} />
       </Pressable>

@@ -597,3 +597,36 @@ Before releasing:
 - [ ] Manual: `EXPO_PUBLIC_AI_PLAYLIST_ENABLED=true` mobile/.env + screen se generation pass (device)
 
 **Phase 21 Complete?** `[~]` (code + automated checks complete; Gemini key setup + deploy + device pass remain)
+
+---
+
+## 🏳️ PHASE 22: AI Assistant V1 (Roadmap 13c)
+
+> Spec `docs/superpowers/specs/2026-10-29-ai-assistant-design.md` + plan
+> `docs/superpowers/plans/2026-10-30-ai-assistant-plan.md`. FR ids
+> REQUIREMENTS.md FR-12 me. Same `GEMINI_API_KEY` reuse — koi naya env nahi.
+
+### Server (Vercel)
+- [x] `api/_aiAssistantCore.js` pure — `normalizeAssistantRequest` (turns guard), `buildAssistantPrompt` (intent protocol + turns/taste isolation), `parseAssistantResponse` (per-action args validation, default replies), limiter reuse custom limits
+- [x] `api/ai-assistant.js` handler — 405/no_key/bad_request fail-closed, 429 + Retry-After, 20s abort, 502 upstream; limits 20/day + 5/hour
+- [x] `api/_aiPlaylistCore.js` limiter generalize (optional limits param — 13b defaults unchanged)
+
+### Client Core and Service
+- [x] `core/ai/assistant.ts` pure — `matchLocalQuickCommand` (pause/next/prev OFFLINE), `validateAssistantReply` second guard, `makeTurnWindow` (6), `truncateReply`/`defaultReplyFor`/`describeAction`
+- [x] `services/aiAssistantService.ts` — `sendMessage` (quick → shuffle → server flow), `executeAssistantAction` (searchSongs resolve + playerStore/playlistStore local execution), `AiAssistantError` + Hinglish describe; privacy-safe taste (sirf top-5 artist names)
+
+### Store and Screen
+- [x] `stores/assistantStore.ts` — messages cap 20 (`@pb_ai_chat`), optimistic user bubble, failed-mark + retryLast, clearChat, quota echo
+- [x] `app/ai-assistant.tsx` — chat bubbles + action result cards (tap→play), disclosure strip, quota pill, input bar (max 240), clear confirm
+- [x] `components/AiAssistantGate.tsx` — `ai_assistant_enabled` flag guard
+- [x] featureFlags — `ai_assistant_enabled` registry + `EXPO_PUBLIC_AI_ASSISTANT_ENABLED` env hook (+ 13b ka miss hota `EXPO_PUBLIC_AI_PLAYLIST_ENABLED` hook ab add — catch)
+- [x] Library card #5 — `app/(tabs)/library.tsx` (+ AI chat entry)
+
+### Verification
+- [x] `test-ai-assistant.mjs` — 8 assertions (request guards, prompt isolation, per-action parse, custom-limit windows, quick commands, validator, turn window)
+- [x] Wired root + mobile test chains (`test:assistant`)
+- [x] `probe-ai-assistant.mjs` — local handler self-test (12 checks incl. 6th-hit 429 + Retry-After) + `--live` mode
+- [x] `npx tsc --noEmit` 0 · `npm run lint` 0 · root `npm test` green
+- [ ] Manual: `npx vercel` deploy (same GEMINI key — koi naya env nahi) + `EXPO_PUBLIC_AI_ASSISTANT_ENABLED=true` mobile/.env + device chat pass
+
+**Phase 22 Complete?** `[~]` (code + automated checks complete; deploy + device pass remain)

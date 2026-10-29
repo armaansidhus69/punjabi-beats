@@ -9,6 +9,7 @@ export const FEATURE_FLAG_NAMES = [
   'lyrics_enabled',
   'downloads_enabled',
   'ai_playlist_enabled',
+  'ai_assistant_enabled',
   'premium_enabled',
   'events_enabled',
 ] as const;
@@ -27,6 +28,7 @@ export const DEFAULT_FEATURE_FLAGS: FeatureFlags = {
   lyrics_enabled: false,
   downloads_enabled: false,
   ai_playlist_enabled: false,
+  ai_assistant_enabled: false,
   premium_enabled: false,
   events_enabled: false,
 };
@@ -50,6 +52,12 @@ export function initializeFeatureFlags(): void {
   }
   if (process.env.EXPO_PUBLIC_PODCASTS_ENABLED === 'true') {
     currentFlags = { ...currentFlags, podcasts_enabled: true };
+  }
+  if (process.env.EXPO_PUBLIC_AI_PLAYLIST_ENABLED === 'true') {
+    currentFlags = { ...currentFlags, ai_playlist_enabled: true };
+  }
+  if (process.env.EXPO_PUBLIC_AI_ASSISTANT_ENABLED === 'true') {
+    currentFlags = { ...currentFlags, ai_assistant_enabled: true };
   }
 }
 

@@ -123,6 +123,16 @@
 | FR-11.7 | Feature gated behind `ai_playlist_enabled` flag (default off, `EXPO_PUBLIC_AI_PLAYLIST_ENABLED` opt-in) | P1 |
 | FR-11.8 | Minimum 3 playable resolved tracks warna `not_enough` error (honest partial results nahi) | P2 |
 
+### FR-12: AI Assistant V1 *(Phase 13c — production roadmap; intent protocol, commands + chat)*
+| ID | Requirement | Priority |
+|---|---|---|
+| FR-12.1 | Chat message → server intent JSON `{action, args, reply}` (`api/ai-assistant.js`, same GEMINI key) | P1 |
+| FR-12.2 | Actions: search/play/pause/next/prev/queue_add/create_playlist + chat fallback; execution client-local | P1 |
+| FR-12.3 | Local quick commands (pause/next/prev/shuffle) OFFLINE — server roundtrip + rate budget skip | P2 |
+| FR-12.4 | AI disclosure chat header + quota pill; no private data (sirf coarse artist names context me) | P1 |
+| FR-12.5 | Rate limits: 20/day + 5/hour per device (2-window, 13b limiter reuse custom limits) | P1 |
+| FR-12.6 | Chat history `@pb_ai_chat` cap 20 (restore + failed-mark retry), feature gated `ai_assistant_enabled` default off | P1 |
+
 ---
 
 ## 2. Non-Functional Requirements

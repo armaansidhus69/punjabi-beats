@@ -175,9 +175,12 @@ function toTrackRef(candidate) {
 
 /**
  * 2-window per-device limiter (pure — caller state Map owns karta hai).
- * Windows: 1h aur 24h. Purane hits filter se naturally drop hote hain.
+ * Uses optional custom limits (assistant chat apne 20/day + 5/hour ke liye);
+ * default playlist generator ke 10/day + 4/hour.
  */
-export function rateLimitBucket(state, deviceId, nowMs) {
+export function rateLimitBucket(state, deviceId, nowMs, limits) {
+  const dailyLimit = typeof limits?.daily === 'number' && limits.daily > 0 ? limits.daily : AI_DAILY_LIMIT;
+  const hourlyLimit = typeof limits?.hourly === 'number' && limits.hourly > 0 ? limits.hourly : AI_HOURLY_LIMIT;
   let device = state.get(deviceId);
   if (!device || !Array.isArray(device.hits)) {
     device = { hits: [] };
@@ -190,12 +193,12 @@ export function rateLimitBucket(state, deviceId, nowMs) {
 
   // hourly window kab free hoga (sabse purana in-window hit + 1h)
   let retryAfterSec = 0;
-  if (hitsThisHour >= AI_HOURLY_LIMIT) {
+  if (hitsThisHour >= hourlyLimit) {
     const oldestThisHour = hits.filter(ts => ts > hourAgo)[0] ?? nowMs;
     // day cap pehle aa sakta hai — retry dono me min
     retryAfterSec = Math.max(0, Math.ceil((oldestThisHour + 60 * 60_000 - nowMs) / 1000));
   }
-  if (hitsThisDay >= AI_DAILY_LIMIT) {
+  if (hitsThisDay >= dailyLimit) {
     const oldestThisDay = hits[0] ?? nowMs;
     const dayWait = Math.max(0, Math.ceil((oldestThisDay + 24 * 60 * 60_000 - nowMs) / 1000));
     retryAfterSec = retryAfterSec === 0 ? dayWait : Math.min(retryAfterSec, dayWait);
@@ -204,14 +207,12 @@ export function rateLimitBucket(state, deviceId, nowMs) {
   const allowed = retryAfterSec === 0;
   if (allowed) {
     hits.push(nowMs);
-    state.set(deviceId, { hits });
-  } else {
-    state.set(deviceId, { hits });
   }
+  state.set(deviceId, { hits });
 
   return {
     allowed,
     retryAfterSec,
-    remaining: allowed ? Math.min(AI_DAILY_LIMIT - (hitsThisDay + 1), AI_HOURLY_LIMIT - (hitsThisHour + 1)) : 0,
+    remaining: allowed ? Math.min(dailyLimit - (hitsThisDay + 1), hourlyLimit - (hitsThisHour + 1)) : 0,
   };
 }

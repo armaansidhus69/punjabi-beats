@@ -502,3 +502,50 @@ export type AiPlaylistErrorCode =
   | 'not_enough'
   | 'network'
   | 'bad_request';
+
+/* ---------- Phase 13c (roadmap): AI assistant v1 (intent protocol) ---------- */
+
+/** Gemini intent protocol actions (spec Section 3) — transport local run */
+export type AssistantAction =
+  | 'search'
+  | 'play'
+  | 'pause'
+  | 'next'
+  | 'prev'
+  | 'queue_add'
+  | 'create_playlist'
+  | 'chat';
+
+/** sirf catalog-actions args lete hain; transport args-free */
+export interface AssistantArgs {
+  /** search/play/queue_add/create_playlist pe required (≤120 chars) */
+  query?: string;
+  /** create_playlist pe required (≤60 chars) */
+  name?: string;
+  /** create_playlist pe 1..10 */
+  count?: number;
+}
+
+/** server validated output — client dobara guard karta hai */
+export interface AssistantReply {
+  action: AssistantAction;
+  args: AssistantArgs;
+  reply: string;
+}
+
+/** @pb_ai_chat entry — results restore ke liye denormalized */
+export interface AssistantMessage {
+  role: 'user' | 'assistant';
+  text: string;
+  /** ISO */
+  ts: string;
+  /** sirf assistant action pe — search/create_playlist result cards */
+  results?: Song[];
+  failed?: boolean;
+}
+
+/** server ko jata context turn (isolate quoted slot me hi) */
+export interface AssistantTurn {
+  role: 'user' | 'assistant';
+  text: string;
+}
