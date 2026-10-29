@@ -360,3 +360,44 @@ export interface JamMessage {
   replyToId: string | null;
   createdAt: string;
 }
+
+/* ---------- Phase 12a (roadmap): Podcasts — RSS-first episodes v1 ---------- */
+
+export interface PodcastShow {
+  /** iTunes collectionId */
+  id: string;
+  title: string;
+  artist: string;
+  artworkUrl: string;
+  /** RSS feed — null ho to lookup fallback chalta hai */
+  feedUrl: string | null;
+  primaryGenre: string | null;
+}
+
+export interface PodcastEpisode {
+  /** audioUrl ka stable fnv1a-64 hash — resume/played keys isse drive hote hain */
+  id: string;
+  showId: string;
+  showTitle: string;
+  title: string;
+  description: string | null;
+  artworkUrl: string;
+  durationMs: number;
+  /** full stream — enclosure / episodeUrl (30s preview problem NAHI hai yahan) */
+  audioUrl: string;
+  /** ISO */
+  publishedAt: string;
+}
+
+/** @pb_podcast_progress map ki value (pure merge policy core/podcast/progress.ts) */
+export interface PodcastProgressEntry {
+  positionMs: number;
+  durationMs: number;
+  played: boolean;
+  updatedAt: string;
+  /** row render + replay ke liye denormalized (types PodcastEpisode se) */
+  title: string;
+  showTitle: string;
+  artworkUrl: string;
+  audioUrl: string;
+}

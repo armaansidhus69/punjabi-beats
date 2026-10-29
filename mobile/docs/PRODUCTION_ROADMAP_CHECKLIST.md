@@ -320,14 +320,37 @@
   > migration + deploy `room-control` + cron SQL + `jam_enabled` flag +
   > 2-device manual pass — boxes flip to `[x]` only after that.
 
-## Phase 12 — Podcasts, audiobooks, and video
+## Phase 12 - Podcasts, audiobooks, and video
 
-- [ ] Podcast show/episode pages, trailers, continue listening, played state
-- [ ] Save-for-later, comments, polls, transcripts, chapters, auto-download
+### Podcasts
+
+- [~] Podcast show/episode pages, trailers, continue listening, played state
+- [~] Save-for-later, comments, polls, transcripts, chapters, auto-download *(save-for-later hi v1 me; baaki defer)*
 - [ ] Podcast notification preferences
 - [ ] Audiobook pages, chapters, progress, resume, purchase/access, family access
 - [ ] Audiobook offline-license handling
 - [ ] Music-video pages, video feed, full-screen player, playlists, quality, download policy
+
+  > **2026-10-29 [~] status**: Podcasts v1 (12a) coded behind
+  > `podcasts_enabled` (default off) per
+  > `docs/superpowers/specs/2026-10-29-podcasts-design.md` +
+  > `docs/superpowers/plans/2026-10-30-podcasts-plan.md`. Scope: show/episode
+  > pages, iTunes show + episode search, full-episode playback (RSS enclosure,
+  > no 30s preview limit), continue-listening, played state (95%/sticky),
+  > save-for-later — sab local-only AsyncStorage (`@pb_podcast_shows` /
+  > `@pb_podcast_progress`), guest-compatible, koi Supabase auth/deploy nahi.
+  > Sources: parser `mobile/core/podcast/rss.ts` (hand-rolled walker, ATOM
+  > fallback), adapters `mobile/core/podcast/episode.ts` (+ progress
+  > `progress.ts`), service `mobile/services/podcastService.ts` (RSS-first,
+  > lookup fallback), screens `mobile/app/podcast/*` +
+  > `mobile/components/{PodcastGate,EpisodeRow}.tsx`, Library entry card.
+  > Episode→player existing pipeline se (`episodeToSong`, previewOnly false).
+  > Comments/polls/transcripts/chapters/auto-download/notification prefs +
+  > audiobooks + music-video rows genuinely `[ ]` — later phases.
+  > > Gates pass: tsc 0 · eslint 0 · root `npm test` green (11 new
+  > `test-podcast.mjs` assertions). Pending: `EXPO_PUBLIC_PODCASTS_ENABLED=true`
+  > + manual pass (koi server deploy nahi chahiye) - boxes flip to `[x]`
+  > only after that.
 
 ## Phase 13 — AI and recommendations
 

@@ -3,7 +3,7 @@
  * Saare reads defensively handle hote hain (corrupt data pe empty fallback).
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Playlist, RepeatMode, Song } from '../types';
+import { Playlist, RepeatMode, Song, PodcastShow, PodcastProgressEntry } from '../types';
 
 const PLAYLISTS_KEY = '@pb_playlists';
 const RECENT_KEY = '@pb_recently_played';
@@ -303,5 +303,59 @@ export async function saveRoomName(name: string): Promise<void> {
     await AsyncStorage.setItem(ROOM_NAME_KEY, name.slice(0, 20));
   } catch (err) {
     console.warn('Room name save failed:', err);
+  }
+}
+
+/* ---------- Podcasts (Phase 12a — saved shows + episode progress) ---------- */
+
+const PODCAST_SHOWS_KEY = '@pb_podcast_shows';
+const PODCAST_PROGRESS_KEY = '@pb_podcast_progress';
+
+/** saved (follow) shows — local-only, guest-usable */
+export async function getSavedPodcastShows(): Promise<PodcastShow[]> {
+  try {
+    const raw = await AsyncStorage.getItem(PODCAST_SHOWS_KEY);
+    const parsed = raw ? (JSON.parse(raw) as unknown) : null;
+    return Array.isArray(parsed) ? (parsed as PodcastShow[]) : [];
+  } catch (err) {
+    console.warn('Saved podcast shows read failed:', err);
+    return [];
+  }
+}
+
+export async function saveSavedPodcastShows(shows: PodcastShow[]): Promise<void> {
+  try {
+    await AsyncStorage.setItem(PODCAST_SHOWS_KEY, JSON.stringify(shows));
+  } catch (err) {
+    console.warn('Saved podcast shows write failed:', err);
+  }
+}
+
+export type PodcastProgressMap = Record<string, PodcastProgressEntry>;
+
+/** episodeId → progress map (resume + played badges isi se render hote) */
+export async function getPodcastProgressMap(): Promise<PodcastProgressMap> {
+  try {
+    const raw = await AsyncStorage.getItem(PODCAST_PROGRESS_KEY);
+    const parsed = raw ? (JSON.parse(raw) as unknown) : null;
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+    return parsed as PodcastProgressMap;
+  } catch (err) {
+    console.warn('Podcast progress read failed:', err);
+    return {};
+  }
+}
+
+/** ek episode ki entry upsert (read-modify-write; throttle caller pe) */
+export async function savePodcastProgressEntry(
+  episodeId: string,
+  entry: PodcastProgressEntry,
+): Promise<void> {
+  try {
+    const map = await getPodcastProgressMap();
+    map[episodeId] = entry;
+    await AsyncStorage.setItem(PODCAST_PROGRESS_KEY, JSON.stringify(map));
+  } catch (err) {
+    console.warn('Podcast progress write failed:', err);
   }
 }

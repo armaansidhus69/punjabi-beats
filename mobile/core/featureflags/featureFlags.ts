@@ -5,6 +5,7 @@ export const FEATURE_FLAG_NAMES = [
   'chat_enabled',
   'blend_enabled',
   'jam_enabled',
+  'podcasts_enabled',
   'lyrics_enabled',
   'downloads_enabled',
   'ai_playlist_enabled',
@@ -22,6 +23,7 @@ export const DEFAULT_FEATURE_FLAGS: FeatureFlags = {
   chat_enabled: false,
   blend_enabled: false,
   jam_enabled: false,
+  podcasts_enabled: false,
   lyrics_enabled: false,
   downloads_enabled: false,
   ai_playlist_enabled: false,
@@ -45,6 +47,9 @@ export function initializeFeatureFlags(): void {
   }
   if (process.env.EXPO_PUBLIC_JAM_ENABLED === 'true') {
     currentFlags = { ...currentFlags, jam_enabled: true };
+  }
+  if (process.env.EXPO_PUBLIC_PODCASTS_ENABLED === 'true') {
+    currentFlags = { ...currentFlags, podcasts_enabled: true };
   }
 }
 
