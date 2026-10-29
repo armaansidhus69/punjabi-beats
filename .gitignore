@@ -14,6 +14,7 @@ node_modules/
 tsc-out.txt
 tsc.log
 .expo/
+supabase/.temp/
 
 # Session-local agent files (chat attachments, inbox, scratch notes)
 .opencode/
