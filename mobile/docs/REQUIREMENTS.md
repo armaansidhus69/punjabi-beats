@@ -90,6 +90,17 @@
 | FR-8.2 | Show last 20 songs | P2 |
 | FR-8.3 | Tap to replay | P2 |
 
+### FR-9: Podcasts *(Phase 12a — production roadmap se add; original v1 out-of-scope revise)*
+| ID | Requirement | Priority |
+|---|---|---|
+| FR-9.1 | User can search podcast shows and episodes (iTunes, IN store) | P1 |
+| FR-9.2 | Show page lists full episodes (RSS enclosure / lookup fallback) | P1 |
+| FR-9.3 | User can play full episode (no 30s preview limit) | P1 |
+| FR-9.4 | Continue listening — resume position persists (local) | P1 |
+| FR-9.5 | Played state (≥95% or sticky) shows on episode rows | P2 |
+| FR-9.6 | User can save/unsave shows (local, guest-compatible) | P2 |
+| FR-9.7 | Feature gated behind `podcasts_enabled` flag (default off) | P1 |
+
 ---
 
 ## 2. Non-Functional Requirements
@@ -168,11 +179,15 @@
 - ❌ Offline download
 - ❌ Lyrics display
 - ❌ Equalizer
-- ❌ Podcasts
 - ❌ Video content
 - ❌ Social features (comments, likes)
 - ❌ Ads
 - ❌ Payment
+
+> **Update (Phase 12a, 2026-10-29):** Podcasts production roadmap se Phase 12
+> me aaye — original out-of-scope revise hua (FR-9 dekho). Scope sirf core
+> listening (local-only, flag-gated); comments/polls/transcripts/download
+> abhi bhi nahi bane.
 
 ---
 

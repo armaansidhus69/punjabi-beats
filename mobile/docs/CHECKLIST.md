@@ -490,3 +490,44 @@ Before releasing:
 - [ ] Manually verify save, remove, restart persistence, Play All, and Shuffle
 
 **Phase 18 Complete?** `[~]` (code + automated checks complete; device manual verification remains)
+
+---
+
+## 🎙️ PHASE 19: Podcasts (Production Roadmap 12a)
+
+> Spec `docs/superpowers/specs/2026-10-29-podcasts-design.md` + plan
+> `docs/superpowers/plans/2026-10-30-podcasts-plan.md`. FR ids REQUIREMENTS.md
+> FR-9 me add hue (original v1 out-of-scope revise hua). Roadmap (production
+> checklist) Phase 12 me `[~]` status note bhi hai. Local-only — koi backend.
+
+### Core Pure Logic
+- [x] RSS/ATOM parser — `core/podcast/rss.ts` (stack walker, unescape-once leaf reads, malformed item skip, `itunes:duration` H:MM:SS + seconds, CDATA, itunes:image artwork)
+- [x] Episode adapters — `core/podcast/episode.ts` (`stableEpisodeId` fnv1a64 reuse, RSS/lookup rows → `PodcastEpisode`, `episodeToSong` full-stream `Song`, previewOnly false)
+- [x] Progress policy — `core/podcast/progress.ts` (played = ≥95% ya sticky, duration-0 never played, position clamp, `mergeProgress` previous-metadata rehydrate)
+- [x] Stable episode id = audioUrl hash — resume/played keys stable across restarts
+
+### Service and Storage
+- [x] iTunes service — `services/podcastService.ts` (`searchShows` / `searchEpisodes` / `getShowById` / `getShowEpisodes` RSS-first + `lookup` entity=podcastEpisode fallback, 10s AbortController)
+- [x] Storage keys — `@pb_podcast_shows` (saved shows) + `@pb_podcast_progress` (episodeId → entry, denormalized title/showTitle/artwork/audio) — `services/storage.ts`, guest-compatible
+- [x] Flag — `podcasts_enabled` default off + `EXPO_PUBLIC_PODCASTS_ENABLED` opt-in (blend/jam pattern); `.env` + `.env.example`
+
+### State and Playback
+- [x] `stores/podcastStore.ts` — search/saved/detail/progress slice, `playEpisode` (existing `playSong` pipeline + `initialPosition` ms resume), `resumeFromProgress`, `selectContinueListening` (latest 5, unplayed)
+- [x] `hooks/usePodcastProgress.ts` — 10s throttled position ticks + pause-transition flush + unmount flush; root `_layout.tsx` me global mount (flag off → zero-op)
+- [x] Podcast song registry (`isPodcastSongId`) — itunes source songs se distinguish
+
+### Screens
+- [x] Library tab Podcasts entry card (Blend/Jam pattern ke saath)
+- [x] `/podcast/index` — 350ms debounced search (shows + episodes sections), continue-listening rows, saved shows horizontal
+- [x] `/podcast/[id]` — hero (art/title/artist/genre), save/unsave chip with toast + haptic, episode list (EpisodeRow)
+- [x] `components/PodcastGate.tsx` (flag-only upsell, login nahi) + `components/EpisodeRow.tsx` (played ✅ / resume % / duration/format)
+
+### Verification
+- [x] `test-podcast.mjs` — 11 assertions (RSS/ATOM parse, malformed, duration/date formats, adapter invariants, 95% boundary, sticky/clamp)
+- [x] Wired root + mobile `npm test` chains (`test:podcast`)
+- [x] `npx tsc --noEmit` — 0 errors (`allowImportingTsExtensions` + explicit `.ts` imports for Node type-stripping)
+- [x] `npm run lint` — 0 warnings
+- [x] RSS region live probe verified (2026-10-29: search + lookup + RSS enclosure full mp3)
+- [ ] Manual device pass — search, play full episode, kill-app resume, 95% played badge, save/unsave (flag `EXPO_PUBLIC_PODCASTS_ENABLED=true`)
+
+**Phase 19 Complete?** `[~]` (code + automated checks complete; manual device pass with `EXPO_PUBLIC_PODCASTS_ENABLED=true` remains — koi server deploy nahi chahiye)

@@ -31,6 +31,7 @@ import { initializeCore } from '../core/bootstrap';
 import { initializeMedia } from '../core/media/mediaFacade';
 import { useAuthStore } from '../stores/authStore';
 import { handleInitialOAuthCallback } from '../core/auth/authService';
+import usePodcastProgressWriter from '../hooks/usePodcastProgress';
 
 TrackPlayer.registerPlaybackService(() => playbackService);
 
@@ -77,6 +78,9 @@ function AppShell() {
 }
 
 export default function RootLayout() {
+  // Podcast progress writer (Phase 12a) — global mount; flag off pe zero-op
+  usePodcastProgressWriter();
+
   // Room sync (Phase 11) — ek hi baar init: player action + room lifecycle
   // listeners + socket state listener register. Idempotent aur missing-env par
   // non-crashing (warning + failed state).

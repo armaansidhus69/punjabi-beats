@@ -5,13 +5,20 @@
  */
 
 import { useEffect, useRef } from 'react';
+import { isFeatureEnabled } from '../core/featureflags/featureFlags';
 import { podcastProgressTick, usePodcast } from '../stores/podcastStore';
 import { usePlayer } from '../stores/playerStore';
 
+/**
+ * Root layout pe mount hota hai (global). Flag off ho to seed verify ke
+ * baad seedha return — interval/subscription register hi nahi hote.
+ */
 export default function usePodcastProgressWriter(): void {
   const lastTickRef = useRef<number>(0);
 
   useEffect(() => {
+    if (!isFeatureEnabled('podcasts_enabled')) return undefined;
+
     const timer = setInterval(() => {
       const player = usePlayer.getState();
       const song = player.currentSong;
