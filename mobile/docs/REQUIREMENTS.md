@@ -141,6 +141,16 @@
 | FR-13.3 | Plain-lyrics fallback with approximate progress highlight; honest not-found/network/rate-limit states + retry | P1 |
 | FR-13.4 | Versioned `@pb_lyrics` cache cap 50; feature gated `lyrics_enabled` default off (`EXPO_PUBLIC_LYRICS_ENABLED` opt-in), guest-compatible | P1 |
 
+### FR-14: Podcast Transcripts V1 *(Phase 7b — publisher RSS transcripts)*
+| ID | Requirement | Priority |
+|---|---|---|
+| FR-14.1 | Discover HTTPS `<podcast:transcript>` refs from official/default or alternate Podcast Namespace prefixes; preserve on RSS episodes | P1 |
+| FR-14.2 | Parse publisher WebVTT, SRT, Podcast JSON, HTML, and plain text into one safe segment model (2 MiB / 5,000 segment caps) | P1 |
+| FR-14.3 | Transcript screen supports local text/speaker search, timed current-segment highlight, follow latch, and segment tap → play/seek | P1 |
+| FR-14.4 | Untimed HTML/plain transcripts stay searchable/readable and never expose a false timestamp action | P1 |
+| FR-14.5 | Reading position persists in versioned `@pb_transcript_positions` cap 50, bound to source URL; full transcript body stays memory-only | P2 |
+| FR-14.6 | Creator-provided only: no AI/audio upload/backend; reuse `podcasts_enabled` gate and existing guest playback pipeline | P1 |
+
 ---
 
 ## 2. Non-Functional Requirements

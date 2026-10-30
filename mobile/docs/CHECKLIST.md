@@ -436,12 +436,13 @@ Before releasing:
 | Phase 21: AI Playlist V1 (Roadmap 13b) | 16 | 14 | 88% |
 | Phase 22: AI Assistant V1 (Roadmap 13c) | 15 | 14 | 93% |
 | Phase 23: Lyrics V1 (Roadmap 7a) | 14 | 13 | 93% |
-| **TOTAL** | **334** | **295** | **88%** |
+| Phase 24: Podcast Transcripts V1 (Roadmap 7b) | 16 | 15 | 94% |
+| **TOTAL** | **350** | **310** | **89%** |
 
 > Counts 2026-10-30 ko actual checkbox lines se dobara verify hue — har `## PHASE n` section
 > ke andar ke `- [ ]`/`- [x]` boxes gine gaye (SECTION 0/1/2 ke headers, Tracker table,
 > Pending summary, Milestones aur FINAL CHECKLIST is count me nahi — wo alag sections
-> hain). Phases 18–23 ab tracker me include hain. FINAL CHECKLIST aur Milestones alag
+> hain). Phases 18–24 ab tracker me include hain. FINAL CHECKLIST aur Milestones alag
 > release-level gates hain.
 
 ### ⏳ Abhi kya pending hai (sirf yehi baaki)
@@ -449,7 +450,7 @@ Before releasing:
 - **Phase 13 (1 box)** — runtime console-warnings device check (ESLint setup + 0-warning run ✓ done)
 - **Phase 16 (12 box)** — backend 2 box DONE (deploy + env); ab `npx eas-cli login` + builds (user)
 - **Phase 17 (3 box)** — screenshots + GitHub repo + push (local git commit ✓ done; remote push commands box me hain)
-- **Phases 18–23** — code/automated checks done; manual device/deploy gates remain (Liked, Podcasts, Signals, AI Playlist, AI Assistant, Lyrics)
+- **Phases 18–24** — code/automated checks done; manual device/deploy gates remain (Liked, Podcasts, Signals, AI Playlist, AI Assistant, Lyrics, Transcripts)
 
 ---
 
@@ -672,3 +673,37 @@ Before releasing:
 > pass hain. Upstream available hone par same `--live` command re-run karna hai.
 
 **Phase 23 Complete?** `[~]` (code + automated checks complete; flag opt-in + device pass remain)
+
+---
+
+## 🏳️ PHASE 24: Podcast Transcripts V1 (Roadmap 7b)
+
+> Spec `docs/superpowers/specs/2026-10-30-podcast-transcripts-design.md` + plan
+> `docs/superpowers/plans/2026-10-30-podcast-transcripts-plan.md`. FR ids
+> REQUIREMENTS.md FR-14 me. Publisher files only; no backend/key/AI upload.
+
+### RSS, Types, and Pure Core
+- [x] Transcript refs/types — MIME union, episode refs, common segments/transcript, source-bound position envelope
+- [x] RSS discovery — official/default + alternate Podcast Namespace prefixes, HTTPS/type guards, dedupe, max 10 refs
+- [x] Episode adapters — RSS refs preserve; iTunes and progress-rebuilt episodes honest empty refs
+- [x] `core/podcast/transcript.ts` — VTT/SRT/JSON/HTML/plain parsers, 5,000-segment cap, safe text-only HTML handling
+- [x] Pure helpers — format priority, timestamp parser, JSON word coalescing, segment boundary, text/speaker search, version/source/cap-50 positions
+
+### Service and State
+- [x] `podcastTranscriptService.ts` — 10s HTTPS fetch, 2 MiB Content-Length/body guard, MIME parser dispatch, one-entry memory cache, honest errors
+- [x] `@pb_transcript_positions` storage — versioned raw read/write; full transcript body never persisted
+- [x] `transcriptStore.ts` — stale-request token, open/retry/close/search, play-or-seek jump, 750ms position persistence, toast+haptics
+
+### UI
+- [x] `EpisodeRow` sibling transcript action (no nested Pressable), visible only for RSS episode refs
+- [x] Podcast detail transcript entry → static `/podcast/transcript` route
+- [x] Transcript screen — virtualized rows, search/hit count, timed current highlight + follow latch, untimed non-seek rows, saved-position restore, MiniPlayer padding
+
+### Verification
+- [x] `test-podcast.mjs` extended to 12 tests (namespace refs/MIME alias/dedupe/adapter preservation)
+- [x] `test-transcript.mjs` — 12 tests (five formats, guards/caps, search, boundaries, source-bound positions)
+- [x] Root + mobile chains wired (`test:transcript`) + `probe-transcript.mjs` local fixtures and official live VTT pass (2026-10-30)
+- [x] `npx tsc --noEmit` 0 · `npm run lint` 0 · root `npm test` green (13 suites)
+- [ ] Manual: `EXPO_PUBLIC_PODCASTS_ENABLED=true`; RSS show transcript icon + timed follow/search/jump + plain fallback + position restore on device
+
+**Phase 24 Complete?** `[~]` (code + automated checks complete; RSS-backed device pass remains)

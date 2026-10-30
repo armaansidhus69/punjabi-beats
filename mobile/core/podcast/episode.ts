@@ -30,6 +30,7 @@ export function rssEpisodeToPodcastEpisode(
     durationMs: Math.max(0, Math.round((parseItunesDuration(item.rawDurationSec) ?? 0) * 1000)),
     audioUrl: item.audioUrl,
     publishedAt: item.publishedAt,
+    transcripts: item.transcripts,
   };
 }
 
@@ -66,6 +67,7 @@ export function itunesEpisodeRowToPodcastEpisode(
     durationMs: ms,
     audioUrl: url,
     publishedAt: Number.isNaN(Date.parse(iso)) ? '' : new Date(Date.parse(iso)).toISOString(),
+    transcripts: [],
   };
 }
 

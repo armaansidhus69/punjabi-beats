@@ -15,6 +15,7 @@ import LoadingSpinner from '../../components/LoadingSpinner';
 import EmptyState from '../../components/EmptyState';
 import { PodcastShow } from '../../types';
 import { usePodcast } from '../../stores/podcastStore';
+import { useTranscript } from '../../stores/transcriptStore';
 import { usePlayer } from '../../stores/playerStore';
 import { useMiniPlayerPadding } from '../../hooks/useMiniPlayerPadding';
 import { colors } from '../../constants/colors';
@@ -36,6 +37,7 @@ export default function PodcastDetailScreen() {
   const toggleSave = usePodcast(s => s.toggleSave);
   const playEpisode = usePodcast(s => s.playEpisode);
   const progressMap = usePodcast(s => s.progressMap);
+  const openTranscript = useTranscript(s => s.open);
 
   const currentSongId = usePlayer(s => s.currentSong?.id ?? null);
   const [show, setShow] = useState<PodcastShow | null>(null);
@@ -81,6 +83,16 @@ export default function PodcastDetailScreen() {
       void playEpisode(episode).catch(() => undefined);
     },
     [detailEpisodes, playEpisode],
+  );
+
+  const handleTranscript = useCallback(
+    (episodeId: string) => {
+      const episode = detailEpisodes.find(candidate => candidate.id === episodeId);
+      if (!episode || episode.transcripts.length === 0) return;
+      void openTranscript(episode);
+      router.push('/podcast/transcript');
+    },
+    [detailEpisodes, openTranscript],
   );
 
   if (detailLoading) {
@@ -191,6 +203,11 @@ export default function PodcastDetailScreen() {
                 progress={progressMap[episode.id] ?? null}
                 playing={currentSongId === episode.id}
                 onPress={() => handlePlay(episode.id)}
+                onTranscript={
+                  episode.transcripts.length > 0
+                    ? () => handleTranscript(episode.id)
+                    : undefined
+                }
               />
             ))
           )}

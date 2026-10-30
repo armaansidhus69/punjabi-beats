@@ -9,7 +9,12 @@
  * spec ke mutabik (audio enclosure missing → item null).
  */
 
-import type { PodcastEpisode, PodcastShow } from '../../types';
+import type {
+  PodcastEpisode,
+  PodcastShow,
+  PodcastTranscriptMime,
+  PodcastTranscriptRef,
+} from '../../types';
 
 /** Raw feed item — episode.ts adapters isko PodcastEpisode banate hain */
 export interface RssEpisode {
@@ -21,6 +26,7 @@ export interface RssEpisode {
   /** ISO ya '' (invalid/missing date) */
   publishedAt: string;
   artworkUrl: string | null;
+  transcripts: PodcastTranscriptRef[];
 }
 
 export interface ParsedFeed {
@@ -57,6 +63,40 @@ interface Tag {
   attrs: Map<string, string>;
   /** RAW inner (unescape nahi hua) */
   inner: string;
+}
+
+const PODCAST_NAMESPACE_URIS = new Set([
+  'https://podcastindex.org/namespace/1.0',
+  'https://github.com/podcastindex-org/podcast-namespace/blob/main/docs/1.0.md',
+]);
+
+const TRANSCRIPT_MIMES = new Set<PodcastTranscriptMime>([
+  'text/vtt',
+  'application/x-subrip',
+  'application/json',
+  'text/html',
+  'text/plain',
+]);
+
+/** Publisher MIME normalize — charset suffix strip, common SRT alias tolerate. */
+export function normalizeTranscriptMime(raw: string | null): PodcastTranscriptMime | null {
+  const clean = (raw ?? '').split(';', 1)[0].trim().toLowerCase();
+  const normalized = clean === 'application/srt' ? 'application/x-subrip' : clean;
+  return TRANSCRIPT_MIMES.has(normalized as PodcastTranscriptMime)
+    ? (normalized as PodcastTranscriptMime)
+    : null;
+}
+
+/** Official namespace URI se actual XML prefixes; common `podcast` tolerate. */
+export function transcriptNamespacePrefixes(xml: string): Set<string> {
+  const prefixes = new Set<string>(['podcast']);
+  const regex = /xmlns:([A-Za-z_][\w.-]*)\s*=\s*(?:"([^"]*)"|'([^']*)')/gi;
+  let match: RegExpExecArray | null;
+  while ((match = regex.exec(xml)) !== null) {
+    const uri = unescapeXml(match[2] ?? match[3] ?? '').trim().toLowerCase();
+    if (PODCAST_NAMESPACE_URIS.has(uri)) prefixes.add(match[1].toLowerCase());
+  }
+  return prefixes;
 }
 
 function readOpeningTag(tagRaw: string): { name: string; attrs: Map<string, string>; selfClosing: boolean } | null {
@@ -174,6 +214,7 @@ export function parsePodcastFeed(xml: string): ParsedFeed {
   const region = xml.slice(start, endRegion);
 
   const tags = walkChildren(region);
+  const transcriptPrefixes = transcriptNamespacePrefixes(xml);
   const title = tags.find(tag => tag.name === 'title')?.inner.trim() ?? '';
   // itunes:author plain text ho to direct; `<itunes:owner><name>` wrapper me
   // bhi author ho sakta hai — tags strip kar ke text
@@ -190,10 +231,10 @@ export function parsePodcastFeed(xml: string): ParsedFeed {
   const episodes: RssEpisode[] = [];
   for (const tag of tags) {
     if (tag.name === 'item') {
-      const episode = itemToRssEpisode(tag);
+      const episode = itemToRssEpisode(tag, transcriptPrefixes);
       if (episode) episodes.push(episode);
     } else if (tag.name === 'entry') {
-      const episode = entryToRssEpisode(tag);
+      const episode = entryToRssEpisode(tag, transcriptPrefixes);
       if (episode) episodes.push(episode);
     }
   }
@@ -201,15 +242,43 @@ export function parsePodcastFeed(xml: string): ParsedFeed {
   return { title: unescapeXml(title), artist: unescapeXml(artist), artworkUrl, episodes };
 }
 
-function itemToRssEpisode(item: Tag): RssEpisode | null {
+function transcriptRefsFromChildren(children: Tag[], prefixes: Set<string>): PodcastTranscriptRef[] {
+  const names = new Set([...prefixes].map(prefix => `${prefix}:transcript`));
+  const refs: PodcastTranscriptRef[] = [];
+  const seen = new Set<string>();
+  for (const child of children) {
+    if (!names.has(child.name) || refs.length >= 10) continue;
+    const rawUrl = (child.attrs.get('url') ?? '').trim();
+    const type = normalizeTranscriptMime(child.attrs.get('type') ?? null);
+    if (rawUrl.length === 0 || type === null) continue;
+    try {
+      if (new URL(rawUrl).protocol !== 'https:') continue;
+    } catch {
+      continue;
+    }
+    const languageRaw = (child.attrs.get('language') ?? '').trim();
+    const language = languageRaw.length > 0 ? languageRaw : null;
+    const relRaw = (child.attrs.get('rel') ?? '').trim().toLowerCase();
+    const rel = relRaw.length > 0 ? relRaw : null;
+    const key = `${rawUrl}\u0000${type}\u0000${language ?? ''}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    refs.push({ url: rawUrl, type, language, rel });
+  }
+  return refs;
+}
+
+function itemToRssEpisode(item: Tag, transcriptPrefixes: Set<string>): RssEpisode | null {
   let title = '';
   let audioUrl: string | null = null;
   let rawDurationSec: string | null = null;
   let description: string | null = null;
   let publishedAt = '';
   let artworkUrl: string | null = null;
+  const children = walkChildren(item.inner);
+  const transcripts = transcriptRefsFromChildren(children, transcriptPrefixes);
 
-  for (const child of walkChildren(item.inner)) {
+  for (const child of children) {
     switch (child.name) {
       case 'title':
         if (title === '') title = unescapeXml(child.inner).trim();
@@ -241,16 +310,18 @@ function itemToRssEpisode(item: Tag): RssEpisode | null {
     }
   }
   if (audioUrl === null) return null;
-  return { title, audioUrl, rawDurationSec, description, publishedAt, artworkUrl };
+  return { title, audioUrl, rawDurationSec, description, publishedAt, artworkUrl, transcripts };
 }
 
-function entryToRssEpisode(entry: Tag): RssEpisode | null {
+function entryToRssEpisode(entry: Tag, transcriptPrefixes: Set<string>): RssEpisode | null {
   let title = '';
   let audioUrl: string | null = null;
   let description: string | null = null;
   let publishedAt = '';
+  const children = walkChildren(entry.inner);
+  const transcripts = transcriptRefsFromChildren(children, transcriptPrefixes);
 
-  for (const child of walkChildren(entry.inner)) {
+  for (const child of children) {
     switch (child.name) {
       case 'title':
         if (title === '') title = unescapeXml(child.inner).trim();
@@ -278,7 +349,15 @@ function entryToRssEpisode(entry: Tag): RssEpisode | null {
     }
   }
   if (audioUrl === null) return null;
-  return { title, audioUrl, rawDurationSec: null, description, publishedAt, artworkUrl: null };
+  return {
+    title,
+    audioUrl,
+    rawDurationSec: null,
+    description,
+    publishedAt,
+    artworkUrl: null,
+    transcripts,
+  };
 }
 
 /* ------------------------------ type re-exports ------------------------------ */

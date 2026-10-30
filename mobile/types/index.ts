@@ -374,6 +374,21 @@ export interface PodcastShow {
   primaryGenre: string | null;
 }
 
+/** Podcasting 2.0 publisher transcript formats (normalized MIME values). */
+export type PodcastTranscriptMime =
+  | 'text/vtt'
+  | 'application/x-subrip'
+  | 'application/json'
+  | 'text/html'
+  | 'text/plain';
+
+export interface PodcastTranscriptRef {
+  url: string;
+  type: PodcastTranscriptMime;
+  language: string | null;
+  rel: string | null;
+}
+
 export interface PodcastEpisode {
   /** audioUrl ka stable fnv1a-64 hash — resume/played keys isse drive hote hain */
   id: string;
@@ -387,6 +402,40 @@ export interface PodcastEpisode {
   audioUrl: string;
   /** ISO */
   publishedAt: string;
+  /** RSS Podcasting 2.0 refs; iTunes-only episodes me empty */
+  transcripts: PodcastTranscriptRef[];
+}
+
+export interface TranscriptSegment {
+  id: string;
+  /** null = untimed plain/HTML segment */
+  startMs: number | null;
+  endMs: number | null;
+  speaker: string | null;
+  text: string;
+}
+
+export interface PodcastTranscript {
+  episodeId: string;
+  sourceUrl: string;
+  mimeType: PodcastTranscriptMime;
+  language: string | null;
+  timed: boolean;
+  segments: TranscriptSegment[];
+}
+
+export interface TranscriptPositionEntry {
+  sourceUrl: string;
+  segmentIndex: number;
+  /** ISO */
+  updatedAt: string;
+}
+
+export type TranscriptPositionMap = Record<string, TranscriptPositionEntry>;
+
+export interface TranscriptPositionEnvelope {
+  version: 1;
+  positions: TranscriptPositionMap;
 }
 
 /** @pb_podcast_progress map ki value (pure merge policy core/podcast/progress.ts) */

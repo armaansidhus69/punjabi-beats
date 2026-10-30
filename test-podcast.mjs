@@ -6,7 +6,14 @@
  */
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { parsePodcastFeed, parseItunesDuration, parseDateToIso, stripHtml } from './mobile/core/podcast/rss.ts';
+import {
+  parsePodcastFeed,
+  parseItunesDuration,
+  parseDateToIso,
+  stripHtml,
+  normalizeTranscriptMime,
+  transcriptNamespacePrefixes,
+} from './mobile/core/podcast/rss.ts';
 import {
   stableEpisodeId,
   rssEpisodeToPodcastEpisode,
@@ -15,7 +22,10 @@ import {
 } from './mobile/core/podcast/episode.ts';
 import { isEpisodePlayed, mergeProgress } from './mobile/core/podcast/progress.ts';
 
-const RSS_FIXTURE = `<rss version="2.0" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd">
+const RSS_FIXTURE = `<rss version="2.0"
+xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd"
+xmlns:podcast="https://podcastindex.org/namespace/1.0"
+xmlns:pod2="https://github.com/Podcastindex-org/podcast-namespace/blob/main/docs/1.0.md">
 <channel>
   <title>Punjabi Katha &amp; Co</title>
   <itunes:author>Bhai Veer Singh</itunes:author>
@@ -27,6 +37,11 @@ const RSS_FIXTURE = `<rss version="2.0" xmlns:itunes="http://www.itunes.com/dtds
     <itunes:duration>1:02:03</itunes:duration>
     <description><![CDATA[<p>Ye episode <b>bold</b> hai</p>]]></description>
     <pubDate>Wed, 28 Oct 2026 10:00:00 GMT</pubDate>
+    <podcast:transcript url="https://cdn.example/ep1.vtt" type="text/vtt; charset=utf-8" language="en" rel="captions" />
+    <podcast:transcript url="https://cdn.example/ep1.vtt" type="text/vtt" language="en" />
+    <pod2:transcript url="https://cdn.example/ep1.srt" type="application/srt" />
+    <podcast:transcript url="http://cdn.example/insecure.vtt" type="text/vtt" />
+    <podcast:transcript url="https://cdn.example/unsupported.xml" type="application/xml" />
   </item>
   <item>
     <title>Broken item — no audio</title>
@@ -65,8 +80,23 @@ test('rss: full fixture parse', () => {
   assert.equal(ep0.rawDurationSec, '1:02:03');
   assert.equal(ep0.publishedAt, '2026-10-28T10:00:00.000Z');
   assert.equal(ep0.description, 'Ye episode bold hai'); // html strip
+  assert.deepEqual(ep0.transcripts, [
+    {
+      url: 'https://cdn.example/ep1.vtt',
+      type: 'text/vtt',
+      language: 'en',
+      rel: 'captions',
+    },
+    {
+      url: 'https://cdn.example/ep1.srt',
+      type: 'application/x-subrip',
+      language: null,
+      rel: null,
+    },
+  ]);
   assert.equal(ep1.audioUrl, 'https://cdn.example/ep2.mp3');
   assert.equal(ep1.artworkUrl, 'https://cdn.example/ep2-art.png');
+  assert.deepEqual(ep1.transcripts, []);
 });
 
 test('rss: malformed + garbage input throw nahi kare', () => {
@@ -99,6 +129,15 @@ test('duration + date + stripHtml scalar helpers', () => {
   assert.equal(stripHtml('<p>Ye <b>bold</b></p>'), 'Ye bold');
 });
 
+test('rss transcript helpers: MIME aliases + namespace prefixes', () => {
+  assert.equal(normalizeTranscriptMime('Text/VTT; charset=UTF-8'), 'text/vtt');
+  assert.equal(normalizeTranscriptMime('application/srt'), 'application/x-subrip');
+  assert.equal(normalizeTranscriptMime('application/xml'), null);
+  const prefixes = transcriptNamespacePrefixes(RSS_FIXTURE);
+  assert.equal(prefixes.has('podcast'), true);
+  assert.equal(prefixes.has('pod2'), true);
+});
+
 test('rss adapter: stableEpisodeId deterministic + url-sensitive', () => {
   assert.equal(stableEpisodeId('https://cdn.example/ep1.mp3'), stableEpisodeId('https://cdn.example/ep1.mp3'));
   assert.notEqual(stableEpisodeId('https://cdn.example/ep1.mp3'), stableEpisodeId('https://cdn.example/ep2.mp3'));
@@ -119,6 +158,7 @@ test('rss adapter: episode load → PodcastEpisode', () => {
   assert.equal(episode.durationMs, 3723000); // 1:02:03 → ms
   assert.equal(episode.audioUrl, 'https://cdn.example/ep1.mp3');
   assert.equal(episode.id, stableEpisodeId('https://cdn.example/ep1.mp3'));
+  assert.equal(episode.transcripts.length, 2);
 });
 
 test('rss adapter: no-audio item → null', () => {
@@ -127,7 +167,15 @@ test('rss adapter: no-audio item → null', () => {
   assert.equal(broken.episodes.length, 0);
   // yahan adapter ka null-path direct test — synthetic raw shape
   const nullEpisode = rssEpisodeToPodcastEpisode(
-    { title: 'x', audioUrl: '', rawDurationSec: null, description: null, publishedAt: '', artworkUrl: null },
+    {
+      title: 'x',
+      audioUrl: '',
+      rawDurationSec: null,
+      description: null,
+      publishedAt: '',
+      artworkUrl: null,
+      transcripts: [],
+    },
     SHOW_META,
   );
   assert.equal(nullEpisode, null);
@@ -166,6 +214,7 @@ test('itunes row adapter: episodeUrl + duration, missing url → null', () => {
   assert.equal(episode.showId, '77');
   assert.equal(episode.publishedAt, '2026-10-25T00:00:00.000Z');
   assert.equal(episode.artworkUrl, 'https://cdn.example/l160.png');
+  assert.deepEqual(episode.transcripts, []);
   assert.equal(itunesEpisodeRowToPodcastEpisode({ episodeUrl: null }, SHOW_META), null);
   // invalid releaseDate → '' (empty, not NaN crash)
   const badDate = itunesEpisodeRowToPodcastEpisode(

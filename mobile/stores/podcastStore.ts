@@ -185,6 +185,7 @@ export const usePodcast = create<PodcastStore>()((set, get) => ({
       durationMs: entry.durationMs,
       audioUrl: entry.audioUrl,
       publishedAt: '',
+      transcripts: [],
     };
     await get().playEpisode(episode);
   },

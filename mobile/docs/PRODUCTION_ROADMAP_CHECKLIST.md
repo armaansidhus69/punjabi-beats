@@ -229,18 +229,30 @@
   > current-line boundaries, and caps cache at 50. `/lyrics` is gated by
   > `lyrics_enabled` (default off), player icon stays hidden while off,
   > direct route makes zero network calls while gated. Plain-only fallback
-  > uses approximate highlight. Translation, selected-line sharing, report,
-  > and podcast transcripts remain `[ ]`.
+  > uses approximate highlight. Translation, selected-line sharing, and lyrics
+  > report remain `[ ]`; podcast transcripts are covered by 7b below.
 
 ### Transcripts
 
-- [ ] Podcast transcripts
-- [ ] Transcript search
-- [ ] Current-sentence highlighting
-- [ ] Jump to timestamp
-- [ ] Save transcript position
+- [~] Podcast transcripts *(7b v1: publisher RSS refs; VTT/SRT/JSON/HTML/plain)*
+- [~] Transcript search *(7b v1: local text + speaker search, cap 50 hits)*
+- [~] Current-sentence highlighting *(7b v1: timed segment + follow latch; untimed honest fallback)*
+- [~] Jump to timestamp *(7b v1: segment tap → play/seek through existing playerStore)*
+- [~] Save transcript position *(7b v1: source-bound `@pb_transcript_positions`, cap 50)*
 - [ ] Report transcript issue
-- [~] `lyrics` and `transcripts` data models *(7a local LyricsData/cache envelope done; transcript model pending)*
+- [~] `lyrics` and `transcripts` data models *(7a LyricsData + 7b local transcript refs/segments/position model done; server model deferred)*
+
+  > **2026-10-30 [~] status (Publisher transcripts v1 7b)**: coded per
+  > `docs/superpowers/specs/2026-10-30-podcast-transcripts-design.md` +
+  > `docs/superpowers/plans/2026-10-30-podcast-transcripts-plan.md`.
+  > RSS parser resolves official/default and alternate Podcast Namespace
+  > prefixes, keeps HTTPS refs, and normalizes official MIME formats. Pure
+  > `core/podcast/transcript.ts` handles VTT/SRT/JSON/HTML/plain, JSON word
+  > coalescing, search, playback boundaries, and source-bound position cap.
+  > `/podcast/transcript` adds virtualized search/follow/highlight/jump UI;
+  > full bodies stay memory-only (2 MiB + 5,000-segment safety limits). No
+  > backend/key/AI upload; existing `podcasts_enabled` gate reused. Publisher
+  > report endpoint and multi-language picker remain `[ ]`.
 
 ## Phase 8 — Social sharing
 
@@ -337,7 +349,7 @@
 ### Podcasts
 
 - [~] Podcast show/episode pages, trailers, continue listening, played state
-- [~] Save-for-later, comments, polls, transcripts, chapters, auto-download *(save-for-later hi v1 me; baaki defer)*
+- [~] Save-for-later, comments, polls, transcripts, chapters, auto-download *(save + publisher transcripts v1; comments/polls/chapters/auto-download defer)*
 - [ ] Podcast notification preferences
 - [ ] Audiobook pages, chapters, progress, resume, purchase/access, family access
 - [ ] Audiobook offline-license handling
@@ -357,10 +369,11 @@
   > lookup fallback), screens `mobile/app/podcast/*` +
   > `mobile/components/{PodcastGate,EpisodeRow}.tsx`, Library entry card.
   > Episode→player existing pipeline se (`episodeToSong`, previewOnly false).
-  > Comments/polls/transcripts/chapters/auto-download/notification prefs +
-  > audiobooks + music-video rows genuinely `[ ]` — later phases.
-  > > Gates pass: tsc 0 · eslint 0 · root `npm test` green (11 new
-  > `test-podcast.mjs` assertions). Pending: `EXPO_PUBLIC_PODCASTS_ENABLED=true`
+  > Comments/polls/chapters/auto-download/notification prefs + audiobooks +
+  > music-video rows genuinely `[ ]`; publisher transcripts shipped as Phase
+  > 7b `[~]` above. Gates pass: tsc 0 · eslint 0 · root `npm test` green
+  > (`test-podcast.mjs` 12 + `test-transcript.mjs` 12 assertions). Pending:
+  > `EXPO_PUBLIC_PODCASTS_ENABLED=true`
   > + manual pass (koi server deploy nahi chahiye) - boxes flip to `[x]`
   > only after that.
 

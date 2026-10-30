@@ -3,7 +3,7 @@
  * Saare reads defensively handle hote hain (corrupt data pe empty fallback).
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Playlist, RepeatMode, Song, PodcastShow, PodcastProgressEntry, SignalsLedger, TasteStats, AiPromptHistoryEntry, AssistantMessage } from '../types';
+import { Playlist, RepeatMode, Song, PodcastShow, PodcastProgressEntry, SignalsLedger, TasteStats, AiPromptHistoryEntry, AssistantMessage, TranscriptPositionEnvelope } from '../types';
 
 const PLAYLISTS_KEY = '@pb_playlists';
 const RECENT_KEY = '@pb_recently_played';
@@ -310,6 +310,7 @@ export async function saveRoomName(name: string): Promise<void> {
 
 const PODCAST_SHOWS_KEY = '@pb_podcast_shows';
 const PODCAST_PROGRESS_KEY = '@pb_podcast_progress';
+const TRANSCRIPT_POSITIONS_KEY = '@pb_transcript_positions';
 
 /** saved (follow) shows — local-only, guest-usable */
 export async function getSavedPodcastShows(): Promise<PodcastShow[]> {
@@ -357,6 +358,27 @@ export async function savePodcastProgressEntry(
     await AsyncStorage.setItem(PODCAST_PROGRESS_KEY, JSON.stringify(map));
   } catch (err) {
     console.warn('Podcast progress write failed:', err);
+  }
+}
+
+/** Phase 7b: version/shape validation pure transcript core me hoti hai. */
+export async function getTranscriptPositionsRaw(): Promise<unknown> {
+  try {
+    const raw = await AsyncStorage.getItem(TRANSCRIPT_POSITIONS_KEY);
+    return raw ? (JSON.parse(raw) as unknown) : null;
+  } catch (err) {
+    console.warn('Transcript positions read failed:', err);
+    return null;
+  }
+}
+
+export async function saveTranscriptPositions(
+  envelope: TranscriptPositionEnvelope,
+): Promise<void> {
+  try {
+    await AsyncStorage.setItem(TRANSCRIPT_POSITIONS_KEY, JSON.stringify(envelope));
+  } catch (err) {
+    console.warn('Transcript positions write failed:', err);
   }
 }
 
