@@ -9,7 +9,7 @@
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
     "lint": "eslint . --ext .js,.jsx,.ts,.tsx --max-warnings=0",
-    "test": "cd .. && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON test-logic.mjs && node test-loadqueue.mjs && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON test-youtube-match.mjs && node test-player.mjs && node test-music-api.mjs && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON test-blend.mjs && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON test-jam.mjs && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON test-podcast.mjs && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON test-signals.mjs && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON test-ai-playlist.mjs && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON test-ai-assistant.mjs && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON test-lyrics.mjs && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON test-transcript.mjs",
+    "test": "cd .. && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON test-logic.mjs && node test-loadqueue.mjs && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON test-youtube-match.mjs && node test-player.mjs && node test-music-api.mjs && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON test-blend.mjs && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON test-jam.mjs && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON test-podcast.mjs && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON test-signals.mjs && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON test-ai-playlist.mjs && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON test-ai-assistant.mjs && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON test-lyrics.mjs && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON test-transcript.mjs && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON test-share.mjs",
     "test:logic": "cd .. && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON test-logic.mjs",
     "test:loadqueue": "cd .. && node test-loadqueue.mjs",
     "test:blend": "cd .. && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON test-blend.mjs",
@@ -19,7 +19,8 @@
     "test:ai": "cd .. && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON test-ai-playlist.mjs",
     "test:assistant": "cd .. && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON test-ai-assistant.mjs",
     "test:lyrics": "cd .. && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON test-lyrics.mjs",
-    "test:transcript": "cd .. && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON test-transcript.mjs"
+    "test:transcript": "cd .. && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON test-transcript.mjs",
+    "test:share": "cd .. && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON test-share.mjs"
   },
   "dependencies": {
     "@apinator/client": "^2.0.0",

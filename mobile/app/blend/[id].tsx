@@ -10,7 +10,6 @@ import {
   FlatList,
   Modal,
   Pressable,
-  Share,
   StyleSheet,
   Text,
   TextInput,
@@ -26,7 +25,8 @@ import LoadingSpinner from '../../components/LoadingSpinner';
 import EmptyState from '../../components/EmptyState';
 import type { BlendItem } from '../../types';
 import { getCurrentUser } from '../../core/auth/authService';
-import { blendShareText, updateBlend } from '../../services/blendService';
+import { updateBlend } from '../../services/blendService';
+import { shareBlend } from '../../services/shareService';
 import { useBlends } from '../../stores/blendStore';
 import { usePlayer } from '../../stores/playerStore';
 import { useMiniPlayerPadding } from '../../hooks/useMiniPlayerPadding';
@@ -81,8 +81,7 @@ export default function BlendDetailScreen() {
 
   const handleShare = useCallback(async () => {
     if (!blend) return;
-    tapFeedback();
-    await Share.share({ message: blendShareText(blend.name, blend.inviteCode) });
+    await shareBlend(blend.name, blend.inviteCode);
   }, [blend]);
 
   const handleRotateInvite = useCallback(() => {

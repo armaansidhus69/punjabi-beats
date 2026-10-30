@@ -4,7 +4,7 @@
  * Songs add karne ke liye Home/Mood ke SongItem ka '+' button (global sheet).
  */
 import { useCallback, useEffect } from 'react';
-import { Alert, FlatList, Pressable, Share, StyleSheet, Text, View } from 'react-native';
+import { Alert, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -21,6 +21,7 @@ import { spacing } from '../../constants/spacing';
 import EmptyState from '../../components/EmptyState';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import SongItem from '../../components/SongItem';
+import { sharePlaylist } from '../../services/shareService';
 
 /** "12 Mar 2026" jaisa chhota date label */
 function formatCreatedAt(timestamp: number): string {
@@ -82,15 +83,10 @@ export default function PlaylistDetailScreen() {
     [removeSongFromPlaylist, playlistId],
   );
 
-  /* Share playlist (Phase 14 — React Native Share API) */
+  /* Share playlist (Phase 8a signed link; flag-off legacy fallback) */
   const handleShare = useCallback(() => {
     if (!playlist) return;
-    const lines = playlist.songs.slice(0, 10).map(s => `• ${s.title} — ${s.artist}`);
-    const more = playlist.songs.length > 10 ? `\n… aur ${playlist.songs.length - 10} songs` : '';
-    const message =
-      `Punjabi Beats playlist "${playlist.name}" (${playlist.songs.length} songs):\n` +
-      `${lines.join('\n')}${more}`;
-    Share.share({ message }).catch(err => console.warn('Share failed:', err));
+    void sharePlaylist(playlist);
   }, [playlist]);
 
   const confirmDelete = useCallback(() => {

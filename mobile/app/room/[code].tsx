@@ -8,7 +8,7 @@
  * (connection state ko `state_change` listener khud update karta hai, polling nahi).
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Pressable, Share, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -22,6 +22,7 @@ import { colors } from '../../constants/colors';
 import { typography } from '../../constants/typography';
 import { spacing } from '../../constants/spacing';
 import EmptyState from '../../components/EmptyState';
+import { shareRoom } from '../../services/shareService';
 
 /** Room code 6 digits (FR-5.1) */
 const CODE_PATTERN = /^\d{6}$/;
@@ -90,12 +91,7 @@ export default function RoomScreen() {
 
   const handleInvite = useCallback(() => {
     if (!validCode) return;
-    successFeedback();
-    void Share.share({
-      message: `Punjabi Beats ke group room me aa jao! Room code: ${routeCode}`,
-    }).catch(err => {
-      console.warn('Room invite share failed:', err);
-    });
+    void shareRoom(routeCode);
   }, [routeCode, validCode]);
 
   // Invalid code (deep link) — crash ki jagah friendly screen

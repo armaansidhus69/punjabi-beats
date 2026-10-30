@@ -16,7 +16,6 @@ import {
   Easing,
   PanResponder,
   Pressable,
-  Share,
   StyleSheet,
   Text,
   View,
@@ -37,6 +36,7 @@ import SongArtwork from '../components/SongArtwork';
 import { handleOpenOnYouTube, isYouTubeMatchConfigured } from '../utils/youtubeLink';
 import { successFeedback, tapFeedback, warningFeedback } from '../utils/haptics';
 import { isFeatureEnabled } from '../core/featureflags/featureFlags';
+import { shareTrack } from '../services/shareService';
 
 /** Swipe-down close threshold (px aur velocity) */
 const CLOSE_SWIPE_THRESHOLD = 110;
@@ -106,13 +106,10 @@ export default function PlayerScreen() {
     router.back();
   }, []);
 
-  /* ---------- Share song (Phase 14 — React Native Share API) ---------- */
+  /* ---------- Share song (Phase 8a signed link; flag-off legacy fallback) ---------- */
   const handleShare = useCallback(() => {
     if (!currentSong) return;
-    const message =
-      `"${currentSong.title}" — ${currentSong.artist}\n` +
-      `Punjabi Beats pe suno: ${currentSong.preview}`;
-    Share.share({ message }).catch(err => console.warn('Share failed:', err));
+    void shareTrack(currentSong);
   }, [currentSong]);
 
   const handleLyrics = useCallback(() => {

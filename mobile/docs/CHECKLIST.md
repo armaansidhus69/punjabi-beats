@@ -437,12 +437,13 @@ Before releasing:
 | Phase 22: AI Assistant V1 (Roadmap 13c) | 15 | 14 | 93% |
 | Phase 23: Lyrics V1 (Roadmap 7a) | 14 | 13 | 93% |
 | Phase 24: Podcast Transcripts V1 (Roadmap 7b) | 16 | 15 | 94% |
-| **TOTAL** | **350** | **310** | **89%** |
+| Phase 25: Canonical Share Links V1 (Roadmap 8a) | 17 | 16 | 94% |
+| **TOTAL** | **367** | **326** | **89%** |
 
 > Counts 2026-10-30 ko actual checkbox lines se dobara verify hue — har `## PHASE n` section
 > ke andar ke `- [ ]`/`- [x]` boxes gine gaye (SECTION 0/1/2 ke headers, Tracker table,
 > Pending summary, Milestones aur FINAL CHECKLIST is count me nahi — wo alag sections
-> hain). Phases 18–24 ab tracker me include hain. FINAL CHECKLIST aur Milestones alag
+> hain). Phases 18–25 ab tracker me include hain. FINAL CHECKLIST aur Milestones alag
 > release-level gates hain.
 
 ### ⏳ Abhi kya pending hai (sirf yehi baaki)
@@ -450,7 +451,7 @@ Before releasing:
 - **Phase 13 (1 box)** — runtime console-warnings device check (ESLint setup + 0-warning run ✓ done)
 - **Phase 16 (12 box)** — backend 2 box DONE (deploy + env); ab `npx eas-cli login` + builds (user)
 - **Phase 17 (3 box)** — screenshots + GitHub repo + push (local git commit ✓ done; remote push commands box me hain)
-- **Phases 18–24** — code/automated checks done; manual device/deploy gates remain (Liked, Podcasts, Signals, AI Playlist, AI Assistant, Lyrics, Transcripts)
+- **Phases 18–25** — code/automated checks done; manual device/deploy gates remain (Liked, Podcasts, Signals, AI Playlist, AI Assistant, Lyrics, Transcripts, Share Links)
 
 ---
 
@@ -707,3 +708,38 @@ Before releasing:
 - [ ] Manual: `EXPO_PUBLIC_PODCASTS_ENABLED=true`; RSS show transcript icon + timed follow/search/jump + plain fallback + position restore on device
 
 **Phase 24 Complete?** `[~]` (code + automated checks complete; RSS-backed device pass remains)
+
+---
+
+## 🏳️ PHASE 25: Canonical Share Links V1 (Roadmap 8a)
+
+> Spec `docs/superpowers/specs/2026-10-30-share-links-design.md` + plan
+> `docs/superpowers/plans/2026-10-30-share-links-plan.md`. FR ids
+> REQUIREMENTS.md FR-15 me. Stateless HMAC; no share DB/new dependency.
+
+### Server Core and Endpoint
+- [x] `_shareCore.js` five-kind strict schemas — caps/code/HTTPS guards, private-field drop, canonical payload
+- [x] HMAC v1 token — 30-day expiry, max 8 KiB, signature length + timingSafeEqual, tamper/future/expiry guards
+- [x] Safe preview HTML — escaped metadata, OG/Twitter/canonical, app-scheme button, CSP/nosniff/no-referrer
+- [x] `api/share.js` POST create + GET JSON/HTML resolve + OPTIONS CORS, fixed `SHARE_PUBLIC_BASE_URL`
+- [x] Fail-closed env/client-token guard, 30/hour + 100/day limiter/Retry-After, `vercel.json` budget, root `.env.example`
+
+### Client Core, Service, and Landing
+- [x] `core/share/share.ts` — safe builders, second payload guard, response-origin/path guard, typed action allowlist, legacy fallback parity
+- [x] `shareService.ts` — create/resolve, device ID + existing publish-token barrier, native sheet, signed failure → legacy fallback
+- [x] `shareStore.ts` — stale token guard, bounded catalog resolution, track play, partial playlist import/play, typed navigation target
+- [x] `SocialShareGate` + `/share` card screen — expiry disclosure, five kinds, loading/error/retry, direct flag-off zero resolve
+- [x] `EXPO_PUBLIC_SOCIAL_SHARE_ENABLED` bootstrap/`.env.example`; API base documented
+
+### Existing Share Integrations
+- [x] Player track + playlist detail upgraded to wrappers; flag-off text output preserved
+- [x] Group room + Blend + Jam upgraded; raw code/app-scheme fallback preserved
+
+### Verification
+- [x] `test-share.mjs` — 13 tests (five schemas, HMAC/tamper/expiry, HTML/CSP, limiter, parity/actions/origin guard)
+- [x] Root + mobile chains wired (`test:share`) — total 14 suites
+- [x] `probe-share.mjs` local handler checks — CORS/env/auth/schema/create/JSON/HTML/tamper/expiry/429 all pass
+- [x] `npx tsc --noEmit` 0 · `npm run lint` 0 · root `npm test` green
+- [ ] Manual/deploy: Vercel `SHARE_SIGNING_SECRET` + `SHARE_PUBLIC_BASE_URL`, deploy, enable mobile flag/API base, five-kind two-device/WhatsApp/tamper/offline-fallback pass
+
+**Phase 25 Complete?** `[~]` (code + automated checks complete; env deploy + cross-device preview pass remain)

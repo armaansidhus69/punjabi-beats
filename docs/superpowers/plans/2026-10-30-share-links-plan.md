@@ -42,7 +42,7 @@ Verified anchors:
    - `tokenMatches` app-client header helper (same honest pattern as publish)
 
 2. **Server handler — `api/share.js` + `vercel.json`**
-   - methods GET/POST; others 405 + Allow
+   - methods GET/POST + OPTIONS CORS preflight; others 405 + Allow
    - env helper normalizes `SHARE_PUBLIC_BASE_URL` HTTPS/no trailing slash;
      missing signing/base/client token → fail closed 500 `no_key`
    - POST:

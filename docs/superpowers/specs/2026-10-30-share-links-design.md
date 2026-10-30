@@ -84,6 +84,9 @@ for track preview and must be HTTPS.
 
 ## 5. Endpoint — `api/share.js`
 
+`OPTIONS` returns CORS preflight for Expo web (`GET, POST, OPTIONS`;
+`content-type` + `x-publish-token`). Other methods get 405.
+
 ### POST create
 
 Request: `{kind, data, deviceId}` + existing `x-publish-token` header.

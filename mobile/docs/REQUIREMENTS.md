@@ -151,6 +151,17 @@
 | FR-14.5 | Reading position persists in versioned `@pb_transcript_positions` cap 50, bound to source URL; full transcript body stays memory-only | P2 |
 | FR-14.6 | Creator-provided only: no AI/audio upload/backend; reuse `podcasts_enabled` gate and existing guest playback pipeline | P1 |
 
+### FR-15: Canonical Share Links V1 *(Phase 8a — signed stateless links + OG preview)*
+| ID | Requirement | Priority |
+|---|---|---|
+| FR-15.1 | Server validates five public entity schemas and signs versioned 30-day HMAC tokens; no DB/private IDs/audio URLs | P1 |
+| FR-15.2 | Public GET verifies token and serves escaped Open Graph/Twitter HTML or no-store JSON for mobile resolve | P1 |
+| FR-15.3 | Track, playlist, group room, Blend, and Jam native share actions use signed HTTPS links when enabled | P1 |
+| FR-15.4 | `/share` client revalidates payload and executes only typed allowlisted play/import/join actions | P1 |
+| FR-15.5 | API/signing failure or flag-off preserves existing raw text/code native share behavior | P1 |
+| FR-15.6 | Security: fixed public origin, timing-safe secret/client-token checks, strict caps/HTML CSP, 30/hour + 100/day best-effort rate limits | P1 |
+| FR-15.7 | `social_share_enabled` default off (`EXPO_PUBLIC_SOCIAL_SHARE_ENABLED` opt-in); guest-compatible | P1 |
+
 ---
 
 ## 2. Non-Functional Requirements

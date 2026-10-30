@@ -10,7 +10,6 @@ import {
   FlatList,
   Modal,
   Pressable,
-  Share,
   StyleSheet,
   Text,
   TextInput,
@@ -29,7 +28,7 @@ import EmptyState from '../../components/EmptyState';
 import type { JamMessage, JamQueueItem, RoomRole } from '../../types';
 import { getCurrentUser } from '../../core/auth/authService';
 import { can } from '../../core/room/permissions';
-import { jamShareText } from '../../services/jamService';
+import { shareJam } from '../../services/shareService';
 import { useJam, canControlPlayback, type AssignableRole } from '../../stores/jamStore';
 import { usePlayer } from '../../stores/playerStore';
 import { useMiniPlayerPadding } from '../../hooks/useMiniPlayerPadding';
@@ -97,8 +96,7 @@ export default function JamRoomScreen() {
 
   const handleShare = useCallback(async () => {
     if (!room) return;
-    tapFeedback();
-    await Share.share({ message: jamShareText(room.title, room.inviteCode, room.type) });
+    await shareJam(room.title, room.inviteCode, room.type);
   }, [room]);
 
   const handlePlayPause = useCallback(() => {
