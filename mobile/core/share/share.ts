@@ -10,6 +10,8 @@ import type { Playlist, Song } from '../../types';
 export const SHARE_TTL_SEC = 30 * 24 * 60 * 60;
 export const SHARE_TOKEN_MAX_CHARS = 8192;
 export const SHARE_CLOCK_SKEW_SEC = 5 * 60;
+export const SHARE_QR_MAX_URL_CHARS = 2400;
+export const SHARE_COMPOSER_CACHE_CAP = 10;
 
 export type ShareKind = 'track' | 'playlist' | 'room' | 'blend' | 'jam' | 'lyrics';
 
@@ -343,6 +345,77 @@ export function validateResolvedShare(raw: unknown, nowSec: number): ResolvedSha
 
 export function fallbackShareText(entity: ShareEntity): string {
   return entity.fallbackText;
+}
+
+/** Cache key me fallback text/audio URL intentionally nahi jata. */
+export function shareEntityFingerprint(entity: ShareEntity): string {
+  return JSON.stringify({ kind: entity.kind, data: entity.data });
+}
+
+function validToken(token: string): boolean {
+  return (
+    token.length > 0 &&
+    token.length <= SHARE_TOKEN_MAX_CHARS &&
+    /^v1\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(token)
+  );
+}
+
+export function canonicalShareUrl(apiBase: string, token: string): string | null {
+  if (!validToken(token)) return null;
+  try {
+    const base = new URL(apiBase);
+    if (
+      base.protocol !== 'https:' ||
+      base.username.length > 0 ||
+      base.password.length > 0 ||
+      base.search.length > 0 ||
+      base.hash.length > 0 ||
+      (base.pathname !== '' && base.pathname !== '/')
+    ) {
+      return null;
+    }
+    return `${base.origin}/api/share?token=${encodeURIComponent(token)}`;
+  } catch {
+    return null;
+  }
+}
+
+export function canRenderShareQr(url: string): boolean {
+  if (url.length === 0 || url.length > SHARE_QR_MAX_URL_CHARS) return false;
+  try {
+    const parsed = new URL(url);
+    const token = parsed.searchParams.get('token') ?? '';
+    const keys = [...parsed.searchParams.keys()];
+    return (
+      parsed.protocol === 'https:' &&
+      parsed.username.length === 0 &&
+      parsed.password.length === 0 &&
+      parsed.hash.length === 0 &&
+      parsed.pathname === '/api/share' &&
+      keys.length === 1 &&
+      keys[0] === 'token' &&
+      validToken(token)
+    );
+  } catch {
+    return false;
+  }
+}
+
+export function signedShareMessage(entity: ShareEntity, url: string): string {
+  switch (entity.kind) {
+    case 'track':
+      return `"${entity.data.title}" — ${entity.data.artist}\nPunjabi Beats pe kholo: ${url}`;
+    case 'playlist':
+      return `Punjabi Beats playlist "${entity.data.name}" (${entity.data.totalCount} songs):\n${url}`;
+    case 'room':
+      return `Punjabi Beats group room join karo! Code: ${entity.data.code}\n${url}`;
+    case 'blend':
+      return `${entity.data.name ?? 'Punjabi Beats Blend'} join karo! Code: ${entity.data.code}\n${url}`;
+    case 'jam':
+      return `${entity.data.name ?? 'Punjabi Beats Jam'} join karo! Code: ${entity.data.code}\n${url}`;
+    case 'lyrics':
+      return `“${entity.data.lines.join('\n')}”\n— ${entity.data.title}, ${entity.data.artist}\n${url}`;
+  }
 }
 
 export function shareAction(payload: ResolvedSharePayload): ShareAction {

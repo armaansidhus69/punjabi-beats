@@ -439,12 +439,13 @@ Before releasing:
 | Phase 24: Podcast Transcripts V1 (Roadmap 7b) | 16 | 15 | 94% |
 | Phase 25: Canonical Share Links V1 (Roadmap 8a) | 17 | 16 | 94% |
 | Phase 26: Selected Lyrics Sharing V1 (Roadmap 8b) | 11 | 10 | 91% |
-| **TOTAL** | **378** | **336** | **89%** |
+| Phase 27: Copy Link + QR Composer V1 (Roadmap 8c) | 14 | 13 | 93% |
+| **TOTAL** | **392** | **349** | **89%** |
 
 > Counts 2026-10-30 ko actual checkbox lines se dobara verify hue — har `## PHASE n` section
 > ke andar ke `- [ ]`/`- [x]` boxes gine gaye (SECTION 0/1/2 ke headers, Tracker table,
 > Pending summary, Milestones aur FINAL CHECKLIST is count me nahi — wo alag sections
-> hain). Phases 18–26 ab tracker me include hain. FINAL CHECKLIST aur Milestones alag
+> hain). Phases 18–27 ab tracker me include hain. FINAL CHECKLIST aur Milestones alag
 > release-level gates hain.
 
 ### ⏳ Abhi kya pending hai (sirf yehi baaki)
@@ -452,7 +453,7 @@ Before releasing:
 - **Phase 13 (1 box)** — runtime console-warnings device check (ESLint setup + 0-warning run ✓ done)
 - **Phase 16 (12 box)** — backend 2 box DONE (deploy + env); ab `npx eas-cli login` + builds (user)
 - **Phase 17 (3 box)** — screenshots + GitHub repo + push (local git commit ✓ done; remote push commands box me hain)
-- **Phases 18–26** — code/automated checks done; manual device/deploy gates remain (Liked, Podcasts, Signals, AI Playlist, AI Assistant, Lyrics, Transcripts, Share Links, Lyrics Sharing)
+- **Phases 18–27** — code/automated checks done; manual device/deploy gates remain (Liked, Podcasts, Signals, AI Playlist, AI Assistant, Lyrics, Transcripts, Share Links, Lyrics Sharing, Copy/QR)
 
 ---
 
@@ -771,3 +772,35 @@ Before releasing:
 - [ ] Manual/deploy: server-first redeploy, enable lyrics+social flags, synced/plain selection + 5th-line/281-char + recipient seek + API-off fallback pass
 
 **Phase 26 Complete?** `[~]` (code + automated checks complete; server-first deploy + two-device UX pass remain)
+
+---
+
+## 🏳️ PHASE 27: Copy Link + QR Composer V1 (Roadmap 8c)
+
+> Spec `docs/superpowers/specs/2026-10-30-share-copy-qr-design.md` + plan
+> `docs/superpowers/plans/2026-10-30-share-copy-qr-plan.md`. FR ids
+> REQUIREMENTS.md FR-17 me. Existing Phase 8a endpoint/env reuse.
+
+### Dependencies and Compatibility
+- [x] SDK 51 dependencies via Expo CLI — `expo-clipboard ~6.0.3`, `react-native-svg 15.2.0`, `react-native-qrcode-svg`
+- [x] RN 0.74 Metro text-encoding transformer configured; no native directory edits
+
+### Core, Service, and State
+- [x] Pure helpers — canonical URL guard, QR 2400-char cap, private-safe fingerprint, six-kind signed messages
+- [x] Low-level share service split from cycle-free facade; flag-off exact immediate legacy behavior preserved
+- [x] Composer store — stale guard, max-10 expiry-aware memory cache, create/retry/native/copy/QR/error actions
+
+### UI and Integrations
+- [x] Reusable `ShareQrModal` — QR 220/ecl L/quiet zone, copy/close, renderer error isolation, no file/gallery access
+- [x] Global `ShareComposerSheet` — Native Share/Copy/QR, loading/error/retry/expiry, accessibility actions
+- [x] `/share` recipient landing Copy Link + QR derived from strict API base/token
+- [x] Track/playlist/room/Blend/Jam/lyrics wrappers migrated through facade; six screens remain thin
+
+### Verification
+- [x] `test-share.mjs` extended to 17 tests (URL/fingerprint/signed-message/QR boundaries + prior security parity)
+- [x] `npx expo install --check` clean + `npx expo-doctor` 17/17
+- [x] Temporary web export succeeds with QR Metro transformer (1,390 modules bundled)
+- [x] tsc 0 · lint 0 · root 14-suite chain/probe green; audit reviewed without forced SDK-breaking fixes
+- [ ] Manual: flag-off immediate share; flag-on six composers; Android/iOS/Web copy; second-device QR scan; API-off fallback; long-URL QR guard
+
+**Phase 27 Complete?** `[~]` (code + automated/Metro gates complete; cross-platform composer device pass remains)

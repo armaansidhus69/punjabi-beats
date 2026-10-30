@@ -1,31 +1,24 @@
 /**
  * Signed-share client boundary (Phase 8a).
  *
- * Flag on → Vercel signed URL attempt; kisi bhi config/network failure pe
- * existing native text/code fallback still opens. Token/body kabhi log nahi.
+ * Low-level Vercel create/resolve + native sheet. Phase 8c facade decides
+ * flag-off legacy vs composer; token/body kabhi log nahi.
  */
 
 import axios from 'axios';
 import { Share } from 'react-native';
 import Toast from 'react-native-toast-message';
 import { getOrCreateDeviceIdentity } from '../core/auth/identity';
-import { isFeatureEnabled } from '../core/featureflags/featureFlags';
 import {
-  buildBlendShare,
-  buildJamShare,
-  buildLyricsShare,
-  buildPlaylistShare,
-  buildRoomShare,
-  buildTrackShare,
   fallbackShareText,
+  signedShareMessage,
   validateCreateResponse,
   validateResolvedShare,
   type ResolvedSharePayload,
   type ShareCreateResponse,
   type ShareEntity,
 } from '../core/share/share';
-import type { Playlist, RoomType, Song } from '../types';
-import { successFeedback, tapFeedback, warningFeedback } from '../utils/haptics';
+import { tapFeedback, warningFeedback } from '../utils/haptics';
 
 const REQUEST_TIMEOUT_MS = 15_000;
 const API_BASE = (process.env.EXPO_PUBLIC_API_BASE_URL ?? '').replace(/\/+$/, '');
@@ -121,45 +114,11 @@ export async function resolveShareToken(token: string): Promise<ResolvedSharePay
   }
 }
 
-function signedShareText(entity: ShareEntity, url: string): string {
-  switch (entity.kind) {
-    case 'track':
-      return `"${entity.data.title}" — ${entity.data.artist}\nPunjabi Beats pe kholo: ${url}`;
-    case 'playlist':
-      return `Punjabi Beats playlist "${entity.data.name}" (${entity.data.totalCount} songs):\n${url}`;
-    case 'room':
-      return `Punjabi Beats group room join karo! Code: ${entity.data.code}\n${url}`;
-    case 'blend':
-      return `${entity.data.name ?? 'Punjabi Beats Blend'} join karo! Code: ${entity.data.code}\n${url}`;
-    case 'jam':
-      return `${entity.data.name ?? 'Punjabi Beats Jam'} join karo! Code: ${entity.data.code}\n${url}`;
-    case 'lyrics':
-      return `“${entity.data.lines.join('\n')}”\n— ${entity.data.title}, ${entity.data.artist}\n${url}`;
-  }
-}
-
-export async function shareEntity(entity: ShareEntity): Promise<boolean> {
-  tapFeedback();
-  let message = fallbackShareText(entity);
-  if (isFeatureEnabled('social_share_enabled')) {
-    try {
-      const created = await createShareLink(entity);
-      message = signedShareText(entity, created.url);
-      successFeedback();
-      Toast.show({ type: 'success', text1: 'Signed share link ready' });
-    } catch (err) {
-      warningFeedback();
-      const mapped = mapRequestError(err);
-      Toast.show({
-        type: 'info',
-        text1: 'Link nahi bana — text share ho raha hai',
-        text2:
-          mapped.code === 'rate_limited'
-            ? `${Math.ceil(mapped.retryAfterSec ?? 60)}s baad signed link try karo`
-            : undefined,
-      });
-    }
-  }
+export async function openNativeShare(
+  entity: ShareEntity,
+  signedUrl?: string | null,
+): Promise<boolean> {
+  const message = signedUrl ? signedShareMessage(entity, signedUrl) : fallbackShareText(entity);
   try {
     await Share.share({ message });
     return true;
@@ -171,42 +130,8 @@ export async function shareEntity(entity: ShareEntity): Promise<boolean> {
   }
 }
 
-function invalidEntity(): Promise<boolean> {
-  warningFeedback();
-  Toast.show({ type: 'error', text1: 'Share details invalid hain' });
-  return Promise.resolve(false);
-}
-
-export function shareTrack(song: Song): Promise<boolean> {
-  const entity = buildTrackShare(song);
-  return entity ? shareEntity(entity) : invalidEntity();
-}
-
-export function sharePlaylist(playlist: Playlist): Promise<boolean> {
-  const entity = buildPlaylistShare(playlist);
-  return entity ? shareEntity(entity) : invalidEntity();
-}
-
-export function shareRoom(code: string, name?: string | null): Promise<boolean> {
-  const entity = buildRoomShare(code, name);
-  return entity ? shareEntity(entity) : invalidEntity();
-}
-
-export function shareBlend(name: string, code: string): Promise<boolean> {
-  const entity = buildBlendShare(name, code);
-  return entity ? shareEntity(entity) : invalidEntity();
-}
-
-export function shareJam(name: string, code: string, type: RoomType): Promise<boolean> {
-  const entity = buildJamShare(name, code, type);
-  return entity ? shareEntity(entity) : invalidEntity();
-}
-
-export function shareLyrics(
-  song: Song,
-  lines: string[],
-  startMs?: number | null,
-): Promise<boolean> {
-  const entity = buildLyricsShare(song, lines, startMs);
-  return entity ? shareEntity(entity) : invalidEntity();
+/** Legacy/immediate path (flag off facade). */
+export async function shareEntity(entity: ShareEntity): Promise<boolean> {
+  tapFeedback();
+  return openNativeShare(entity);
 }

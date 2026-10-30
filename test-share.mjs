@@ -21,14 +21,19 @@ import {
   verifyShareToken,
 } from './api/_shareCore.js';
 import {
+  SHARE_QR_MAX_URL_CHARS,
   buildBlendShare,
   buildJamShare,
   buildLyricsShare,
   buildPlaylistShare,
   buildRoomShare,
   buildTrackShare,
+  canRenderShareQr,
+  canonicalShareUrl,
   fallbackShareText,
+  shareEntityFingerprint,
   shareAction,
+  signedShareMessage,
   validateCreateResponse,
   validateResolvedShare,
 } from './mobile/core/share/share.ts';
@@ -162,6 +167,28 @@ test('public base + canonical URL guards', () => {
   assert.equal(buildShareUrl('https://api.example.com', 'v1.a.b'), 'https://api.example.com/api/share?token=v1.a.b');
 });
 
+test('client canonical URL + QR capacity guards', () => {
+  const token = 'v1.abc.def';
+  assert.equal(
+    canonicalShareUrl('https://api.example.com/', token),
+    `https://api.example.com/api/share?token=${token}`,
+  );
+  assert.equal(canonicalShareUrl('http://api.example.com', token), null);
+  assert.equal(canonicalShareUrl('https://user@api.example.com', token), null);
+  assert.equal(canonicalShareUrl('https://api.example.com/path', token), null);
+  assert.equal(canonicalShareUrl('https://api.example.com?x=1', token), null);
+  assert.equal(canonicalShareUrl('https://api.example.com', 'bad'), null);
+
+  const prefix = 'https://api.example.com/api/share?token=v1.';
+  const suffix = '.b';
+  const exact = `${prefix}${'a'.repeat(SHARE_QR_MAX_URL_CHARS - prefix.length - suffix.length)}${suffix}`;
+  assert.equal(exact.length, SHARE_QR_MAX_URL_CHARS);
+  assert.equal(canRenderShareQr(exact), true);
+  assert.equal(canRenderShareQr(`${exact}x`), false);
+  assert.equal(canRenderShareQr(`https://api.example.com/not-share?token=${token}`), false);
+  assert.equal(canRenderShareQr(`https://api.example.com/api/share?token=${token}&token=${token}`), false);
+});
+
 test('preview HTML escapes metadata and includes security/app-link surface', () => {
   const payload = normalizeShareRequest({
     kind: 'track',
@@ -254,6 +281,39 @@ test('client builders keep private IDs/audio outside signed data + legacy parity
   assert.equal(JSON.stringify(lyrics.data).includes('private-id'), false);
   assert.match(fallbackShareText(lyrics), /First line\nSecond line/);
   assert.match(fallbackShareText(lyrics), /Softly, Karan Aujla/);
+});
+
+test('composer fingerprint excludes fallback/audio and signed messages cover six kinds', () => {
+  const song = {
+    id: 'private-id',
+    title: 'Softly',
+    artist: 'Karan Aujla',
+    cover: 'https://img.example/a.jpg',
+    preview: 'https://audio.example/private.m4a',
+    duration: 200000,
+  };
+  const entities = [
+    buildTrackShare(song),
+    buildPlaylistShare({ id: 'p', name: 'Gym', songs: [song], createdAt: 0 }),
+    buildRoomShare('123456', 'Room'),
+    buildBlendShare('Besties', 'ABCDEFGH'),
+    buildJamShare('Friday', '23456789', 'jam'),
+    buildLyricsShare(song, ['Line one'], 0),
+  ];
+  const url = 'https://api.example.com/api/share?token=v1.abc.def';
+  for (const entity of entities) {
+    assert.ok(entity);
+    const fingerprint = shareEntityFingerprint(entity);
+    assert.equal(fingerprint.includes('audio.example'), false);
+    assert.equal(fingerprint.includes('private-id'), false);
+    assert.match(signedShareMessage(entity, url), /https:\/\/api\.example\.com/);
+  }
+  const track = entities[0];
+  assert.ok(track);
+  assert.equal(
+    shareEntityFingerprint({ ...track, fallbackText: 'different private fallback' }),
+    shareEntityFingerprint(track),
+  );
 });
 
 test('client second guard + typed action allowlist', () => {

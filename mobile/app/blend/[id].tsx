@@ -26,7 +26,7 @@ import EmptyState from '../../components/EmptyState';
 import type { BlendItem } from '../../types';
 import { getCurrentUser } from '../../core/auth/authService';
 import { updateBlend } from '../../services/blendService';
-import { shareBlend } from '../../services/shareService';
+import { shareBlend } from '../../services/shareComposerFacade';
 import { useBlends } from '../../stores/blendStore';
 import { usePlayer } from '../../stores/playerStore';
 import { useMiniPlayerPadding } from '../../hooks/useMiniPlayerPadding';

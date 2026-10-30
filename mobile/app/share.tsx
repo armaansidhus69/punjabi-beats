@@ -3,24 +3,28 @@
  * Gate child pattern guarantees flag-off direct links make zero network calls.
  */
 
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import SocialShareGate from '../components/SocialShareGate';
 import EmptyState from '../components/EmptyState';
 import LoadingSpinner from '../components/LoadingSpinner';
+import ShareQrModal from '../components/ShareQrModal';
 import { useShare } from '../stores/shareStore';
 import { useMiniPlayerPadding } from '../hooks/useMiniPlayerPadding';
 import { colors } from '../constants/colors';
 import { typography } from '../constants/typography';
 import { spacing } from '../constants/spacing';
-import { tapFeedback } from '../utils/haptics';
+import { selectionFeedback, successFeedback, tapFeedback, warningFeedback } from '../utils/haptics';
 import { formatDuration } from '../utils/format';
-import type { ResolvedSharePayload } from '../core/share/share';
+import { canRenderShareQr, canonicalShareUrl, type ResolvedSharePayload } from '../core/share/share';
+import Toast from 'react-native-toast-message';
 
 const TOKEN_PATTERN = /^v1\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/;
+const API_BASE = (process.env.EXPO_PUBLIC_API_BASE_URL ?? '').replace(/\/+$/, '');
 
 function kindLabel(payload: ResolvedSharePayload): string {
   switch (payload.kind) {
@@ -70,6 +74,9 @@ function ShareContent() {
   const params = useLocalSearchParams<{ token?: string | string[] }>();
   const token = typeof params.token === 'string' ? params.token : '';
   const validToken = token.length > 0 && token.length <= 8192 && TOKEN_PATTERN.test(token);
+  const canonicalUrl = validToken ? canonicalShareUrl(API_BASE, token) : null;
+  const qrAllowed = canonicalUrl !== null && canRenderShareQr(canonicalUrl);
+  const [qrVisible, setQrVisible] = useState(false);
 
   const payload = useShare(s => s.payload);
   const loading = useShare(s => s.loading);
@@ -84,6 +91,7 @@ function ShareContent() {
   const playResolved = useShare(s => s.playResolved);
 
   useEffect(() => {
+    setQrVisible(false);
     if (validToken) void openToken(token);
     return clear;
   }, [clear, openToken, token, validToken]);
@@ -99,6 +107,20 @@ function ShareContent() {
       router.replace(`/jam/join?code=${encodeURIComponent(action.code)}`);
     }
   }, [performPrimaryAction]);
+
+  const handleCopy = useCallback(async () => {
+    if (!canonicalUrl) return;
+    try {
+      const copied = await Clipboard.setStringAsync(canonicalUrl);
+      if (!copied) throw new Error('clipboard returned false');
+      successFeedback();
+      Toast.show({ type: 'success', text1: 'Share link copy ho gaya' });
+    } catch (err) {
+      console.warn('[share-landing] clipboard failed:', err);
+      warningFeedback();
+      Toast.show({ type: 'error', text1: 'Link copy nahi hua' });
+    }
+  }, [canonicalUrl]);
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -265,8 +287,53 @@ function ShareContent() {
               </Pressable>
             ) : null}
           </View>
+
+          {canonicalUrl ? (
+            <View style={styles.linkActions}>
+              <Pressable
+                onPress={() => void handleCopy()}
+                accessibilityRole="button"
+                accessibilityLabel="Share link copy karo"
+                style={({ pressed }) => [styles.linkAction, pressed && styles.pressed]}
+              >
+                <Ionicons name="copy-outline" size={18} color={colors.primary} />
+                <Text style={styles.linkActionText}>Copy Link</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => {
+                  selectionFeedback();
+                  setQrVisible(true);
+                }}
+                disabled={!qrAllowed}
+                accessibilityRole="button"
+                accessibilityLabel="Share QR dikhao"
+                accessibilityState={{ disabled: !qrAllowed }}
+                style={({ pressed }) => [
+                  styles.linkAction,
+                  pressed && styles.pressed,
+                  !qrAllowed && styles.disabled,
+                ]}
+              >
+                <Ionicons name="qr-code-outline" size={18} color={colors.primary} />
+                <Text style={styles.linkActionText}>Show QR</Text>
+              </Pressable>
+            </View>
+          ) : null}
         </ScrollView>
       ) : null}
+
+      <ShareQrModal
+        visible={qrVisible && qrAllowed}
+        url={canonicalUrl ?? ''}
+        label={payload ? kindLabel(payload) : 'Punjabi Beats Share'}
+        onClose={() => setQrVisible(false)}
+        onCopy={() => void handleCopy()}
+        onError={message => {
+          setQrVisible(false);
+          warningFeedback();
+          Toast.show({ type: 'error', text1: message });
+        }}
+      />
     </View>
   );
 }
@@ -351,6 +418,20 @@ const styles = StyleSheet.create({
     borderColor: colors.primary,
   },
   secondaryText: { ...typography.body, color: colors.primary, fontWeight: '700' },
+  linkActions: { flexDirection: 'row', gap: spacing.sm },
+  linkAction: {
+    flex: 1,
+    minHeight: 46,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.card,
+  },
+  linkActionText: { ...typography.body, color: colors.text },
   retryButton: {
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,

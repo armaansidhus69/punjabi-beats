@@ -28,7 +28,7 @@ import EmptyState from '../../components/EmptyState';
 import type { JamMessage, JamQueueItem, RoomRole } from '../../types';
 import { getCurrentUser } from '../../core/auth/authService';
 import { can } from '../../core/room/permissions';
-import { shareJam } from '../../services/shareService';
+import { shareJam } from '../../services/shareComposerFacade';
 import { useJam, canControlPlayback, type AssignableRole } from '../../stores/jamStore';
 import { usePlayer } from '../../stores/playerStore';
 import { useMiniPlayerPadding } from '../../hooks/useMiniPlayerPadding';

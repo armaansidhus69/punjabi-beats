@@ -22,6 +22,7 @@ import { TAB_BAR_HEIGHT } from '../constants/layout';
 import AppErrorBoundary from '../components/ErrorBoundary';
 import MiniPlayer from '../components/MiniPlayer';
 import AddToPlaylistSheet from '../components/AddToPlaylistSheet';
+import ShareComposerSheet from '../components/ShareComposerSheet';
 import { initRoomSync } from '../services/roomSync';
 import { hydrateDeadMirrorCache } from '../services/musicApi';
 import TrackPlayer from 'react-native-track-player';
@@ -78,6 +79,8 @@ function AppShell() {
 
       {/* Add-to-playlist bottom sheet — ek hi instance, sabhi screens ke '+' ke liye (Phase 9) */}
       <AddToPlaylistSheet />
+      {/* Phase 8c: signed Share / Copy / QR composer — one global instance */}
+      <ShareComposerSheet />
     </View>
   );
 }

@@ -171,6 +171,16 @@
 | FR-16.4 | Selection mode pauses/restores prior follow state, clears on song change, and preserves valid range after limit errors | P2 |
 | FR-16.5 | Share/API/flag failure falls back to attributed native quote; existing v1 five-kind tokens remain valid | P1 |
 
+### FR-17: Copy Link + QR Composer V1 *(Phase 8c — signed-link actions)*
+| ID | Requirement | Priority |
+|---|---|---|
+| FR-17.1 | Flag-enabled six-kind share buttons open one reusable composer with Native Share, Copy Link, and Show QR | P1 |
+| FR-17.2 | Signed link is generated once, cached memory-only (max 10, expiry-aware), and stale requests cannot replace current entity | P1 |
+| FR-17.3 | Clipboard copies only strict canonical HTTPS URL; flag/API/clipboard failure leaves legacy Native Share available | P1 |
+| FR-17.4 | QR renders only validated canonical URLs ≤2400 chars and isolates renderer errors; no gallery/filesystem permission | P1 |
+| FR-17.5 | Recipient `/share` landing also exposes Copy Link + QR derived from API origin/token, never payload-provided URL | P1 |
+| FR-17.6 | SDK 51 compatibility uses Expo Clipboard, SVG 15.2, and RN 0.74 QR text-encoding Metro transformer | P1 |
+
 ---
 
 ## 2. Non-Functional Requirements

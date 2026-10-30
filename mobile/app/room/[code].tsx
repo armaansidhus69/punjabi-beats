@@ -22,7 +22,7 @@ import { colors } from '../../constants/colors';
 import { typography } from '../../constants/typography';
 import { spacing } from '../../constants/spacing';
 import EmptyState from '../../components/EmptyState';
-import { shareRoom } from '../../services/shareService';
+import { shareRoom } from '../../services/shareComposerFacade';
 
 /** Room code 6 digits (FR-5.1) */
 const CODE_PATTERN = /^\d{6}$/;

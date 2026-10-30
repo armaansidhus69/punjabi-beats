@@ -266,7 +266,7 @@
 - [ ] Later server-side share-card generation
 - [ ] Instagram Stories/Notes
 - [ ] Facebook Feed/Stories and Messenger
-- [ ] Copy link and QR/share code
+- [~] Copy link and QR/share code *(8c: canonical Copy Link + display QR composer/landing; short code/image save pending)*
 
   > **2026-10-30 [~] status (Signed share links v1 8a)**: coded per
   > `docs/superpowers/specs/2026-10-30-share-links-design.md` +
@@ -280,7 +280,10 @@
   > `social_share_enabled` default off. Lyrics excerpts are limited to 4
   > contiguous lines / 280 Unicode code points and can carry only first-line
   > timestamp (no full lyrics/source/audio IDs).
-  > Analytics, cards, universal links, platform SDKs, copy/QR, and remaining
+  > Phase 8c adds a six-kind composer with Native Share / Copy Link / display
+  > QR, expiry-aware memory cache, and recipient landing actions. QR is capped
+  > at 2400 URL chars and never touches gallery/filesystem. Analytics, cards,
+  > universal links, platform SDKs, short codes/image save, and remaining
   > entity kinds stay `[ ]`.
 
 ## Phase 9 — Chat and social interaction

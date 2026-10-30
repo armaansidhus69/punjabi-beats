@@ -36,7 +36,7 @@ import SongArtwork from '../components/SongArtwork';
 import { handleOpenOnYouTube, isYouTubeMatchConfigured } from '../utils/youtubeLink';
 import { successFeedback, tapFeedback, warningFeedback } from '../utils/haptics';
 import { isFeatureEnabled } from '../core/featureflags/featureFlags';
-import { shareTrack } from '../services/shareService';
+import { shareTrack } from '../services/shareComposerFacade';
 
 /** Swipe-down close threshold (px aur velocity) */
 const CLOSE_SWIPE_THRESHOLD = 110;

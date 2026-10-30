@@ -21,7 +21,7 @@ import { spacing } from '../../constants/spacing';
 import EmptyState from '../../components/EmptyState';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import SongItem from '../../components/SongItem';
-import { sharePlaylist } from '../../services/shareService';
+import { sharePlaylist } from '../../services/shareComposerFacade';
 
 /** "12 Mar 2026" jaisa chhota date label */
 function formatCreatedAt(timestamp: number): string {

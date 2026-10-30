@@ -21,7 +21,7 @@ import EmptyState from '../components/EmptyState';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { lineAt, lyricsExcerpt, selectionRange } from '../core/lyrics/lyrics';
 import { fetchLyrics, describeLyricsError, LyricsError } from '../services/lyricsApi';
-import { shareLyrics } from '../services/shareService';
+import { shareLyrics } from '../services/shareComposerFacade';
 import { usePlayer } from '../stores/playerStore';
 import { colors } from '../constants/colors';
 import { typography } from '../constants/typography';
