@@ -23,6 +23,7 @@ import {
 import {
   buildBlendShare,
   buildJamShare,
+  buildLyricsShare,
   buildPlaylistShare,
   buildRoomShare,
   buildTrackShare,
@@ -41,9 +42,19 @@ const KIND_FIXTURES = [
   { kind: 'room', data: { code: '123456', name: 'Dost Room' } },
   { kind: 'blend', data: { code: 'ABCDEFGH', name: 'Besties' } },
   { kind: 'jam', data: { code: '23456789', name: 'Friday Jam', roomType: 'party' } },
+  {
+    kind: 'lyrics',
+    data: {
+      title: 'Softly',
+      artist: 'Karan Aujla',
+      lines: ['<Dil & beat>', 'Second line'],
+      startMs: 0,
+      cover: 'https://img.example/lyrics.jpg',
+    },
+  },
 ];
 
-test('server normalize: five strict schemas + private fields drop', () => {
+test('server normalize: six strict schemas + private fields drop', () => {
   for (const fixture of KIND_FIXTURES) {
     const payload = normalizeShareRequest(
       { ...fixture, data: { ...fixture.data, userId: 'private', audioUrl: 'https://secret/audio' } },
@@ -83,6 +94,34 @@ test('server normalize: string/code/cover/playlist caps', () => {
   assert.equal(normalizeShareRequest({ kind: 'room', data: { code: '12345' } }, NOW), null);
   assert.equal(normalizeShareRequest({ kind: 'blend', data: { code: 'ABCDI234' } }, NOW), null);
   assert.equal(normalizeShareRequest({ kind: 'jam', data: { code: 'ABCDEFGH', roomType: 'evil' } }, NOW)?.data.roomType, undefined);
+});
+
+test('server lyrics schema: excerpt/timestamp/code-point limits', () => {
+  const valid = normalizeShareRequest(KIND_FIXTURES.at(-1), NOW);
+  assert.equal(valid.kind, 'lyrics');
+  assert.equal(valid.data.startMs, 0);
+  assert.equal('songId' in valid.data, false);
+
+  assert.equal(normalizeShareRequest({
+    kind: 'lyrics',
+    data: { title: 'T', artist: 'A', lines: [] },
+  }, NOW), null);
+  assert.equal(normalizeShareRequest({
+    kind: 'lyrics',
+    data: { title: 'T', artist: 'A', lines: ['1', '2', '3', '4', '5'] },
+  }, NOW), null);
+  assert.equal(normalizeShareRequest({
+    kind: 'lyrics',
+    data: { title: 'T', artist: 'A', lines: ['😀'.repeat(161)] },
+  }, NOW), null);
+  assert.equal(normalizeShareRequest({
+    kind: 'lyrics',
+    data: { title: 'T', artist: 'A', lines: ['a'.repeat(140), 'b'.repeat(140)] },
+  }, NOW), null);
+  assert.equal(normalizeShareRequest({
+    kind: 'lyrics',
+    data: { title: 'T', artist: 'A', lines: ['ok'], startMs: -1 },
+  }, NOW), null);
 });
 
 test('HMAC token: deterministic sign + valid verify', () => {
@@ -139,6 +178,15 @@ test('preview HTML escapes metadata and includes security/app-link surface', () 
   assert.match(html, /punjabi-beats:\/\/share\?token=/);
   assert.match(html, /og:title/);
   assert.match(renderShareErrorHtml('expired'), /expired/);
+});
+
+test('lyrics preview escapes selected lines and labels excerpt', () => {
+  const payload = normalizeShareRequest(KIND_FIXTURES.at(-1), NOW);
+  const token = signSharePayload(payload, SECRET);
+  const html = renderShareHtml(payload, token, buildShareUrl('https://api.example.com', token));
+  assert.equal(html.includes('<Dil & beat>'), false);
+  assert.match(html, /&lt;Dil &amp; beat&gt; \/ Second line/);
+  assert.match(html, /Shared lyrics excerpt/);
 });
 
 test('rate limiter: 30/hour and Retry-After', () => {
@@ -199,6 +247,13 @@ test('client builders keep private IDs/audio outside signed data + legacy parity
   assert.ok(buildRoomShare('123456'));
   assert.ok(buildBlendShare('Besties', 'ABCDEFGH'));
   assert.ok(buildJamShare('Friday', '23456789', 'listening_party'));
+  const lyrics = buildLyricsShare(song, ['First line', 'Second line'], 0);
+  assert.ok(lyrics);
+  assert.equal(lyrics.data.startMs, 0);
+  assert.equal(JSON.stringify(lyrics.data).includes('audio.example'), false);
+  assert.equal(JSON.stringify(lyrics.data).includes('private-id'), false);
+  assert.match(fallbackShareText(lyrics), /First line\nSecond line/);
+  assert.match(fallbackShareText(lyrics), /Softly, Karan Aujla/);
 });
 
 test('client second guard + typed action allowlist', () => {
@@ -210,6 +265,13 @@ test('client second guard + typed action allowlist', () => {
     if (fixture.kind === 'room') assert.deepEqual(action, { type: 'navigate', target: 'room', code: '123456' });
     if (fixture.kind === 'blend') assert.equal(action.target, 'blend');
     if (fixture.kind === 'jam') assert.equal(action.target, 'jam');
+    if (fixture.kind === 'lyrics') {
+      assert.deepEqual(action, {
+        type: 'play_track',
+        query: 'Softly Karan Aujla',
+        startMs: 0,
+      });
+    }
   }
   const expired = normalizeShareRequest(KIND_FIXTURES[0], NOW);
   assert.equal(validateResolvedShare(expired, expired.exp), null);

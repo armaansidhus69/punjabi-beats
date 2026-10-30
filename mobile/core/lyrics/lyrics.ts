@@ -9,6 +9,15 @@
 import type { LyricsCacheEnvelope, LyricsData, LyricsLine } from '../../types';
 
 export const LYRICS_CACHE_CAP = 50;
+export const LYRICS_SHARE_MAX_LINES = 4;
+export const LYRICS_SHARE_MAX_CHARS = 280;
+export const LYRICS_SHARE_MAX_LINE_CHARS = 160;
+
+export interface LyricsExcerpt {
+  lines: string[];
+  /** null for plain/untimed lyrics; synced first line can validly be 0 */
+  startMs: number | null;
+}
 
 /* ------------------------------ LRC parsing ------------------------------ */
 
@@ -129,6 +138,77 @@ export function lineAt(lines: LyricsLine[], positionMs: number): number {
     }
   }
   return found;
+}
+
+/* ------------------------------ share selection ------------------------------ */
+
+export function selectionRange(
+  anchor: number,
+  target: number,
+  totalLines: number,
+): number[] | null {
+  if (
+    !Number.isInteger(anchor) ||
+    !Number.isInteger(target) ||
+    !Number.isInteger(totalLines) ||
+    totalLines <= 0 ||
+    anchor < 0 ||
+    target < 0 ||
+    anchor >= totalLines ||
+    target >= totalLines
+  ) {
+    return null;
+  }
+  const start = Math.min(anchor, target);
+  const end = Math.max(anchor, target);
+  const count = end - start + 1;
+  if (count > LYRICS_SHARE_MAX_LINES) return null;
+  return Array.from({ length: count }, (_value, index) => start + index);
+}
+
+function shareLineText(raw: string): string {
+  return raw
+    .replace(/[\u0000-\u001f\u007f]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function codePointLength(value: string): number {
+  return Array.from(value).length;
+}
+
+export function lyricsExcerpt(
+  source: LyricsLine[],
+  indices: number[],
+  synced: boolean,
+): LyricsExcerpt | null {
+  if (indices.length === 0 || indices.length > LYRICS_SHARE_MAX_LINES) return null;
+  for (let index = 0; index < indices.length; index += 1) {
+    const value = indices[index];
+    if (
+      !Number.isInteger(value) ||
+      value < 0 ||
+      value >= source.length ||
+      (index > 0 && value !== indices[index - 1] + 1)
+    ) {
+      return null;
+    }
+  }
+  const lines = indices.map(index => shareLineText(source[index].text));
+  if (
+    lines.some(line => line.length === 0 || codePointLength(line) > LYRICS_SHARE_MAX_LINE_CHARS) ||
+    codePointLength(lines.join('\n')) > LYRICS_SHARE_MAX_CHARS
+  ) {
+    return null;
+  }
+  const first = source[indices[0]];
+  const startMs = synced
+    ? typeof first.timeMs === 'number' && Number.isFinite(first.timeMs) && first.timeMs >= 0
+      ? Math.round(first.timeMs)
+      : null
+    : null;
+  if (synced && startMs === null) return null;
+  return { lines, startMs };
 }
 
 /* ------------------------------ cache helpers ------------------------------ */

@@ -438,12 +438,13 @@ Before releasing:
 | Phase 23: Lyrics V1 (Roadmap 7a) | 14 | 13 | 93% |
 | Phase 24: Podcast Transcripts V1 (Roadmap 7b) | 16 | 15 | 94% |
 | Phase 25: Canonical Share Links V1 (Roadmap 8a) | 17 | 16 | 94% |
-| **TOTAL** | **367** | **326** | **89%** |
+| Phase 26: Selected Lyrics Sharing V1 (Roadmap 8b) | 11 | 10 | 91% |
+| **TOTAL** | **378** | **336** | **89%** |
 
 > Counts 2026-10-30 ko actual checkbox lines se dobara verify hue — har `## PHASE n` section
 > ke andar ke `- [ ]`/`- [x]` boxes gine gaye (SECTION 0/1/2 ke headers, Tracker table,
 > Pending summary, Milestones aur FINAL CHECKLIST is count me nahi — wo alag sections
-> hain). Phases 18–25 ab tracker me include hain. FINAL CHECKLIST aur Milestones alag
+> hain). Phases 18–26 ab tracker me include hain. FINAL CHECKLIST aur Milestones alag
 > release-level gates hain.
 
 ### ⏳ Abhi kya pending hai (sirf yehi baaki)
@@ -451,7 +452,7 @@ Before releasing:
 - **Phase 13 (1 box)** — runtime console-warnings device check (ESLint setup + 0-warning run ✓ done)
 - **Phase 16 (12 box)** — backend 2 box DONE (deploy + env); ab `npx eas-cli login` + builds (user)
 - **Phase 17 (3 box)** — screenshots + GitHub repo + push (local git commit ✓ done; remote push commands box me hain)
-- **Phases 18–25** — code/automated checks done; manual device/deploy gates remain (Liked, Podcasts, Signals, AI Playlist, AI Assistant, Lyrics, Transcripts, Share Links)
+- **Phases 18–26** — code/automated checks done; manual device/deploy gates remain (Liked, Podcasts, Signals, AI Playlist, AI Assistant, Lyrics, Transcripts, Share Links, Lyrics Sharing)
 
 ---
 
@@ -743,3 +744,30 @@ Before releasing:
 - [ ] Manual/deploy: Vercel `SHARE_SIGNING_SECRET` + `SHARE_PUBLIC_BASE_URL`, deploy, enable mobile flag/API base, five-kind two-device/WhatsApp/tamper/offline-fallback pass
 
 **Phase 25 Complete?** `[~]` (code + automated checks complete; env deploy + cross-device preview pass remain)
+
+---
+
+## 🏳️ PHASE 26: Selected Lyrics Sharing V1 (Roadmap 8b)
+
+> Spec `docs/superpowers/specs/2026-10-30-lyrics-sharing-design.md` + plan
+> `docs/superpowers/plans/2026-10-30-lyrics-sharing-plan.md`. FR ids
+> REQUIREMENTS.md FR-16 me. Existing Phase 8a endpoint/env reuse.
+
+### Core and Share Schema
+- [x] Lyrics pure selection — contiguous range max 4, line 160/combined 280 Unicode code-point caps, synced/plain excerpt timestamp semantics
+- [x] Server `_shareCore.js` sixth `lyrics` kind — strict reject/private drop, optional timestamp 0, HTTPS cover, escaped OG excerpt
+- [x] Client share core — lyrics builder/second guard/fallback attribution/typed play action; old five-kind v1 parity preserved
+- [x] Share service/store — `shareLyrics`, signed text, track resolver reuse, play then optional seek (0 valid), lyrics-specific feedback
+
+### Lyrics and Landing UI
+- [x] `/lyrics` long-press selection mode — anchor/range, previous follow restore, song-change clear, invalid-range warning, selected+active styles
+- [x] Header Cancel/count/Share controls with busy guard; plain selection works without false line seek
+- [x] `/share` lyrics quote card — optional cover, individual lines, attribution/timestamp, Play Track action
+
+### Verification
+- [x] `test-lyrics.mjs` extended to 11 tests (range/bounds/code-point caps/synced zero/plain null)
+- [x] `test-share.mjs` extended to 15 tests + `probe-share.mjs` lyrics JSON/escaped HTML checks
+- [x] tsc 0 · lint 0 · root 14-suite chain/probe green; no new dependency/env/token version
+- [ ] Manual/deploy: server-first redeploy, enable lyrics+social flags, synced/plain selection + 5th-line/281-char + recipient seek + API-off fallback pass
+
+**Phase 26 Complete?** `[~]` (code + automated checks complete; server-first deploy + two-device UX pass remain)

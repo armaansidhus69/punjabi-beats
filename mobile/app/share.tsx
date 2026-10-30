@@ -17,6 +17,7 @@ import { colors } from '../constants/colors';
 import { typography } from '../constants/typography';
 import { spacing } from '../constants/spacing';
 import { tapFeedback } from '../utils/haptics';
+import { formatDuration } from '../utils/format';
 import type { ResolvedSharePayload } from '../core/share/share';
 
 const TOKEN_PATTERN = /^v1\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/;
@@ -33,6 +34,8 @@ function kindLabel(payload: ResolvedSharePayload): string {
       return 'Blend Invite';
     case 'jam':
       return payload.data.roomType === 'party' ? 'Listening Party Invite' : 'Jam Invite';
+    case 'lyrics':
+      return 'Shared Lyrics';
   }
 }
 
@@ -48,6 +51,8 @@ function primaryLabel(payload: ResolvedSharePayload, imported: boolean): string 
       return 'Join Blend';
     case 'jam':
       return 'Join Jam';
+    case 'lyrics':
+      return 'Play Track';
   }
 }
 
@@ -180,6 +185,33 @@ function ShareContent() {
               </>
             ) : null}
 
+            {payload.kind === 'lyrics' ? (
+              <>
+                {payload.data.cover ? (
+                  <Image source={{ uri: payload.data.cover }} style={styles.lyricsCover} />
+                ) : (
+                  <Ionicons name="chatbox-ellipses-outline" size={64} color={colors.primary} />
+                )}
+                <View style={styles.quoteBox}>
+                  {payload.data.lines.map((line, index) => (
+                    <Text key={`${index}-${line}`} style={styles.quoteLine}>
+                      {line}
+                    </Text>
+                  ))}
+                </View>
+                <Text style={styles.title}>{payload.data.title}</Text>
+                <Text style={styles.subtitle}>{payload.data.artist}</Text>
+                {payload.data.startMs !== undefined ? (
+                  <View style={styles.timestampChip}>
+                    <Ionicons name="time-outline" size={14} color={colors.primary} />
+                    <Text style={styles.timestampText}>
+                      Starts at {formatDuration(payload.data.startMs)}
+                    </Text>
+                  </View>
+                ) : null}
+              </>
+            ) : null}
+
             {payload.kind === 'room' ? (
               <>
                 <Ionicons name="people-outline" size={64} color={colors.primary} />
@@ -272,6 +304,27 @@ const styles = StyleSheet.create({
   kind: { ...typography.caption, color: colors.primary, textTransform: 'uppercase', letterSpacing: 1 },
   cover: { width: 180, height: 180, borderRadius: 18, backgroundColor: colors.surface },
   coverFallback: { alignItems: 'center', justifyContent: 'center' },
+  lyricsCover: { width: 96, height: 96, borderRadius: 14, backgroundColor: colors.surface },
+  quoteBox: {
+    alignSelf: 'stretch',
+    gap: spacing.xs,
+    padding: spacing.md,
+    borderLeftWidth: 3,
+    borderLeftColor: colors.primary,
+    backgroundColor: colors.surface,
+    borderRadius: 10,
+  },
+  quoteLine: { ...typography.body, color: colors.text, fontStyle: 'italic', lineHeight: 21 },
+  timestampChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: 14,
+    backgroundColor: colors.surface,
+  },
+  timestampText: { ...typography.caption, color: colors.primary },
   title: { ...typography.h1, color: colors.text, textAlign: 'center' },
   subtitle: { ...typography.body, color: colors.subtext, textAlign: 'center' },
   code: { ...typography.h1, color: colors.primary, letterSpacing: 3 },

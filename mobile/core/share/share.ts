@@ -11,7 +11,7 @@ export const SHARE_TTL_SEC = 30 * 24 * 60 * 60;
 export const SHARE_TOKEN_MAX_CHARS = 8192;
 export const SHARE_CLOCK_SKEW_SEC = 5 * 60;
 
-export type ShareKind = 'track' | 'playlist' | 'room' | 'blend' | 'jam';
+export type ShareKind = 'track' | 'playlist' | 'room' | 'blend' | 'jam' | 'lyrics';
 
 export interface SharedTrackDescriptor {
   title: string;
@@ -42,12 +42,19 @@ export interface JamShareData extends BlendShareData {
   roomType?: 'jam' | 'party';
 }
 
+export interface LyricsShareData extends SharedTrackDescriptor {
+  lines: string[];
+  startMs?: number;
+  cover?: string;
+}
+
 export type ShareDataByKind = {
   track: TrackShareData;
   playlist: PlaylistShareData;
   room: RoomShareData;
   blend: BlendShareData;
   jam: JamShareData;
+  lyrics: LyricsShareData;
 };
 
 export type ShareEntity = {
@@ -70,7 +77,7 @@ export type ResolvedSharePayload = {
 }[ShareKind];
 
 export type ShareAction =
-  | { type: 'play_track'; query: string }
+  | { type: 'play_track'; query: string; startMs?: number }
   | { type: 'import_playlist'; name: string; tracks: SharedTrackDescriptor[] }
   | { type: 'navigate'; target: 'room' | 'blend' | 'jam'; code: string };
 
@@ -83,7 +90,7 @@ export interface ShareCreateResponse {
 
 const INVITE_CODE = /^[ABCDEFGHJKMNPQRSTUVWXYZ23456789]{8}$/;
 const ROOM_CODE = /^\d{6}$/;
-const KINDS = new Set<ShareKind>(['track', 'playlist', 'room', 'blend', 'jam']);
+const KINDS = new Set<ShareKind>(['track', 'playlist', 'room', 'blend', 'jam', 'lyrics']);
 
 function cleanText(value: unknown, maxChars: number, required = true): string | null {
   const clean = typeof value === 'string'
@@ -116,6 +123,19 @@ function roomCode(value: unknown): string | null {
 function optionalName(value: unknown): string | null {
   const name = cleanText(value, 80, false);
   return name && name.length > 0 ? name : null;
+}
+
+function codePointLength(value: string): number {
+  return Array.from(value).length;
+}
+
+function lyricsLine(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const clean = value
+    .replace(/[\u0000-\u001f\u007f]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return clean.length > 0 && codePointLength(clean) <= 160 ? clean : null;
 }
 
 function normalizeData(kind: ShareKind, raw: unknown): ShareDataByKind[ShareKind] | null {
@@ -151,6 +171,34 @@ function normalizeData(kind: ShareKind, raw: unknown): ShareDataByKind[ShareKind
       totalCount: Math.max(tracks.length, Math.min(5000, Math.max(0, countRaw))),
       tracks,
     };
+  }
+  if (kind === 'lyrics') {
+    const title = cleanText(record.title, 120);
+    const artist = cleanText(record.artist, 120);
+    if (title === null || artist === null || !Array.isArray(record.lines)) return null;
+    if (record.lines.length === 0 || record.lines.length > 4) return null;
+    const lines: string[] = [];
+    for (const value of record.lines) {
+      const line = lyricsLine(value);
+      if (line === null) return null;
+      lines.push(line);
+    }
+    if (codePointLength(lines.join('\n')) > 280) return null;
+    const data: LyricsShareData = { title, artist, lines };
+    if (record.startMs !== undefined && record.startMs !== null) {
+      if (
+        typeof record.startMs !== 'number' ||
+        !Number.isInteger(record.startMs) ||
+        record.startMs < 0 ||
+        record.startMs > 86_400_000
+      ) {
+        return null;
+      }
+      data.startMs = record.startMs;
+    }
+    const cover = httpsUrl(record.cover);
+    if (cover !== null) data.cover = cover;
+    return data;
   }
   if (kind === 'room') {
     const code = roomCode(record.code);
@@ -247,6 +295,26 @@ export function buildJamShare(
   };
 }
 
+export function buildLyricsShare(
+  song: Song,
+  lines: string[],
+  startMs?: number | null,
+): ShareEntity | null {
+  const data = normalizeData('lyrics', {
+    title: song.title,
+    artist: song.artist,
+    lines,
+    startMs,
+    cover: song.cover,
+  }) as LyricsShareData | null;
+  if (data === null) return null;
+  return {
+    kind: 'lyrics',
+    data,
+    fallbackText: `“${data.lines.join('\n')}”\n— ${data.title}, ${data.artist} · Punjabi Beats`,
+  };
+}
+
 export function validateResolvedShare(raw: unknown, nowSec: number): ResolvedSharePayload | null {
   if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) return null;
   const record = raw as Record<string, unknown>;
@@ -293,6 +361,12 @@ export function shareAction(payload: ResolvedSharePayload): ShareAction {
       return { type: 'navigate', target: 'blend', code: payload.data.code };
     case 'jam':
       return { type: 'navigate', target: 'jam', code: payload.data.code };
+    case 'lyrics':
+      return {
+        type: 'play_track',
+        query: `${payload.data.title} ${payload.data.artist}`,
+        ...(payload.data.startMs !== undefined ? { startMs: payload.data.startMs } : {}),
+      };
   }
 }
 

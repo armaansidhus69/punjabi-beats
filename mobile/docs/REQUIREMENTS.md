@@ -162,6 +162,15 @@
 | FR-15.6 | Security: fixed public origin, timing-safe secret/client-token checks, strict caps/HTML CSP, 30/hour + 100/day best-effort rate limits | P1 |
 | FR-15.7 | `social_share_enabled` default off (`EXPO_PUBLIC_SOCIAL_SHARE_ENABLED` opt-in); guest-compatible | P1 |
 
+### FR-16: Selected Lyrics Sharing V1 *(Phase 8b — capped signed excerpts)*
+| ID | Requirement | Priority |
+|---|---|---|
+| FR-16.1 | Lyrics screen supports 1–4 contiguous selected lines; each ≤160 Unicode code points and combined excerpt ≤280 | P1 |
+| FR-16.2 | Signed `lyrics` payload contains only title/artist/excerpt, optional first timestamp/HTTPS cover—never full lyrics/source/audio/user IDs | P1 |
+| FR-16.3 | Synced recipient action resolves/plays track and seeks to first selected timestamp (including 0); plain lyrics play without false seek | P1 |
+| FR-16.4 | Selection mode pauses/restores prior follow state, clears on song change, and preserves valid range after limit errors | P2 |
+| FR-16.5 | Share/API/flag failure falls back to attributed native quote; existing v1 five-kind tokens remain valid | P1 |
+
 ---
 
 ## 2. Non-Functional Requirements

@@ -6,14 +6,18 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   LYRICS_CACHE_CAP,
+  LYRICS_SHARE_MAX_CHARS,
+  LYRICS_SHARE_MAX_LINE_CHARS,
   cacheFromEnvelope,
   cacheGet,
   cachePut,
   cacheToEnvelope,
   isSyncedLines,
   lineAt,
+  lyricsExcerpt,
   parseLrc,
   plainToLines,
+  selectionRange,
 } from './mobile/core/lyrics/lyrics.ts';
 
 function lyricsData(index, fetchedAt = index) {
@@ -88,6 +92,69 @@ test('plainToLines: blank rows drop and timing stays unsynced', () => {
   ]);
   assert.equal(isSyncedLines(lines), true); // shape valid; caller owns synced flag
   assert.deepEqual(plainToLines('  \n ', 30_000), []);
+});
+
+test('share selection: forward/backward contiguous ranges and guards', () => {
+  assert.deepEqual(selectionRange(2, 2, 10), [2]);
+  assert.deepEqual(selectionRange(2, 5, 10), [2, 3, 4, 5]);
+  assert.deepEqual(selectionRange(5, 2, 10), [2, 3, 4, 5]);
+  assert.equal(selectionRange(1, 5, 10), null); // fifth line
+  assert.equal(selectionRange(-1, 2, 10), null);
+  assert.equal(selectionRange(2, 10, 10), null);
+  assert.equal(selectionRange(1.5, 2, 10), null);
+});
+
+test('share excerpt: synced timestamp zero/nonzero and plain null', () => {
+  const source = [
+    { text: ' First line ', timeMs: 0 },
+    { text: 'Second\tline', timeMs: 1500 },
+    { text: 'Third', timeMs: 3000 },
+  ];
+  assert.deepEqual(lyricsExcerpt(source, [0, 1], true), {
+    lines: ['First line', 'Second line'],
+    startMs: 0,
+  });
+  assert.deepEqual(lyricsExcerpt(source, [1, 2], true), {
+    lines: ['Second line', 'Third'],
+    startMs: 1500,
+  });
+  assert.deepEqual(lyricsExcerpt(source, [0], false), {
+    lines: ['First line'],
+    startMs: null,
+  });
+});
+
+test('share excerpt: indices must be unique contiguous and valid', () => {
+  const source = Array.from({ length: 6 }, (_, index) => ({ text: `L${index}`, timeMs: index * 1000 }));
+  assert.equal(lyricsExcerpt(source, [], true), null);
+  assert.equal(lyricsExcerpt(source, [0, 2], true), null);
+  assert.equal(lyricsExcerpt(source, [1, 1], true), null);
+  assert.equal(lyricsExcerpt(source, [0, 1, 2, 3, 4], true), null);
+  assert.equal(lyricsExcerpt(source, [6], true), null);
+  assert.equal(lyricsExcerpt([{ text: ' ', timeMs: 0 }], [0], true), null);
+});
+
+test('share excerpt: Unicode per-line and combined code-point caps', () => {
+  const exactLine = '😀'.repeat(LYRICS_SHARE_MAX_LINE_CHARS);
+  assert.ok(lyricsExcerpt([{ text: exactLine, timeMs: 0 }], [0], true));
+  assert.equal(
+    lyricsExcerpt([{ text: `${exactLine}😀`, timeMs: 0 }], [0], true),
+    null,
+  );
+
+  const exactCombined = [
+    { text: 'a'.repeat(140), timeMs: 0 },
+    { text: 'b'.repeat(LYRICS_SHARE_MAX_CHARS - 141), timeMs: 1000 },
+  ];
+  assert.equal(Array.from(`${exactCombined[0].text}\n${exactCombined[1].text}`).length, LYRICS_SHARE_MAX_CHARS);
+  assert.ok(lyricsExcerpt(exactCombined, [0, 1], true));
+  assert.equal(
+    lyricsExcerpt([
+      { text: 'a'.repeat(140), timeMs: 0 },
+      { text: 'b'.repeat(140), timeMs: 1000 },
+    ], [0, 1], true),
+    null,
+  );
 });
 
 test('cache envelope: version + entry shape guards', () => {

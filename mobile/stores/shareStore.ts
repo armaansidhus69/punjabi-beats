@@ -131,13 +131,24 @@ export const useShare = create<ShareStore>((set, get) => ({
     set({ busy: true, error: null });
     try {
       if (action.type === 'play_track') {
-        const descriptor = payload.kind === 'track' ? payload.data : null;
+        const descriptor = payload.kind === 'track' || payload.kind === 'lyrics'
+          ? payload.data
+          : null;
         const song = descriptor ? await resolveDescriptor(descriptor) : null;
         if (!song) throw new Error('track_not_found');
         await usePlayer.getState().playSong(song, [song], { startPaused: false });
+        if (action.startMs !== undefined) {
+          await usePlayer.getState().seek(action.startMs);
+        }
         set({ resolvedSongs: [song] });
         successFeedback();
-        Toast.show({ type: 'success', text1: 'Shared track chal raha hai' });
+        Toast.show({
+          type: 'success',
+          text1:
+            payload.kind === 'lyrics'
+              ? 'Shared lyrics track chal raha hai'
+              : 'Shared track chal raha hai',
+        });
         return action;
       }
 

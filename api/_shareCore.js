@@ -11,7 +11,7 @@ export const SHARE_HOURLY_LIMIT = 30;
 export const SHARE_DAILY_LIMIT = 100;
 export const SHARE_CLOCK_SKEW_SEC = 5 * 60;
 
-const SHARE_KINDS = new Set(['track', 'playlist', 'room', 'blend', 'jam']);
+const SHARE_KINDS = new Set(['track', 'playlist', 'room', 'blend', 'jam', 'lyrics']);
 const INVITE_CODE = /^[ABCDEFGHJKMNPQRSTUVWXYZ23456789]{8}$/;
 const ROOM_CODE = /^\d{6}$/;
 
@@ -103,6 +103,43 @@ function normalizeJamData(raw) {
   return data;
 }
 
+function codePointLength(value) {
+  return Array.from(value).length;
+}
+
+function cleanLyricsLine(value) {
+  if (typeof value !== 'string') return null;
+  const clean = value
+    .replace(/[\u0000-\u001f\u007f]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return clean.length > 0 && codePointLength(clean) <= 160 ? clean : null;
+}
+
+function normalizeLyricsData(raw) {
+  const title = cleanText(raw?.title, 120);
+  const artist = cleanText(raw?.artist, 120);
+  if (title === null || artist === null || !Array.isArray(raw?.lines)) return null;
+  if (raw.lines.length === 0 || raw.lines.length > 4) return null;
+  const lines = [];
+  for (const value of raw.lines) {
+    const line = cleanLyricsLine(value);
+    if (line === null) return null;
+    lines.push(line);
+  }
+  if (codePointLength(lines.join('\n')) > 280) return null;
+  const data = { title, artist, lines };
+  if (raw.startMs !== undefined && raw.startMs !== null) {
+    if (!Number.isInteger(raw.startMs) || raw.startMs < 0 || raw.startMs > 86_400_000) {
+      return null;
+    }
+    data.startMs = raw.startMs;
+  }
+  const cover = cleanHttpsUrl(raw.cover);
+  if (cover !== null) data.cover = cover;
+  return data;
+}
+
 export function normalizeShareData(kind, raw) {
   if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) return null;
   switch (kind) {
@@ -116,6 +153,8 @@ export function normalizeShareData(kind, raw) {
       return normalizeBlendData(raw);
     case 'jam':
       return normalizeJamData(raw);
+    case 'lyrics':
+      return normalizeLyricsData(raw);
     default:
       return null;
   }
@@ -299,6 +338,13 @@ export function sharePreview(payload) {
           : 'Live Jam room join karo.',
         image: null,
         label: 'Jam invite',
+      };
+    case 'lyrics':
+      return {
+        title: `Lyrics: ${payload.data.title} — ${payload.data.artist}`,
+        description: payload.data.lines.join(' / '),
+        image: payload.data.cover ?? null,
+        label: 'Shared lyrics excerpt',
       };
     default:
       return { title: 'Punjabi Beats', description: 'Music saath suno.', image: null, label: 'Shared link' };

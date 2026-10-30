@@ -13,6 +13,7 @@ import { isFeatureEnabled } from '../core/featureflags/featureFlags';
 import {
   buildBlendShare,
   buildJamShare,
+  buildLyricsShare,
   buildPlaylistShare,
   buildRoomShare,
   buildTrackShare,
@@ -132,6 +133,8 @@ function signedShareText(entity: ShareEntity, url: string): string {
       return `${entity.data.name ?? 'Punjabi Beats Blend'} join karo! Code: ${entity.data.code}\n${url}`;
     case 'jam':
       return `${entity.data.name ?? 'Punjabi Beats Jam'} join karo! Code: ${entity.data.code}\n${url}`;
+    case 'lyrics':
+      return `“${entity.data.lines.join('\n')}”\n— ${entity.data.title}, ${entity.data.artist}\n${url}`;
   }
 }
 
@@ -196,5 +199,14 @@ export function shareBlend(name: string, code: string): Promise<boolean> {
 
 export function shareJam(name: string, code: string, type: RoomType): Promise<boolean> {
   const entity = buildJamShare(name, code, type);
+  return entity ? shareEntity(entity) : invalidEntity();
+}
+
+export function shareLyrics(
+  song: Song,
+  lines: string[],
+  startMs?: number | null,
+): Promise<boolean> {
+  const entity = buildLyricsShare(song, lines, startMs);
   return entity ? shareEntity(entity) : invalidEntity();
 }

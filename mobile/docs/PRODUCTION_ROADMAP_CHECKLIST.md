@@ -216,7 +216,7 @@
 - [~] Full-screen lyrics *(7a v1: `/lyrics` modal + player entry; translation/share baad)*
 - [~] Synced line-by-line lyrics *(7a v1: LRCLIB LRC highlight + follow + tap-to-seek)*
 - [ ] Translation
-- [ ] Share selected lines
+- [~] Share selected lines *(8b v1: 1–4 contiguous lines / 280 code points, signed excerpt + plain fallback)*
 - [~] Lyrics cache and error states *(7a v1: versioned `@pb_lyrics` cap 50 + not-found/network/rate retry)*
 - [ ] Report incorrect lyrics
 
@@ -230,7 +230,8 @@
   > `lyrics_enabled` (default off), player icon stays hidden while off,
   > direct route makes zero network calls while gated. Plain-only fallback
   > uses approximate highlight. Translation, selected-line sharing, and lyrics
-  > report remain `[ ]`; podcast transcripts are covered by 7b below.
+  > report remain `[ ]`; selected-line sharing shipped as 8b `[~]`, and
+  > podcast transcripts are covered by 7b below.
 
 ### Transcripts
 
@@ -260,7 +261,7 @@
 - [~] Share-token creation and server preview metadata *(8a: stateless HMAC token + escaped OG/Twitter page)*
 - [~] Native share sheet and web fallback *(8a: native sheet + HTTPS card/app-scheme button; universal links pending)*
 - [ ] Open/click analytics
-- [~] Share track, album, artist, playlist, lyrics, Blend, Jam, room, Wrapped, and event *(8a five live entity kinds; album/artist/lyrics/Wrapped/event pending)*
+- [~] Share track, album, artist, playlist, lyrics, Blend, Jam, room, Wrapped, and event *(8a/8b: track/playlist/capped lyrics/Blend/Jam/room; album/artist/Wrapped/event pending)*
 - [ ] Device-generated share cards
 - [ ] Later server-side share-card generation
 - [ ] Instagram Stories/Notes
@@ -270,12 +271,15 @@
   > **2026-10-30 [~] status (Signed share links v1 8a)**: coded per
   > `docs/superpowers/specs/2026-10-30-share-links-design.md` +
   > `docs/superpowers/plans/2026-10-30-share-links-plan.md`. Server
-  > `api/share.js` signs strict track/playlist/room/Blend/Jam public metadata
+  > `api/share.js` signs strict track/playlist/room/Blend/Jam/capped-lyrics public metadata
   > with 30-day HMAC tokens and serves CSP-protected OG HTML or no-store JSON.
   > No DB, user IDs, audio URLs, chat, or signals enter tokens. Client
   > revalidates payload in `core/share/share.ts`, `/share` allows only typed
   > play/import/join actions, and all five existing handlers preserve legacy
-  > text/code fallback when flag/API is off. `social_share_enabled` default off.
+  > text/code/attributed-quote fallback when flag/API is off.
+  > `social_share_enabled` default off. Lyrics excerpts are limited to 4
+  > contiguous lines / 280 Unicode code points and can carry only first-line
+  > timestamp (no full lyrics/source/audio IDs).
   > Analytics, cards, universal links, platform SDKs, copy/QR, and remaining
   > entity kinds stay `[ ]`.
 

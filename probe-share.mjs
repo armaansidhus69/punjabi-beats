@@ -104,6 +104,26 @@ async function localProbe() {
   res = await call('GET', { query: { token: expired, format: 'json' } });
   check('expired token → 410', res.statusCode === 410 && res.body?.error === 'expired', `${res.statusCode} ${JSON.stringify(res.body)}`);
 
+  res = await call('POST', {
+    body: {
+      kind: 'lyrics',
+      data: {
+        title: 'Softly',
+        artist: 'Karan Aujla',
+        lines: ['<Dil & beat>', 'Second line'],
+        startMs: 0,
+      },
+      deviceId: 'lyrics-device',
+    },
+    headers: { 'x-publish-token': process.env.PUBLISH_CLIENT_TOKEN },
+  });
+  check('lyrics POST creates token', res.statusCode === 200 && /^v1\./.test(res.body?.token ?? ''), `${res.statusCode}`);
+  const lyricsToken = res.body?.token;
+  res = await call('GET', { query: { token: lyricsToken, format: 'json' } });
+  check('lyrics JSON keeps timestamp zero', res.statusCode === 200 && res.body?.payload?.kind === 'lyrics' && res.body?.payload?.data?.startMs === 0, JSON.stringify(res.body));
+  res = await call('GET', { query: { token: lyricsToken } });
+  check('lyrics HTML escaped', res.statusCode === 200 && !res.body.includes('<Dil & beat>') && res.body.includes('&lt;Dil &amp; beat&gt;'), `${res.statusCode}`);
+
   for (let index = 0; index < 30; index += 1) {
     res = await call('POST', {
       body: validBody('rate-device'),

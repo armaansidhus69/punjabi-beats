@@ -15,16 +15,18 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Toast from 'react-native-toast-message';
 import LyricsGate from '../components/LyricsGate';
 import EmptyState from '../components/EmptyState';
 import LoadingSpinner from '../components/LoadingSpinner';
-import { lineAt } from '../core/lyrics/lyrics';
+import { lineAt, lyricsExcerpt, selectionRange } from '../core/lyrics/lyrics';
 import { fetchLyrics, describeLyricsError, LyricsError } from '../services/lyricsApi';
+import { shareLyrics } from '../services/shareService';
 import { usePlayer } from '../stores/playerStore';
 import { colors } from '../constants/colors';
 import { typography } from '../constants/typography';
 import { spacing } from '../constants/spacing';
-import { tapFeedback } from '../utils/haptics';
+import { selectionFeedback, tapFeedback, warningFeedback } from '../utils/haptics';
 import type { LyricsData, LyricsErrorCode, LyricsLine, Song } from '../types';
 
 type LoadState =
@@ -55,11 +57,16 @@ function LyricsContent() {
 
   const [state, setState] = useState<LoadState>({ phase: 'idle' });
   const [following, setFollowing] = useState(true);
+  const [selectionAnchor, setSelectionAnchor] = useState<number | null>(null);
+  const [selectedIndices, setSelectedIndices] = useState<number[]>([]);
+  const [sharing, setSharing] = useState(false);
 
   const listRef = useRef<FlatList<LyricsLine> | null>(null);
   const currentSongRef = useRef(currentSong);
   currentSongRef.current = currentSong;
   const requestId = useRef(0);
+  const followBeforeSelection = useRef(true);
+  const suppressedPressIndex = useRef<number | null>(null);
   /** last line already auto-scrolled — repeat scrollTo bachao */
   const scrolledTo = useRef(-1);
 
@@ -67,6 +74,10 @@ function LyricsContent() {
     const id = ++requestId.current;
     setState({ phase: 'loading' });
     setFollowing(true);
+    setSelectionAnchor(null);
+    setSelectedIndices([]);
+    setSharing(false);
+    followBeforeSelection.current = true;
     scrolledTo.current = -1;
     try {
       const data = await fetchLyrics(song);
@@ -124,6 +135,7 @@ function LyricsContent() {
   }, []);
 
   const canSeekLines = state.phase === 'ok' && state.data.synced;
+  const selecting = selectionAnchor !== null;
 
   /* ---------- tap line → seek (synced hi; pehli line 0ms bhi valid) ---------- */
   const handleTapLine = useCallback(
@@ -135,28 +147,128 @@ function LyricsContent() {
     [canSeekLines, seek],
   );
 
+  const handleLongPressLine = useCallback(
+    (index: number) => {
+      if (state.phase !== 'ok') return;
+      suppressedPressIndex.current = index;
+      const excerpt = lyricsExcerpt(state.data.lines, [index], state.data.synced);
+      if (!excerpt) {
+        warningFeedback();
+        Toast.show({ type: 'error', text1: 'Ye line share limit se badi hai' });
+        return;
+      }
+      if (selectionAnchor === null) followBeforeSelection.current = following;
+      setFollowing(false);
+      setSelectionAnchor(index);
+      setSelectedIndices([index]);
+      selectionFeedback();
+    },
+    [following, selectionAnchor, state],
+  );
+
+  const handleSelectLine = useCallback(
+    (index: number) => {
+      if (state.phase !== 'ok' || selectionAnchor === null) return;
+      const range = selectionRange(selectionAnchor, index, state.data.lines.length);
+      const excerpt = range
+        ? lyricsExcerpt(state.data.lines, range, state.data.synced)
+        : null;
+      if (!range || !excerpt) {
+        warningFeedback();
+        Toast.show({
+          type: 'error',
+          text1: 'Max 4 contiguous lines / 280 chars share kar sakte ho',
+        });
+        return;
+      }
+      selectionFeedback();
+      setSelectedIndices(range);
+    },
+    [selectionAnchor, state],
+  );
+
+  const clearSelection = useCallback((restoreFollow: boolean) => {
+    setSelectionAnchor(null);
+    setSelectedIndices([]);
+    suppressedPressIndex.current = null;
+    if (restoreFollow) setFollowing(followBeforeSelection.current);
+  }, []);
+
+  const handleShareSelection = useCallback(async () => {
+    if (state.phase !== 'ok' || !currentSong || sharing) return;
+    const excerpt = lyricsExcerpt(state.data.lines, selectedIndices, state.data.synced);
+    if (!excerpt) {
+      warningFeedback();
+      Toast.show({ type: 'error', text1: 'Valid lyric lines select karo' });
+      return;
+    }
+    setSharing(true);
+    try {
+      const shared = await shareLyrics(currentSong, excerpt.lines, excerpt.startMs);
+      if (shared) clearSelection(true);
+    } finally {
+      setSharing(false);
+    }
+  }, [clearSelection, currentSong, selectedIndices, sharing, state]);
+
   const renderLine = useCallback(
     ({ item, index }: { item: LyricsLine; index: number }) => {
       const isActive = index === activeIndex;
+      const isSelected = selectedIndices.includes(index);
       return (
         <Pressable
-          onPress={() => handleTapLine(item)}
-          disabled={!canSeekLines}
-          accessibilityRole={canSeekLines ? 'button' : 'text'}
-          accessibilityLabel={canSeekLines ? `Seek line: ${item.text}` : item.text}
-          accessibilityState={{ selected: isActive, disabled: !canSeekLines }}
+          onPress={() => {
+            if (suppressedPressIndex.current === index) {
+              suppressedPressIndex.current = null;
+              return;
+            }
+            if (selecting) handleSelectLine(index);
+            else handleTapLine(item);
+          }}
+          onLongPress={() => handleLongPressLine(index)}
+          onPressOut={() => {
+            setTimeout(() => {
+              if (suppressedPressIndex.current === index) suppressedPressIndex.current = null;
+            }, 0);
+          }}
+          delayLongPress={450}
+          disabled={state.phase !== 'ok'}
+          accessibilityRole="button"
+          accessibilityLabel={
+            selecting
+              ? `Lyric line select karo: ${item.text}`
+              : canSeekLines
+                ? `Seek line: ${item.text}; long press to share`
+                : `${item.text}; long press to share`
+          }
+          accessibilityState={{ selected: isSelected || isActive }}
           style={({ pressed }) => [
             styles.lineButton,
+            isSelected && styles.lineSelected,
             pressed && styles.linePressed,
           ]}
         >
-          <Text style={isActive ? styles.lineActive : styles.lineRegular}>
+          <Text
+            style={[
+              isActive ? styles.lineActive : styles.lineRegular,
+              isSelected && styles.lineSelectedText,
+            ]}
+          >
             {item.text}
           </Text>
         </Pressable>
       );
     },
-    [activeIndex, canSeekLines, handleTapLine],
+    [
+      activeIndex,
+      canSeekLines,
+      handleLongPressLine,
+      handleSelectLine,
+      handleTapLine,
+      selectedIndices,
+      selecting,
+      state.phase,
+    ],
   );
 
   const handleScrollToIndexFailed = useCallback(
@@ -178,6 +290,20 @@ function LyricsContent() {
   return (
     <View style={[styles.container, { paddingTop: insets.top + spacing.sm }]}>
         <View style={styles.header}>
+          {selecting ? (
+            <Pressable
+              onPress={() => {
+                selectionFeedback();
+                clearSelection(true);
+              }}
+              hitSlop={12}
+              accessibilityRole="button"
+              accessibilityLabel="Lyrics selection cancel karo"
+              style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}
+            >
+              <Ionicons name="close" size={24} color={colors.text} />
+            </Pressable>
+          ) : (
           <Pressable
             onPress={router.back}
             hitSlop={12}
@@ -187,15 +313,40 @@ function LyricsContent() {
           >
             <Ionicons name="chevron-down" size={24} color={colors.text} />
           </Pressable>
+          )}
           <View style={styles.headerInfo}>
-            <Text style={styles.title} numberOfLines={2}>
-              {currentSong?.title ?? 'Lyrics'}
-            </Text>
-            <Text style={styles.artist} numberOfLines={1}>
-              {currentSong?.artist ?? ''}
-            </Text>
+            {selecting ? (
+              <>
+                <Text style={styles.title}>{selectedIndices.length}/4 lines</Text>
+                <Text style={styles.artist}>Tap karke contiguous range adjust karo</Text>
+              </>
+            ) : (
+              <>
+                <Text style={styles.title} numberOfLines={2}>
+                  {currentSong?.title ?? 'Lyrics'}
+                </Text>
+                <Text style={styles.artist} numberOfLines={1}>
+                  {currentSong?.artist ?? ''}
+                </Text>
+              </>
+            )}
           </View>
-          {!following ? (
+          {selecting ? (
+            <Pressable
+              onPress={() => void handleShareSelection()}
+              disabled={sharing || selectedIndices.length === 0}
+              accessibilityRole="button"
+              accessibilityLabel="Selected lyrics share karo"
+              style={({ pressed }) => [
+                styles.shareButton,
+                pressed && styles.pressed,
+                (sharing || selectedIndices.length === 0) && styles.disabled,
+              ]}
+            >
+              <Ionicons name="share-outline" size={18} color={colors.background} />
+              <Text style={styles.shareText}>{sharing ? 'Wait…' : 'Share'}</Text>
+            </Pressable>
+          ) : !following ? (
             <Pressable
               onPress={() => {
                 tapFeedback();
@@ -284,6 +435,7 @@ const styles = StyleSheet.create({
   headerInfo: { flex: 1 },
   iconButton: { padding: spacing.xs },
   pressed: { opacity: 0.7 },
+  disabled: { opacity: 0.5 },
   title: { ...typography.h2, color: colors.text },
   artist: { ...typography.caption, color: colors.subtext },
   followChip: {
@@ -311,8 +463,25 @@ const styles = StyleSheet.create({
     minHeight: LineButtonMinHeight,
   },
   linePressed: { opacity: 0.8 },
+  lineSelected: {
+    borderWidth: 1,
+    borderColor: colors.primary,
+    backgroundColor: colors.card,
+    paddingHorizontal: spacing.sm,
+  },
   lineRegular: { ...typography.h2, color: colors.subtext },
   lineActive: { ...typography.h2, color: colors.text },
+  lineSelectedText: { color: colors.primary },
+  shareButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: 16,
+    backgroundColor: colors.primary,
+  },
+  shareText: { ...typography.caption, color: colors.background, fontWeight: '700' },
   retryButton: {
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.xl,
