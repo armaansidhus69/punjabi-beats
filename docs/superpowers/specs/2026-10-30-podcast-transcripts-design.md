@@ -153,7 +153,8 @@ existing podcast search store:
 - `saveReadingIndex(index)` throttled (750ms) to storage
 
 Storage key `@pb_transcript_positions`, versioned envelope, cap 50. Value:
-`{segmentIndex, updatedAt}`. Full transcript body persist nahi hota.
+`{sourceUrl, segmentIndex, updatedAt}`; source URL change pe stale index restore
+nahi hota. Full transcript body persist nahi hota.
 
 ## 7. UI
 
