@@ -394,8 +394,8 @@ Before releasing:
 - [x] 0 TypeScript errors — re-verified 2026-09-27 (`npx tsc --noEmit`, strict → 0)
 - [x] 0 ESLint warnings — verified (`npm run lint` → 47 files, 0 problems, `--max-warnings=0` enforced)
 - [ ] APK size < 50MB
-- [ ] App icon designed (abhi `assets/icon.png` = default Expo template — custom design pending)
-- [ ] Splash screen designed (abhi `assets/splash.png` = default Expo template)
+- [x] App icon designed — custom glowing saffron amber emblem (1024x1024 icon.png + adaptive-icon.png)
+- [x] Splash screen designed — centered Punjabi Beats emblem + typography (splash.png)
 - [x] App name finalized — "Punjabi Beats" (app.json `name` + `slug: punjabi-beats` + `scheme` consistent)
 - [ ] Privacy policy (if publishing)
 - [ ] Terms of service (if publishing)
