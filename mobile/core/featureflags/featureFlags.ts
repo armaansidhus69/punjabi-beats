@@ -53,6 +53,9 @@ export function initializeFeatureFlags(): void {
   if (process.env.EXPO_PUBLIC_PODCASTS_ENABLED === 'true') {
     currentFlags = { ...currentFlags, podcasts_enabled: true };
   }
+  if (process.env.EXPO_PUBLIC_LYRICS_ENABLED === 'true') {
+    currentFlags = { ...currentFlags, lyrics_enabled: true };
+  }
   if (process.env.EXPO_PUBLIC_AI_PLAYLIST_ENABLED === 'true') {
     currentFlags = { ...currentFlags, ai_playlist_enabled: true };
   }

@@ -35,7 +35,8 @@ import PlayerControls from '../components/PlayerControls';
 import ProgressBar from '../components/ProgressBar';
 import SongArtwork from '../components/SongArtwork';
 import { handleOpenOnYouTube, isYouTubeMatchConfigured } from '../utils/youtubeLink';
-import { successFeedback, warningFeedback } from '../utils/haptics';
+import { successFeedback, tapFeedback, warningFeedback } from '../utils/haptics';
+import { isFeatureEnabled } from '../core/featureflags/featureFlags';
 
 /** Swipe-down close threshold (px aur velocity) */
 const CLOSE_SWIPE_THRESHOLD = 110;
@@ -69,6 +70,7 @@ export default function PlayerScreen() {
   const setVolume = usePlayer(s => s.setVolume);
 
   const isLiked = currentSong ? likedSongs.some(song => song.id === currentSong.id) : false;
+  const lyricsEnabled = isFeatureEnabled('lyrics_enabled');
 
   const handleToggleLiked = useCallback(() => {
     if (!currentSong) return;
@@ -112,6 +114,11 @@ export default function PlayerScreen() {
       `Punjabi Beats pe suno: ${currentSong.preview}`;
     Share.share({ message }).catch(err => console.warn('Share failed:', err));
   }, [currentSong]);
+
+  const handleLyrics = useCallback(() => {
+    tapFeedback();
+    router.push('/lyrics');
+  }, []);
 
   const panResponder = useMemo(
     () =>
@@ -160,6 +167,7 @@ export default function PlayerScreen() {
         onClose={close}
         onShare={handleShare}
         onLike={handleToggleLiked}
+        onLyrics={lyricsEnabled ? handleLyrics : undefined}
         isLiked={isLiked}
       />
 
@@ -246,11 +254,13 @@ function PlayerHeader({
   onClose,
   onShare,
   onLike,
+  onLyrics,
   isLiked = false,
 }: {
   onClose: () => void;
   onShare?: () => void;
   onLike?: () => void;
+  onLyrics?: () => void;
   isLiked?: boolean;
 }) {
   return (
@@ -268,6 +278,17 @@ function PlayerHeader({
         <Text style={styles.headerLabel}>Now Playing</Text>
       </View>
       <View style={styles.headerActions}>
+        {onLyrics ? (
+          <Pressable
+            onPress={onLyrics}
+            accessibilityRole="button"
+            accessibilityLabel="Lyrics kholo"
+            hitSlop={12}
+            style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}
+          >
+            <Ionicons name="document-text-outline" size={20} color={colors.text} />
+          </Pressable>
+        ) : null}
         {onLike ? (
           <Pressable
             onPress={onLike}

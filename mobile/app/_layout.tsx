@@ -49,7 +49,7 @@ function AppShell() {
   const segments = useSegments();
   const topRoute: string | undefined = segments[0];
   const isTabScreen = topRoute === '(tabs)';
-  const isFullPlayerOpen = topRoute === 'player';
+  const isFullPlayerOpen = topRoute === 'player' || topRoute === 'lyrics';
 
   return (
     <View style={styles.root}>
@@ -63,6 +63,11 @@ function AppShell() {
         {/* Full player modal (Phase 8) — neeche se slide hokar aata hai */}
         <Stack.Screen
           name="player"
+          options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
+        />
+        {/* Lyrics player-extension modal (Phase 7a) — player ke upar khulta */}
+        <Stack.Screen
+          name="lyrics"
           options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
         />
       </Stack>

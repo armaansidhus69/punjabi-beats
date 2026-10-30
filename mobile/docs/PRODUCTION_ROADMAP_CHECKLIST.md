@@ -213,12 +213,24 @@
 
 ### Lyrics
 
-- [ ] Full-screen lyrics
-- [ ] Synced line-by-line lyrics
+- [~] Full-screen lyrics *(7a v1: `/lyrics` modal + player entry; translation/share baad)*
+- [~] Synced line-by-line lyrics *(7a v1: LRCLIB LRC highlight + follow + tap-to-seek)*
 - [ ] Translation
 - [ ] Share selected lines
-- [ ] Lyrics cache and error states
+- [~] Lyrics cache and error states *(7a v1: versioned `@pb_lyrics` cap 50 + not-found/network/rate retry)*
 - [ ] Report incorrect lyrics
+
+  > **2026-10-30 [~] status (Lyrics v1 7a)**: coded per
+  > `docs/superpowers/specs/2026-10-29-lyrics-design.md` +
+  > `docs/superpowers/plans/2026-10-30-lyrics-plan.md`. LRCLIB exact
+  > artist/title/duration lookup + scored search fallback (free/keyless),
+  > identified client header, 10s abort, `Retry-After` backoff. Pure core
+  > `core/lyrics/lyrics.ts` parses multi-timestamp LRC + offset, resolves
+  > current-line boundaries, and caps cache at 50. `/lyrics` is gated by
+  > `lyrics_enabled` (default off), player icon stays hidden while off,
+  > direct route makes zero network calls while gated. Plain-only fallback
+  > uses approximate highlight. Translation, selected-line sharing, report,
+  > and podcast transcripts remain `[ ]`.
 
 ### Transcripts
 
@@ -228,7 +240,7 @@
 - [ ] Jump to timestamp
 - [ ] Save transcript position
 - [ ] Report transcript issue
-- [ ] `lyrics` and `transcripts` data models
+- [~] `lyrics` and `transcripts` data models *(7a local LyricsData/cache envelope done; transcript model pending)*
 
 ## Phase 8 — Social sharing
 

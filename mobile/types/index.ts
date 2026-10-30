@@ -549,3 +549,31 @@ export interface AssistantTurn {
   role: 'user' | 'assistant';
   text: string;
 }
+
+/* ---------- Phase 7a (roadmap): Lyrics v1 (LRCLIB synced) ---------- */
+
+/** ek lyrics line — synced me timeMs real, unsynced me 0 (approx share) */
+export interface LyricsLine {
+  text: string;
+  timeMs: number;
+}
+
+/** ek song ka fetched lyrics record — @pb_lyrics cache value shape */
+export interface LyricsData {
+  synced: boolean;
+  lines: LyricsLine[];
+  /** original plain text jab synced nahi mili */
+  plain: string;
+  artist: string;
+  title: string;
+  /** epoch ms — cache eviction ordering isi se */
+  fetchedAt: number;
+}
+
+/** versioned envelope — storage me poora cache ek key me */
+export interface LyricsCacheEnvelope {
+  version: 1;
+  lyrics: Record<string, LyricsData>;
+}
+
+export type LyricsErrorCode = 'not_found' | 'network' | 'bad_request';

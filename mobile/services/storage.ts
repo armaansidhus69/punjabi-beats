@@ -444,3 +444,25 @@ export async function saveAiChatHistory(messages: AssistantMessage[]): Promise<v
     console.warn('AI chat history write failed:', err);
   }
 }
+
+/* ---------- Lyrics cache (Phase 7a — versioned envelope, cap core-side) ---------- */
+
+const LYRICS_CACHE_KEY = '@pb_lyrics';
+
+export async function getLyricsCacheRaw(): Promise<unknown> {
+  try {
+    const raw = await AsyncStorage.getItem(LYRICS_CACHE_KEY);
+    return raw ? (JSON.parse(raw) as unknown) : null;
+  } catch (err) {
+    console.warn('Lyrics cache read failed:', err);
+    return null;
+  }
+}
+
+export async function saveLyricsCache(value: unknown): Promise<void> {
+  try {
+    await AsyncStorage.setItem(LYRICS_CACHE_KEY, JSON.stringify(value));
+  } catch (err) {
+    console.warn('Lyrics cache write failed:', err);
+  }
+}

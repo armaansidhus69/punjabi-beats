@@ -133,6 +133,14 @@
 | FR-12.5 | Rate limits: 20/day + 5/hour per device (2-window, 13b limiter reuse custom limits) | P1 |
 | FR-12.6 | Chat history `@pb_ai_chat` cap 20 (restore + failed-mark retry), feature gated `ai_assistant_enabled` default off | P1 |
 
+### FR-13: Lyrics V1 *(Phase 7a — LRCLIB synced lyrics, client-only)*
+| ID | Requirement | Priority |
+|---|---|---|
+| FR-13.1 | Cache-first LRCLIB lookup: exact artist/title/duration → scored search fallback; free/keyless client API, 10s timeout, Retry-After honored | P1 |
+| FR-13.2 | Full-screen `/lyrics`: line-by-line current-position highlight, auto-follow latch, synced line tap → local player seek | P1 |
+| FR-13.3 | Plain-lyrics fallback with approximate progress highlight; honest not-found/network/rate-limit states + retry | P1 |
+| FR-13.4 | Versioned `@pb_lyrics` cache cap 50; feature gated `lyrics_enabled` default off (`EXPO_PUBLIC_LYRICS_ENABLED` opt-in), guest-compatible | P1 |
+
 ---
 
 ## 2. Non-Functional Requirements

@@ -413,7 +413,7 @@ Before releasing:
 | Phase | Total | Done | % |
 |---|---|---|---|
 | Phase 0: Project Setup | 19 | 19 | 100% |
-| Phase 1: Data Layer | 29 | 28 | 97% |
+| Phase 1: Data Layer | 35 | 34 | 97% |
 | Phase 2: UI Components | 12 | 12 | 100% |
 | Phase 3: Home Screen | 11 | 10 | 91% |
 | Phase 4: Mood Screen | 7 | 6 | 86% |
@@ -424,24 +424,32 @@ Before releasing:
 | Phase 9: Playlists | 12 | 12 | 100% |
 | Phase 10: Group Room | 10 | 10 | 100% |
 | Phase 11: Real-Time Sync | 12 | 12 | 100% |
-| Phase 12: Backend (Vercel) | 7 | 7 | 100% |
+| Phase 12: Backend (Vercel) | 10 | 10 | 100% |
 | Phase 13: Polish | 10 | 9 | 90% |
-| Phase 14: Extra Features (P2) | 8 | 8 | 100% |
+| Phase 14: Extra Features (P2) | 9 | 9 | 100% |
 | Phase 15: Testing | 17 | 7 | 41% |
 | Phase 16: Build & Deploy | 15 | 3 | 20% |
 | Phase 17: Documentation | 11 | 8 | 73% |
-| **TOTAL** | **213** | **181** | **85%** |
+| Phase 18: Liked Songs / Favorites | 22 | 21 | 95% |
+| Phase 19: Podcasts (Roadmap 12a) | 20 | 19 | 95% |
+| Phase 20: Play Signals (Roadmap 13a) | 14 | 13 | 93% |
+| Phase 21: AI Playlist V1 (Roadmap 13b) | 16 | 14 | 88% |
+| Phase 22: AI Assistant V1 (Roadmap 13c) | 15 | 14 | 93% |
+| Phase 23: Lyrics V1 (Roadmap 7a) | 14 | 13 | 93% |
+| **TOTAL** | **334** | **295** | **88%** |
 
-> Counts 2026-09-30 ko actual checkbox lines se verify hue — har `## PHASE n` section
+> Counts 2026-10-30 ko actual checkbox lines se dobara verify hue — har `## PHASE n` section
 > ke andar ke `- [ ]`/`- [x]` boxes gine gaye (SECTION 0/1/2 ke headers, Tracker table,
 > Pending summary, Milestones aur FINAL CHECKLIST is count me nahi — wo alag sections
-> hain). FINAL CHECKLIST (release gates) me alag se 5/20 done hain, Milestones me 4/7.
+> hain). Phases 18–23 ab tracker me include hain. FINAL CHECKLIST aur Milestones alag
+> release-level gates hain.
 
 ### ⏳ Abhi kya pending hai (sirf yehi baaki)
 - **Device/manual tests** — har phase ke `Test:` boxes + Phase 15 ke 10 box (7 manual + 3 edge cases); **2-phone sync LIVE PASS (2026-09-27)**
 - **Phase 13 (1 box)** — runtime console-warnings device check (ESLint setup + 0-warning run ✓ done)
 - **Phase 16 (12 box)** — backend 2 box DONE (deploy + env); ab `npx eas-cli login` + builds (user)
 - **Phase 17 (3 box)** — screenshots + GitHub repo + push (local git commit ✓ done; remote push commands box me hain)
+- **Phases 18–23** — code/automated checks done; manual device/deploy gates remain (Liked, Podcasts, Signals, AI Playlist, AI Assistant, Lyrics)
 
 ---
 
@@ -630,3 +638,37 @@ Before releasing:
 - [ ] Manual: `npx vercel` deploy (same GEMINI key — koi naya env nahi) + `EXPO_PUBLIC_AI_ASSISTANT_ENABLED=true` mobile/.env + device chat pass
 
 **Phase 22 Complete?** `[~]` (code + automated checks complete; deploy + device pass remain)
+
+---
+
+## 🏳️ PHASE 23: Lyrics V1 (Roadmap 7a)
+
+> Spec `docs/superpowers/specs/2026-10-29-lyrics-design.md` + plan
+> `docs/superpowers/plans/2026-10-30-lyrics-plan.md`. FR ids
+> REQUIREMENTS.md FR-13 me. LRCLIB free/keyless — backend deploy nahi.
+
+### Core and Cache
+- [x] Lyrics types — `LyricsLine`, `LyricsData`, versioned `LyricsCacheEnvelope`, `LyricsErrorCode`
+- [x] `core/lyrics/lyrics.ts` pure — standard/multi-timestamp LRC parser, offset handling, sorted lines, `lineAt` boundary lookup, plain fallback helpers
+- [x] Pure cache helpers — restore shape/version guard, `cacheGet`/`cachePut`, oldest-drop cap 50
+- [x] `services/storage.ts` — `@pb_lyrics` raw read/write (version envelope core-owned)
+
+### Service and UI
+- [x] `services/lyricsApi.ts` — cache-first LRCLIB exact artist/title/duration lookup + scored search fallback, title cleanup, 10s abort
+- [x] LRCLIB production behavior — `Lrclib-Client` identity header, sequential requests, 429/503 `Retry-After` + jitter backoff
+- [x] `components/LyricsGate.tsx` + `EXPO_PUBLIC_LYRICS_ENABLED` bootstrap hook/`.env.example`; flag off default/direct route zero-network
+- [x] `app/lyrics.tsx` — synced current-line highlight, scroll-follow latch, tap-line seek, plain approx highlight, differentiated not-found/network retry states
+- [x] `app/player.tsx` Lyrics icon only while flag enabled; `_layout.tsx` modal registration + MiniPlayer hidden on lyrics route
+
+### Verification
+- [x] `test-lyrics.mjs` — 7 tests (fractions, multi-timestamp, offset/meta/junk/sort, line boundaries, plain fallback, envelope guards, cap 50)
+- [x] Wired root + mobile test chains (`test:lyrics`)
+- [x] `probe-lyrics.mjs` — deterministic local parser checks + optional keyless `--live https://lrclib.net`
+- [x] `npx tsc --noEmit` 0 · `npm run lint` 0 · root `npm test` green
+- [ ] Manual: `EXPO_PUBLIC_LYRICS_ENABLED=true` mobile/.env + device synced/plain/not-found + tap-seek pass
+
+> Live smoke 2026-10-30 ko attempt hua: LRCLIB ne `503` + `Retry-After: 1`
+> do baar diya. Probe ne required backoff honor kiya; local deterministic checks
+> pass hain. Upstream available hone par same `--live` command re-run karna hai.
+
+**Phase 23 Complete?** `[~]` (code + automated checks complete; flag opt-in + device pass remain)
