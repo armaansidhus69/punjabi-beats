@@ -99,3 +99,88 @@ export function isPresenceStale(lastSeenIso: string, nowMs: number): boolean {
   if (Number.isNaN(seen)) return true;
   return nowMs - seen > PRESENCE_STALE_MS;
 }
+
+export type ClockSample = { offset: number; rtt: number; at: number };
+
+/**
+ * NTP-style high-precision clock synchronizer.
+ * Keeps a rolling window of samples and trusts lowest RTT samples to compute median offset.
+ */
+export class NtpClock {
+  private samples: ClockSample[] = [];
+  offset = 0;
+  rtt = 0;
+  jitter = 0;
+  quality = 0;
+  syncing = false;
+  lastSyncAt = 0;
+
+  get confidence(): 'excellent' | 'good' | 'weak' | 'none' {
+    if (!this.samples.length) return 'none';
+    if (this.rtt < 45 && this.jitter < 12) return 'excellent';
+    if (this.rtt < 130) return 'good';
+    if (this.rtt < 400) return 'weak';
+    return 'none';
+  }
+
+  /** Best estimate of server wall-clock time right now. */
+  now(): number {
+    return Date.now() + this.offset;
+  }
+
+  /** Half the RTT + jitter: irreducible uncertainty */
+  uncertainty(): number {
+    return this.rtt / 2 + this.jitter;
+  }
+
+  push(offset: number, rtt: number): void {
+    this.samples.push({ offset, rtt, at: Date.now() });
+    if (this.samples.length > 24) this.samples.shift();
+    const sorted = [...this.samples].sort((a, b) => a.rtt - b.rtt);
+    const best = sorted.slice(0, Math.max(4, Math.ceil(sorted.length / 2)));
+    const offsets = best.map((s) => s.offset).sort((a, b) => a - b);
+    const median = offsets[Math.floor(offsets.length / 2)] ?? offset;
+    const spread =
+      offsets.length > 1
+        ? (offsets[offsets.length - 1] - offsets[0]) / 2
+        : 0;
+    this.offset = Math.round(median);
+    this.rtt = Math.round(sorted[0]?.rtt ?? rtt);
+    this.jitter = Math.round(spread);
+    this.quality = best.length;
+    this.lastSyncAt = Date.now();
+  }
+
+  async sync(endpoint: string, token = '', rounds = 5): Promise<void> {
+    if (this.syncing) return;
+    this.syncing = true;
+    try {
+      for (let i = 0; i < rounds; i += 1) {
+        const t0 = Date.now();
+        const headers: Record<string, string> = { 'content-type': 'application/json' };
+        if (token) headers['x-publish-token'] = token;
+        const res = await fetch(endpoint, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ t0 }),
+        });
+        const t3 = Date.now();
+        if (!res.ok) break;
+        const data = (await res.json()) as { t1: number; t2: number };
+        const rtt = t3 - t0 - (data.t2 - data.t1);
+        const offset = (data.t1 - t0 + (data.t2 - t3)) / 2;
+        this.push(offset, Math.max(0, rtt));
+        await new Promise((r) => setTimeout(r, 50));
+      }
+    } catch {
+      // safe fallback on network fail
+    } finally {
+      this.syncing = false;
+    }
+  }
+
+  history(): ClockSample[] {
+    return this.samples.slice(-16);
+  }
+}
+

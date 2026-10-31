@@ -23,7 +23,19 @@ import {
   evaluateSync,
   smoothCorrectionDurationMs,
   isPresenceStale,
+  NtpClock,
 } from './mobile/core/room/timeModel.ts';
+import {
+  calculateQueueScore,
+  applyVote,
+  sortQueueByVotes,
+  formatScore,
+} from './mobile/core/room/voting.ts';
+import {
+  VOICES,
+  JAM_PADS,
+  midiToFreq,
+} from './mobile/core/room/jamAudio.ts';
 import { shouldApply, stampFromRow } from './mobile/core/room/versioning.ts';
 import { can, canModerateMember } from './mobile/core/room/permissions.ts';
 import { jamTrackToSong, jamQueueItemToSong, playbackToSong } from './mobile/core/room/song.ts';
@@ -299,6 +311,77 @@ test('jamLabels — type/status/role Hinglish labels', () => {
   assert.equal(roomRoleLabel('moderator'), 'moderator');
   assert.equal(roomRoleLabel('participant'), 'member');
   assert.equal(roomRoleLabel('listener'), 'listener');
+});
+
+/* ------------------------------ NtpClock tests ------------------------------ */
+
+test('NtpClock — median offset, confidence rating, uncertainty math', () => {
+  const clock = new NtpClock();
+  assert.equal(clock.confidence, 'none');
+
+  // Push samples: offset = 42ms, RTT = 20ms
+  clock.push(40, 20);
+  clock.push(42, 22);
+  clock.push(44, 25);
+  clock.push(42, 19);
+
+  assert.equal(clock.offset, 42);
+  assert.ok(clock.rtt <= 25);
+  assert.equal(clock.confidence, 'excellent');
+  assert.ok(clock.now() >= Date.now() + 35);
+  assert.ok(clock.uncertainty() > 0);
+  assert.equal(clock.history().length, 4);
+});
+
+/* ------------------------------ Voting tests ------------------------------ */
+
+test('Queue Voting — score calculation and toggle behavior', () => {
+  assert.equal(calculateQueueScore(10, 3), 7);
+  assert.equal(calculateQueueScore(0, 4), -4);
+  assert.equal(formatScore(5), '+5');
+  assert.equal(formatScore(-2), '-2');
+  assert.equal(formatScore(0), '0');
+
+  // New upvote
+  const v1 = applyVote(0, 1);
+  assert.deepEqual(v1, { vote: 1, deltaUp: 1, deltaDown: 0 });
+
+  // Toggle off existing upvote
+  const v2 = applyVote(1, 1);
+  assert.deepEqual(v2, { vote: 0, deltaUp: -1, deltaDown: 0 });
+
+  // Switch from upvote to downvote
+  const v3 = applyVote(1, -1);
+  assert.deepEqual(v3, { vote: -1, deltaUp: -1, deltaDown: 1 });
+
+  // Sort queue preserving current live item
+  const queue = [
+    { id: '1', score: 2, createdAt: 100, isCurrent: false },
+    { id: 'live', score: 0, createdAt: 50, isCurrent: true },
+    { id: '2', score: 10, createdAt: 200, isCurrent: false },
+    { id: '3', score: 2, createdAt: 80, isCurrent: false },
+  ];
+  const sorted = sortQueueByVotes(queue);
+  assert.equal(sorted[0].id, 'live');
+  assert.equal(sorted[1].id, '2'); // highest score
+  assert.equal(sorted[2].id, '3'); // tied score 2, but created earlier at 80
+  assert.equal(sorted[3].id, '1'); // tied score 2, created at 100
+});
+
+/* ------------------------------ JamAudio tests ------------------------------ */
+
+test('JamAudio — voices, pad layout, and midi formula', () => {
+  assert.equal(VOICES.length, 10);
+  assert.equal(JAM_PADS.length, 10);
+  assert.ok(JAM_PADS.some((p) => p.voice === 'kick'));
+  assert.ok(JAM_PADS.some((p) => p.voice === 'snare'));
+  assert.ok(JAM_PADS.some((p) => p.voice === 'hat'));
+  assert.ok(JAM_PADS.some((p) => p.voice === 'bass'));
+
+  // A4 = MIDI note 69 = 440 Hz
+  assert.equal(Math.round(midiToFreq(69)), 440);
+  // A5 = MIDI note 81 = 880 Hz
+  assert.equal(Math.round(midiToFreq(81)), 880);
 });
 
 /* ------------------------------ parity guard ------------------------------ */
