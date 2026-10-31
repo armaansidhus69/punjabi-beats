@@ -650,3 +650,6 @@ export interface LyricsCacheEnvelope {
 }
 
 export type LyricsErrorCode = 'not_found' | 'network' | 'bad_request';
+
+export * from './syncroom';
+
