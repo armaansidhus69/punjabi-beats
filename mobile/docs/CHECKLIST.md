@@ -377,11 +377,11 @@
 - [x] Tech stack documented — README "🛠 Tech stack" table
 - [x] Contributing guidelines — `CONTRIBUTING.md`
 - [x] License added (MIT) — root `LICENSE`
-- [ ] GitHub repo created (account chahiye — user task)
+- [x] GitHub repo created — https://github.com/armaansidhus69/punjabi-beats
 - [x] Local git repo + initial commit (`git init -b main` + add + commit; gitignores se `node_modules/`/`.env` excluded)
-- [ ] Code pushed to GitHub (repo create ke baad: `git remote add origin <url> && git push -u origin main`)
+- [x] Code pushed to GitHub — main branch tracked and pushed to origin
 
-**Phase 17 Complete?** `[~]` (8/11 — screenshots/GitHub/push user task)
+**Phase 17 Complete?** [~] (10/11 — sirf screenshots baaki)
 
 ---
 
@@ -429,7 +429,7 @@ Before releasing:
 | Phase 14: Extra Features (P2) | 9 | 9 | 100% |
 | Phase 15: Testing | 17 | 7 | 41% |
 | Phase 16: Build & Deploy | 15 | 3 | 20% |
-| Phase 17: Documentation | 11 | 8 | 73% |
+| Phase 17: Documentation | 11 | 10 | 91% |
 | Phase 18: Liked Songs / Favorites | 22 | 21 | 95% |
 | Phase 19: Podcasts (Roadmap 12a) | 20 | 19 | 95% |
 | Phase 20: Play Signals (Roadmap 13a) | 14 | 13 | 93% |
@@ -440,7 +440,7 @@ Before releasing:
 | Phase 25: Canonical Share Links V1 (Roadmap 8a) | 17 | 16 | 94% |
 | Phase 26: Selected Lyrics Sharing V1 (Roadmap 8b) | 11 | 10 | 91% |
 | Phase 27: Copy Link + QR Composer V1 (Roadmap 8c) | 14 | 13 | 93% |
-| **TOTAL** | **392** | **349** | **89%** |
+| **TOTAL** | **392** | **351** | **90%** |
 
 > Counts 2026-10-30 ko actual checkbox lines se dobara verify hue — har `## PHASE n` section
 > ke andar ke `- [ ]`/`- [x]` boxes gine gaye (SECTION 0/1/2 ke headers, Tracker table,
@@ -452,7 +452,7 @@ Before releasing:
 - **Device/manual tests** — har phase ke `Test:` boxes + Phase 15 ke 10 box (7 manual + 3 edge cases); **2-phone sync LIVE PASS (2026-09-27)**
 - **Phase 13 (1 box)** — runtime console-warnings device check (ESLint setup + 0-warning run ✓ done)
 - **Phase 16 (12 box)** — backend 2 box DONE (deploy + env); ab `npx eas-cli login` + builds (user)
-- **Phase 17 (3 box)** — screenshots + GitHub repo + push (local git commit ✓ done; remote push commands box me hain)
+- **Phase 17 (1 box)** — screenshots baaki (GitHub repo create + push DONE)
 - **Phases 18–27** — code/automated checks done; manual device/deploy gates remain (Liked, Podcasts, Signals, AI Playlist, AI Assistant, Lyrics, Transcripts, Share Links, Lyrics Sharing, Copy/QR)
 
 ---
