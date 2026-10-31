@@ -42,6 +42,26 @@ export interface Mood {
   query: string;
 }
 
+/* ---------- Phase 3: Music Catalogue (Artists & Albums) ---------- */
+
+export interface ArtistSummary {
+  id: string;
+  name: string;
+  image: string;
+  bio?: string;
+  monthlyListeners?: string;
+  genre?: string;
+}
+
+export interface AlbumSummary {
+  id: string;
+  title: string;
+  artist: string;
+  cover: string;
+  year?: string;
+  trackCount?: number;
+}
+
 /* ---------- Phase 11: room real-time sync ---------- */
 
 /**
