@@ -358,12 +358,13 @@
 - [ ] Test via TestFlight
 - [ ] Submit to App Store
 
-### Backend
+### Backend & Web Hosting
 - [x] Vercel deployed — **LIVE**: `https://punjabi-beats-api.vercel.app` (2026-09-27, live probe se verified)
 - [x] Environment variables set — 3 critical vars live-verified (`--live` probe → 200); `APINATOR_CLUSTER` optional hai (default `eu` = mobile env se match)
+- [x] Web deployment (Expo Hosting) — **LIVE**: `https://punjabi-beats.expo.app` (2026-10-31)
 - [ ] Custom domain (optional — abhi `*.vercel.app` subdomain)
 
-**Phase 16 Complete?** `[~]` (3/15 — `eas.json` ready + backend LIVE; baaki sab EAS login + builds + device tasks)
+**Phase 16 Complete?** `[~]` (8/16 — APK built + Web deployed + backend LIVE; device testing remains)
 
 ---
 
@@ -428,7 +429,7 @@ Before releasing:
 | Phase 13: Polish | 10 | 9 | 90% |
 | Phase 14: Extra Features (P2) | 9 | 9 | 100% |
 | Phase 15: Testing | 17 | 7 | 41% |
-| Phase 16: Build & Deploy | 15 | 7 | 47% |
+| Phase 16: Build & Deploy | 16 | 8 | 50% |
 | Phase 17: Documentation | 11 | 10 | 91% |
 | Phase 18: Liked Songs / Favorites | 22 | 21 | 95% |
 | Phase 19: Podcasts (Roadmap 12a) | 20 | 19 | 95% |
@@ -440,7 +441,7 @@ Before releasing:
 | Phase 25: Canonical Share Links V1 (Roadmap 8a) | 17 | 16 | 94% |
 | Phase 26: Selected Lyrics Sharing V1 (Roadmap 8b) | 11 | 10 | 91% |
 | Phase 27: Copy Link + QR Composer V1 (Roadmap 8c) | 14 | 13 | 93% |
-| **TOTAL** | **392** | **355** | **91%** |
+| **TOTAL** | **393** | **356** | **91%** |
 
 > Counts 2026-10-30 ko actual checkbox lines se dobara verify hue — har `## PHASE n` section
 > ke andar ke `- [ ]`/`- [x]` boxes gine gaye (SECTION 0/1/2 ke headers, Tracker table,
