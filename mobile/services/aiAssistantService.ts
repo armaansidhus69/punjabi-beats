@@ -75,7 +75,8 @@ function privateSafeTaste(): { topArtists: string[] } | undefined {
 async function resolveQuery(query: string, limit = 5): Promise<Song[]> {
   try {
     const results = await searchSongs(query, limit);
-    return results.filter(song => song.previewOnly !== true);
+    const full = results.filter(song => song.previewOnly !== true);
+    return full.length > 0 ? full : results;
   } catch (err) {
     console.warn('[ai-assistant] search failed:', query, err);
     return [];

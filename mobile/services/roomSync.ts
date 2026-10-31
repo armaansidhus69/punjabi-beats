@@ -80,6 +80,12 @@ let publishWarned = false;
 /** ChatModal khula hai? (khula ho to toast/badge suppress — modal khud dikhata hai) */
 let chatOpen = false;
 
+const dlog = (...args: unknown[]) => {
+  if (typeof __DEV__ !== 'undefined' && __DEV__) {
+    console.log(...args);
+  }
+};
+
 /** ChatModal mount/unmount pe register kare — roomSync toast/unread decide kare */
 export function setChatOpen(open: boolean): void {
   chatOpen = open;
@@ -89,6 +95,10 @@ let lastSeekSentAt = 0;
 let pendingSeek: number | null = null;
 let seekTimer: ReturnType<typeof setTimeout> | null = null;
 let remoteEventQueue: Promise<void> = Promise.resolve();
+let sendSeq = 0;
+const lastSeqBySender = new Map<string, number>();
+let subscribeRetryTimer: ReturnType<typeof setTimeout> | null = null;
+let subscribeAttempts = 0;
 
 function cancelPendingSeek(): void {
   if (seekTimer) {
@@ -149,13 +159,12 @@ export function initRoomSync(): void {
 
   try {
     disposeStateListener = onStateChange(state => {
-      console.log('[roomSync][DEBUG] connection change:', state);
+      dlog('[roomSync][DEBUG] connection change:', state);
       const room = useRoom.getState();
       room.setConnectionState(state);
-      // Reconnect ke baad safety net: agar transport ka channel kisi wajah se
-      // toot gaya ho (SDK normally khud re-subscribe karta hai) to wapas join.
-      if (state === 'connected' && room.code && getSubscribedCode() !== room.code) {
-        console.log('[roomSync][DEBUG] channel missing after reconnect — re-joining', room.code);
+      // Bug 4: Reconnect safety-net — agar channel missing ya unsubscribed ho to re-join
+      if (state === 'connected' && room.code && !isChannelSubscribed()) {
+        dlog('[roomSync][DEBUG] channel missing/unsubscribed after reconnect — re-joining', room.code);
         joinSyncChannel(room.code);
       }
     });
@@ -169,6 +178,11 @@ export function initRoomSync(): void {
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Apinator init fail';
     console.warn('roomSync: init skipped —', message);
+    setPlayerActionListener(null);
+    setRoomLifecycleListener(null);
+    disposeStateListener?.();
+    disposeStateListener = null;
+    initialized = false; // Bug 7: retry possible
     useRoom.getState().setConnectionState('failed');
     useRoom.getState().setError(message);
   }
@@ -176,6 +190,10 @@ export function initRoomSync(): void {
 
 /** Teardown (tests/dev ke liye) — app normally ise call nahi karta */
 export function disposeRoomSync(): void {
+  if (subscribeRetryTimer) {
+    clearTimeout(subscribeRetryTimer);
+    subscribeRetryTimer = null;
+  }
   setPlayerActionListener(null);
   setRoomLifecycleListener(null);
   disposeStateListener?.();
@@ -185,6 +203,8 @@ export function disposeRoomSync(): void {
   publishWarned = false;
   chatOpen = false;
   remoteEventQueue = Promise.resolve();
+  lastSeqBySender.clear();
+  sendSeq = 0;
 }
 
 /* ---------- Room lifecycle → channel join/leave ---------- */
@@ -217,13 +237,17 @@ export function joinSyncChannel(code: string): void {
     leaveSyncChannel();
   }
 
+  subscribeAttempts = 0;
+  if (subscribeRetryTimer) {
+    clearTimeout(subscribeRetryTimer);
+    subscribeRetryTimer = null;
+  }
+
   try {
     room.setError(null);
     room.setConnectionState('connecting');
-    console.log('[roomSync][DEBUG] subscribing to room-' + code, `(client=${getClientState()})`);
+    dlog('[roomSync][DEBUG] subscribing to room-' + code, `(client=${getClientState()})`);
     subscribeChannel(code, bindChannelEvents);
-    // NOTE: Yahan getClientState() set NAHI karna hai, warna SUBSCRIBED_EVENT se
-    // pehle hi UI 'connected' dikhane lagega. SUBSCRIBED_EVENT khud state update karega.
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Room sync start nahi ho paya';
     console.warn('roomSync: join failed —', message);
@@ -242,37 +266,42 @@ export function joinSyncChannel(code: string): void {
  */
 function bindChannelEvents(ch: Channel): void {
   ch.bind(SYNC_EVENT_SONG, (data: unknown) => {
-    console.log('[roomSync][DEBUG] event received:', SYNC_EVENT_SONG);
+    dlog('[roomSync][DEBUG] event received:', SYNC_EVENT_SONG);
     void handleRemoteEvent(data);
   });
   ch.bind(SYNC_EVENT_CONTROL, (data: unknown) => {
-    console.log('[roomSync][DEBUG] event received:', SYNC_EVENT_CONTROL);
+    dlog('[roomSync][DEBUG] event received:', SYNC_EVENT_CONTROL);
     void handleRemoteEvent(data);
   });
   ch.bind(SYNC_EVENT_QUEUE_ADD, (data: unknown) => {
-    console.log('[roomSync][DEBUG] event received:', SYNC_EVENT_QUEUE_ADD);
+    dlog('[roomSync][DEBUG] event received:', SYNC_EVENT_QUEUE_ADD);
     void handleQueueAdd(data);
   });
   // FR-5.12 room chat — queue-add jaisa pattern (koi bhi member, host bhi)
   ch.bind(SYNC_EVENT_CHAT_MESSAGE, (data: unknown) => {
-    console.log('[roomSync][DEBUG] event received:', SYNC_EVENT_CHAT_MESSAGE);
+    dlog('[roomSync][DEBUG] event received:', SYNC_EVENT_CHAT_MESSAGE);
     handleChatMessage(data);
   });
   ch.bind(SYNC_EVENT_MEMBERS, (data: unknown) => {
-    console.log('[roomSync][DEBUG] event received:', SYNC_EVENT_MEMBERS);
+    dlog('[roomSync][DEBUG] event received:', SYNC_EVENT_MEMBERS);
     handleMemberList(data);
   });
   ch.bind(SYNC_EVENT_MEMBER_JOIN, (data: unknown) => {
-    console.log('[roomSync][DEBUG] event received:', SYNC_EVENT_MEMBER_JOIN);
+    dlog('[roomSync][DEBUG] event received:', SYNC_EVENT_MEMBER_JOIN);
     handleMemberJoin(data);
   });
   ch.bind(SYNC_EVENT_MEMBER_LEAVE, (data: unknown) => {
-    console.log('[roomSync][DEBUG] event received:', SYNC_EVENT_MEMBER_LEAVE);
+    dlog('[roomSync][DEBUG] event received:', SYNC_EVENT_MEMBER_LEAVE);
     handleMemberLeave(data);
   });
-  // SDK ka asli subscribe-success event (pehle galat naam bind hota tha)
+  // SDK ka asli subscribe-success event
   ch.bind(SUBSCRIBED_EVENT, () => {
-    console.log('[roomSync][DEBUG] channel subscribed:', ch.name);
+    dlog('[roomSync][DEBUG] channel subscribed:', ch.name);
+    subscribeAttempts = 0;
+    if (subscribeRetryTimer) {
+      clearTimeout(subscribeRetryTimer);
+      subscribeRetryTimer = null;
+    }
     const room = useRoom.getState();
     room.setConnectionState('connected');
     room.setError(null);
@@ -283,6 +312,26 @@ function bindChannelEvents(ch: Channel): void {
   ch.bind(SUBSCRIPTION_ERROR_EVENT, (data: unknown) => {
     console.warn('roomSync: channel subscribe error', data);
     const room = useRoom.getState();
+    const code = getSubscribedCode() ?? room.code;
+
+    // Issue 11: 3-step retry with exponential backoff
+    if (code && subscribeAttempts < 3) {
+      subscribeAttempts++;
+      const delay = subscribeAttempts === 1 ? 1000 : subscribeAttempts === 2 ? 3000 : 6000;
+      dlog(`roomSync: retrying subscription in ${delay}ms (attempt ${subscribeAttempts}/3)`);
+      room.setConnectionState('connecting');
+      if (subscribeRetryTimer) clearTimeout(subscribeRetryTimer);
+      subscribeRetryTimer = setTimeout(() => {
+        subscribeRetryTimer = null;
+        try {
+          subscribeChannel(code, bindChannelEvents);
+        } catch (e) {
+          console.warn('roomSync: retry subscribe failed:', e);
+        }
+      }, delay);
+      return;
+    }
+
     room.setConnectionState('failed');
     room.setError('Room se connect nahi ho paye — internet check karo');
   });
@@ -293,6 +342,11 @@ function bindChannelEvents(ch: Channel): void {
  * pe subscribeChannel khud bhi isi ko call karta hai.
  */
 export function leaveSyncChannel(): void {
+  if (subscribeRetryTimer) {
+    clearTimeout(subscribeRetryTimer);
+    subscribeRetryTimer = null;
+  }
+  subscribeAttempts = 0;
   cancelPendingSeek();
   lastSeekSentAt = 0;
   // Presence: unsubscribe se pehle "main chala gaya" bhejo — host roster se
@@ -300,6 +354,9 @@ export function leaveSyncChannel(): void {
   announceLeave();
   stopPresenceHeartbeat();
   presenceRoster.clear();
+  lastSeqBySender.clear();
+  sendSeq = 0;
+  chatOpen = false;
   unsubscribeChannel();
   const room = useRoom.getState();
   room.setMembers([]);
@@ -321,7 +378,7 @@ export function handleLocalAction(action: PlayerActionEvent): void {
   if (action.remote) return;
 
   const code = getSubscribedCode();
-  if (!code) return;
+  if (!code || !isChannelSubscribed()) return;
 
   if (action.type === 'seek') {
     enqueueSeek(action.position);
@@ -333,10 +390,13 @@ export function handleLocalAction(action: PlayerActionEvent): void {
   cancelPendingSeek();
 
   const now = Date.now();
+  // Bug 5: Song change ke time position 0 hona chahiye, purane song ka position nahi
+  const pos = action.type === 'song' ? 0 : usePlayer.getState().position;
   const payload = buildSyncPayload(action, {
     senderId: getSenderId(),
-    position: usePlayer.getState().position,
+    position: pos,
     sentAt: now,
+    seq: ++sendSeq,
   });
   void publish(code, syncEventForAction(action), payload);
 }
@@ -363,12 +423,12 @@ function enqueueSeek(positionMs: number): void {
 
 function flushSeek(positionMs: number): void {
   const code = getSubscribedCode();
-  if (!code) return;
+  if (!code || !isChannelSubscribed()) return;
   const now = Date.now();
   lastSeekSentAt = now;
   const payload = buildSyncPayload(
     { type: 'seek', position: positionMs, remote: false },
-    { senderId: getSenderId(), position: positionMs, sentAt: now },
+    { senderId: getSenderId(), position: positionMs, sentAt: now, seq: ++sendSeq },
   );
   void publish(code, SYNC_EVENT_CONTROL, payload);
 }
@@ -383,7 +443,7 @@ async function publish(
   payload: SyncPayload | QueueAddPayload | ChatMessagePayload | Record<string, unknown>,
 ): Promise<void> {
   try {
-    console.log('[roomSync][DEBUG] event sent:', event, '→ room-' + code);
+    dlog('[roomSync][DEBUG] event sent:', event, '→ room-' + code);
     // Wire pe JSON string bhejte hain; receive side string aur object dono
     // handle karta hai (SDK khud bhi JSON string ko parse kar deta hai).
     await publishEvent(code, event, JSON.stringify(payload));
@@ -449,8 +509,7 @@ function handleChatMessage(raw: unknown): void {
   });
   if (useRoom.getState().messages.length === before) return;
   if (!chatOpen) {
-    const current = useRoom.getState();
-    current.setUnreadCount(current.unreadCount + 1);
+    useRoom.setState(s => ({ unreadCount: s.unreadCount + 1 }));
     Toast.show({ type: 'info', text1: `${msg.sender}`, text2: msg.text });
   }
 }
@@ -527,11 +586,30 @@ async function applyRemoteEventInternal(raw: unknown): Promise<void> {
   if (!msg) return; // bekaar payload → chup-chaap ignore (crash nahi)
   if (isOwnEcho(msg, getSenderId())) return;
 
+  // Bug 2: Out-of-order packet drop using monotonic seq per sender
+  if (typeof msg.seq === 'number') {
+    const last = lastSeqBySender.get(msg.senderId) ?? -1;
+    if (msg.seq <= last) {
+      dlog('[roomSync] drop out-of-order packet:', msg.seq, '<= last:', last);
+      return;
+    }
+    lastSeqBySender.set(msg.senderId, msg.seq);
+  }
+
   const now = Date.now();
-  const target = compensatedPosition(msg.position, msg.sentAt, now);
+  const player = usePlayer.getState();
+  const isPlaying =
+    msg.type === 'song'
+      ? msg.isPlaying
+      : msg.type === 'play'
+      ? true
+      : msg.type === 'pause'
+      ? false
+      : player.isPlaying;
+  // Bug 3: Compensate latency only when playing (no drift when paused) + skew clamp
+  const target = compensatedPosition(msg.position, msg.sentAt, now, isPlaying);
   if (shouldIgnoreRemote(msg, snapshot(), target)) return;
 
-  const player = usePlayer.getState();
   try {
     switch (msg.type) {
       case 'song':
@@ -550,7 +628,8 @@ async function applyRemoteEventInternal(raw: unknown): Promise<void> {
         await player.pause({ remote: true, seekTo: target });
         return;
       case 'seek':
-        await player.seek(msg.position, { remote: true });
+        // Issue 9: compensate seek target if currently playing
+        await player.seek(isPlaying ? target : msg.position, { remote: true });
         return;
     }
   } catch (err) {
@@ -622,7 +701,13 @@ function handleMemberJoin(raw: unknown): void {
           isPlaying: p.isPlaying,
           remote: false,
         },
-        { senderId: getSenderId(), position: p.position, sentAt: now },
+        {
+          senderId: getSenderId(),
+          position: p.position,
+          sentAt: now,
+          seq: ++sendSeq,
+          resync: true,
+        },
       );
       void publish(room.code, SYNC_EVENT_SONG, payload);
     }
@@ -714,11 +799,12 @@ function broadcastMemberList(): void {
 function startPresenceHeartbeat(): void {
   stopPresenceHeartbeat();
   presenceTimer = setInterval(() => {
-    const room = useRoom.getState();
-    if (!room.code || getSubscribedCode() === null) {
+    const code = getSubscribedCode();
+    if (!code || !isChannelSubscribed()) {
       stopPresenceHeartbeat();
       return;
     }
+    const room = useRoom.getState();
     const id = getSenderId();
     const now = Date.now();
 
@@ -738,7 +824,7 @@ function startPresenceHeartbeat(): void {
         broadcastMemberList();
       }
     } else {
-      void publish(room.code, SYNC_EVENT_MEMBER_JOIN, {
+      void publish(code, SYNC_EVENT_MEMBER_JOIN, {
         senderId: id,
         name: room.name.trim() || 'Guest',
         sentAt: now,

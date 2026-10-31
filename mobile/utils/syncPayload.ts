@@ -54,6 +54,8 @@ export interface BuildContext {
   /** player ki current position (ms) — play/pause payload ke liye */
   position: number;
   sentAt: number;
+  seq?: number;
+  resync?: boolean;
 }
 
 /* ---------- Build ---------- */
@@ -72,7 +74,12 @@ function position(value: number): number {
  * hai taaki naya device turant same queue pe aa jaaye.
  */
 export function buildSyncPayload(action: PlayerActionEvent, ctx: BuildContext): SyncPayload {
-  const base = { senderId: ctx.senderId, sentAt: ctx.sentAt };
+  const base: { senderId: string; sentAt: number; seq?: number; resync?: boolean } = {
+    senderId: ctx.senderId,
+    sentAt: ctx.sentAt,
+  };
+  if (typeof ctx.seq === 'number') base.seq = ctx.seq;
+  if (ctx.resync) base.resync = true;
 
   if (action.type === 'song') {
     const queue = action.queue.length > 0 ? action.queue : [action.song];
@@ -167,7 +174,16 @@ export function parseSyncPayload(raw: unknown): SyncPayload | null {
   if (!senderId) return null;
 
   const sentAt = Number(data.sentAt);
-  const base = { senderId, sentAt: Number.isFinite(sentAt) && sentAt > 0 ? sentAt : 0 };
+  const base: { senderId: string; sentAt: number; seq?: number; resync?: boolean } = {
+    senderId,
+    sentAt: Number.isFinite(sentAt) && sentAt > 0 ? sentAt : 0,
+  };
+  if (typeof data.seq === 'number' && Number.isFinite(data.seq)) {
+    base.seq = data.seq;
+  }
+  if (data.resync === true) {
+    base.resync = true;
+  }
 
   if (data.type === 'song') {
     const song = toSong(data.song);
@@ -352,8 +368,15 @@ export function latencyCompensation(
 }
 
 /** Remote event ka target position (elapsed add karke) */
-export function compensatedPosition(p: number, sentAt: number, now: number): number {
-  return Math.max(0, Math.round(p + latencyCompensation(sentAt, now)));
+export function compensatedPosition(
+  p: number,
+  sentAt: number,
+  now: number,
+  isPlaying: boolean = true,
+  maxSkewMs: number = MAX_LATENCY_COMPENSATION_MS,
+): number {
+  if (!isPlaying) return Math.max(0, Math.round(p));
+  return Math.max(0, Math.round(p + latencyCompensation(sentAt, now, maxSkewMs)));
 }
 
 /**
@@ -366,6 +389,7 @@ export function shouldIgnoreRemote(
   snapshot: SyncSnapshot,
   target: number,
 ): boolean {
+  if (msg.resync) return false;
   const sameSpot = Math.abs(snapshot.position - target) < DUPLICATE_POSITION_MS;
   switch (msg.type) {
     case 'song':

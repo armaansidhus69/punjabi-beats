@@ -91,6 +91,10 @@ export type SyncPayload = SyncAction & {
   senderId: string;
   /** Date.now() — receive pe elapsed add karke position align karte hain */
   sentAt: number;
+  /** Monotonic sequence number — out-of-order/stale network packets drop karne ke liye */
+  seq?: number;
+  /** Late-joiner resync flag — shouldIgnoreRemote bypass karne ke liye */
+  resync?: boolean;
 };
 
 /**

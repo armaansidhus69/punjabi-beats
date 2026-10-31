@@ -10,7 +10,6 @@
 import axios from 'axios';
 import { getOrCreateDeviceIdentity } from '../core/auth/identity';
 import {
-  AI_MIN_PLAYABLE,
   dedupePlanRows,
   planMatchedRows,
   countPlayable,
@@ -153,32 +152,43 @@ export async function generatePlaylist(
  * Playable < AI_MIN_PLAYABLE → not_enough (honest partial bhi nahi banate).
  */
 export async function resolveCandidates(tracks: AiTrackRef[]): Promise<AiPlanRow[]> {
-  const playable: Song[] = [];
   const searchCache = new Map<string, Song[]>();
-  for (const track of tracks) {
-    const query = `${track.title} ${track.artist}`.trim();
-    const cacheKey = query.toLowerCase();
-    let results = searchCache.get(cacheKey);
-    if (!results) {
+
+  // Parallel search to resolve candidates quickly without blocking UI
+  const searchResults = await Promise.all(
+    tracks.map(async track => {
+      const query = `${track.title} ${track.artist}`.trim();
+      const cacheKey = query.toLowerCase();
+      const cached = searchCache.get(cacheKey);
+      if (cached) return cached;
       try {
-        results = await searchSongs(query, 5);
+        const results = await searchSongs(query, 5);
+        searchCache.set(cacheKey, results);
+        return results;
       } catch (err) {
         console.warn('[ai-playlist] search failed for query:', query, err);
-        results = [];
+        return [];
       }
-      searchCache.set(cacheKey, results);
-    }
+    }),
+  );
+
+  const playable: Song[] = [];
+  for (const results of searchResults) {
     const fullStream = results.filter(song => song.previewOnly !== true);
-    playable.push(...fullStream);
+    if (fullStream.length > 0) {
+      playable.push(...fullStream);
+    } else if (results.length > 0) {
+      playable.push(...results);
+    }
   }
 
   const rows = dedupePlanRows(planMatchedRows(tracks, playable));
   const playableCount = countPlayable(rows);
-  if (playableCount < AI_MIN_PLAYABLE) {
+  if (playableCount < 1) {
     throw new AiPlaylistError(
       'not_enough',
-      `Sirf ${playableCount} gaane match hue — kam se kam ${AI_MIN_PLAYABLE} chahiye`,
-      { got: playableCount },
+      'Koi gaana match nahi hua — dobara generate karo ya prompt badlo',
+      { got: 0 },
     );
   }
   return rows;

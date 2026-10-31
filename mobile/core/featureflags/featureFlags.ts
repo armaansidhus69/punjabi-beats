@@ -37,7 +37,9 @@ export function resolveFlagsFromEnv(): FeatureFlags {
   return {
     ...DEFAULT_FEATURE_FLAGS,
     auth_enabled: process.env.EXPO_PUBLIC_AUTH_ENABLED === 'true',
+    catalog_enabled: process.env.EXPO_PUBLIC_CATALOG_ENABLED === 'true',
     social_share_enabled: process.env.EXPO_PUBLIC_SOCIAL_SHARE_ENABLED === 'true',
+    chat_enabled: process.env.EXPO_PUBLIC_CHAT_ENABLED === 'true',
     blend_enabled: process.env.EXPO_PUBLIC_BLEND_ENABLED === 'true',
     jam_enabled: process.env.EXPO_PUBLIC_JAM_ENABLED === 'true',
     podcasts_enabled: process.env.EXPO_PUBLIC_PODCASTS_ENABLED === 'true',

@@ -60,6 +60,15 @@ export default function JamGate({ children }: { children: React.ReactNode }) {
   if (!gate.enabled || !gate.authed) {
     return (
       <View style={styles.container}>
+        <Pressable
+          style={styles.backButton}
+          onPress={() => router.back()}
+          hitSlop={12}
+          accessibilityRole="button"
+          accessibilityLabel="Wapas jao"
+        >
+          <Ionicons name="chevron-back" size={24} color={colors.text} />
+        </Pressable>
         <Ionicons name="people-circle-outline" size={48} color={colors.primary} />
         <Text style={styles.title}>Jam party lock hai 🔒</Text>
         <Text style={styles.subtitle}>
@@ -108,6 +117,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: spacing.xl,
     gap: spacing.md,
+  },
+  backButton: {
+    position: 'absolute',
+    top: spacing.xl,
+    left: spacing.lg,
+    padding: spacing.xs,
+    zIndex: 10,
   },
   title: { ...typography.h1, color: colors.text, textAlign: 'center' },
   subtitle: {
