@@ -88,6 +88,15 @@ export function setChatOpen(open: boolean): void {
 let lastSeekSentAt = 0;
 let pendingSeek: number | null = null;
 let seekTimer: ReturnType<typeof setTimeout> | null = null;
+let remoteEventQueue: Promise<void> = Promise.resolve();
+
+function cancelPendingSeek(): void {
+  if (seekTimer) {
+    clearTimeout(seekTimer);
+    seekTimer = null;
+  }
+  pendingSeek = null;
+}
 
 /* ---------- Presence roster (Phase 14 — FR-5.10 / FR-5.11) ---------- */
 /**
@@ -173,6 +182,9 @@ export function disposeRoomSync(): void {
   disposeStateListener = null;
   leaveSyncChannel();
   initialized = false;
+  publishWarned = false;
+  chatOpen = false;
+  remoteEventQueue = Promise.resolve();
 }
 
 /* ---------- Room lifecycle → channel join/leave ---------- */
@@ -192,11 +204,17 @@ function handleRoomLifecycle(event: RoomLifecycleEvent): void {
  */
 export function joinSyncChannel(code: string): void {
   const room = useRoom.getState();
+  const currentCode = getSubscribedCode();
 
   // Pehle se isi room pe subscribed hain → dobara subscribe nahi
-  if (getSubscribedCode() === code) {
-    room.setConnectionState(getClientState());
+  if (currentCode === code && isChannelSubscribed()) {
+    room.setConnectionState('connected');
     return;
+  }
+
+  // Agar kisi doosre room se switch kar rahe hain, toh pehle purana clean karo
+  if (currentCode && currentCode !== code) {
+    leaveSyncChannel();
   }
 
   try {
@@ -204,7 +222,8 @@ export function joinSyncChannel(code: string): void {
     room.setConnectionState('connecting');
     console.log('[roomSync][DEBUG] subscribing to room-' + code, `(client=${getClientState()})`);
     subscribeChannel(code, bindChannelEvents);
-    room.setConnectionState(getClientState());
+    // NOTE: Yahan getClientState() set NAHI karna hai, warna SUBSCRIBED_EVENT se
+    // pehle hi UI 'connected' dikhane lagega. SUBSCRIBED_EVENT khud state update karega.
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Room sync start nahi ho paya';
     console.warn('roomSync: join failed —', message);
@@ -274,11 +293,7 @@ function bindChannelEvents(ch: Channel): void {
  * pe subscribeChannel khud bhi isi ko call karta hai.
  */
 export function leaveSyncChannel(): void {
-  if (seekTimer) {
-    clearTimeout(seekTimer);
-    seekTimer = null;
-  }
-  pendingSeek = null;
+  cancelPendingSeek();
   lastSeekSentAt = 0;
   // Presence: unsubscribe se pehle "main chala gaya" bhejo — host roster se
   // hata dega. Publish HTTP se hai, isliye channel live hone ki zaroorat nahi.
@@ -312,6 +327,10 @@ export function handleLocalAction(action: PlayerActionEvent): void {
     enqueueSeek(action.position);
     return;
   }
+
+  // Agar seek ke alawa koi bhi action (song/play/pause) aaya,
+  // toh purana pending seek cancel karo taaki out-of-order broadcast na ho.
+  cancelPendingSeek();
 
   const now = Date.now();
   const payload = buildSyncPayload(action, {
@@ -493,7 +512,17 @@ async function handleQueueAdd(raw: unknown): Promise<void> {
  * Flow: parse → apna echo ignore → duplicate guard → player action `remote: true`.
  * `remote: true` ka matlab: ye action dobara broadcast NAHI hoga (loop band).
  */
-export async function handleRemoteEvent(raw: unknown): Promise<void> {
+export function handleRemoteEvent(raw: unknown): Promise<void> {
+  // Queue mein chain karo taaki playSong() ke beech mein pause/seek race na kare
+  remoteEventQueue = remoteEventQueue
+    .then(() => applyRemoteEventInternal(raw))
+    .catch(err => {
+      console.warn('roomSync: queue error:', err);
+    });
+  return remoteEventQueue;
+}
+
+async function applyRemoteEventInternal(raw: unknown): Promise<void> {
   const msg = parseSyncPayload(raw);
   if (!msg) return; // bekaar payload → chup-chaap ignore (crash nahi)
   if (isOwnEcho(msg, getSenderId())) return;
@@ -563,19 +592,54 @@ function parsePresenceMember(raw: unknown): { id: string; name: string } | null 
 function handleMemberJoin(raw: unknown): void {
   const room = useRoom.getState();
   if (!room.isHost) return;
+
   const member = parsePresenceMember(raw);
-  if (!member) return;
+  if (!member || member.id === getSenderId()) return; // Apna echo ignore
+
+  const existing = presenceRoster.get(member.id);
+  const isNewMember = !existing;
+  const isNameChanged = existing ? existing.name !== member.name : false;
+
+  // Heartbeat timestamp hamesha update karo
   presenceRoster.set(member.id, { name: member.name, lastSeen: Date.now() });
-  broadcastMemberList();
+
+  // Sirf tab broadcast karo jab sach mein koi naya aaya ho ya naam badla ho (No Heartbeat Spam!)
+  if (isNewMember || isNameChanged) {
+    broadcastMemberList();
+  }
+
+  // BUG FIX (FR-5.3): Naye joiner ko current song aur position turant bhejo!
+  if (isNewMember && room.code) {
+    const p = usePlayer.getState();
+    if (p.currentSong) {
+      const now = Date.now();
+      const payload = buildSyncPayload(
+        {
+          type: 'song',
+          song: p.currentSong,
+          queue: p.queue,
+          position: p.position,
+          isPlaying: p.isPlaying,
+          remote: false,
+        },
+        { senderId: getSenderId(), position: p.position, sentAt: now },
+      );
+      void publish(room.code, SYNC_EVENT_SONG, payload);
+    }
+  }
 }
 
-/** `member-leave` — client chala gaya (sirf host roster se hatata hai) */
 function handleMemberLeave(raw: unknown): void {
-  const room = useRoom.getState();
-  if (!room.isHost) return;
   const member = parsePresenceMember(raw);
   if (!member) return;
-  if (presenceRoster.delete(member.id)) broadcastMemberList();
+
+  const room = useRoom.getState();
+  if (room.isHost) {
+    if (presenceRoster.delete(member.id)) broadcastMemberList();
+  } else {
+    // Guest side: agar koi member (ya Host) leave kare toh local list se turant hatao
+    room.setMembers(room.members.filter(m => m.id !== member.id));
+  }
 }
 
 /**
@@ -614,11 +678,14 @@ function announcePresence(): void {
   const room = useRoom.getState();
   const id = getSenderId();
   const name = room.name.trim() || 'Guest';
+
   if (room.isHost) {
+    // Host ko SYNC_EVENT_MEMBER_JOIN bhejne ki zaroorat nahi, wo khud roster maintain karta hai
     presenceRoster.set(id, { name, lastSeen: Date.now() });
     broadcastMemberList();
+  } else {
+    void publish(code, SYNC_EVENT_MEMBER_JOIN, { senderId: id, name, sentAt: Date.now() });
   }
-  void publish(code, SYNC_EVENT_MEMBER_JOIN, { senderId: id, name, sentAt: Date.now() });
 }
 
 /** Room chhodte waqt host ko batao — host roster se hamara id hata dega */
@@ -654,13 +721,22 @@ function startPresenceHeartbeat(): void {
     }
     const id = getSenderId();
     const now = Date.now();
+
     if (room.isHost) {
+      const name = room.name.trim() || 'Guest';
+      presenceRoster.set(id, { name, lastSeen: now });
+
+      let pruned = false;
       for (const [memberId, entry] of presenceRoster) {
         if (memberId !== id && now - entry.lastSeen > PRESENCE_STALE_MS) {
           presenceRoster.delete(memberId);
+          pruned = true;
         }
       }
-      announcePresence(); // self refresh + member-list broadcast
+      // Sirf tab broadcast karo jab koi stale member prune hua ho
+      if (pruned) {
+        broadcastMemberList();
+      }
     } else {
       void publish(room.code, SYNC_EVENT_MEMBER_JOIN, {
         senderId: id,
