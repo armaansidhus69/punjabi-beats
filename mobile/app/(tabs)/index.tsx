@@ -28,7 +28,6 @@ import { tapFeedback } from '../../utils/haptics';
 import { colors } from '../../constants/colors';
 import { typography } from '../../constants/typography';
 import { spacing } from '../../constants/spacing';
-import { isFeatureEnabled } from '../../core/featureflags/featureFlags';
 import { useAuthStore } from '../../stores/authStore';
 import EmptyState from '../../components/EmptyState';
 import LoadingSpinner from '../../components/LoadingSpinner';
@@ -110,21 +109,19 @@ export default function HomeScreen() {
           >
             <Ionicons name="time-outline" size={22} color={colors.text} />
           </Pressable>
-          {isFeatureEnabled('auth_enabled') ? (
-            <Pressable
-              onPress={handleAccountPress}
-              accessibilityRole="button"
-              accessibilityLabel="Account khole"
-              hitSlop={12}
-              style={({ pressed }) => [styles.historyButton, pressed && styles.pressed]}
-            >
-              <Ionicons
-                name={authStatus === 'authenticated' ? 'person' : 'person-outline'}
-                size={22}
-                color={colors.text}
-              />
-            </Pressable>
-          ) : null}
+          <Pressable
+            onPress={handleAccountPress}
+            accessibilityRole="button"
+            accessibilityLabel="Account khole"
+            hitSlop={12}
+            style={({ pressed }) => [styles.historyButton, pressed && styles.pressed]}
+          >
+            <Ionicons
+              name={authStatus === 'authenticated' ? 'person' : 'person-outline'}
+              size={22}
+              color={authStatus === 'authenticated' ? colors.primary : colors.text}
+            />
+          </Pressable>
         </View>
       </View>
 

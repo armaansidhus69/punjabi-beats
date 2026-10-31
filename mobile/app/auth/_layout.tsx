@@ -1,11 +1,6 @@
-import { Redirect, Stack } from 'expo-router';
-import { useAuthStore } from '../../stores/authStore';
+import { Stack } from 'expo-router';
 
 export default function AuthLayout() {
-  const initialized = useAuthStore(state => state.initialized);
-  const status = useAuthStore(state => state.status);
-  if (initialized && status === 'disabled') return <Redirect href="/" />;
-
   return (
     <Stack
       screenOptions={{

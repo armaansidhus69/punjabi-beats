@@ -14,6 +14,7 @@ import Toast from 'react-native-toast-message';
 import { Playlist } from '../../types';
 import { usePlaylists } from '../../stores/playlistStore';
 import { useLikedSongs } from '../../stores/likedSongsStore';
+import { useAuthStore } from '../../stores/authStore';
 import { useMiniPlayerPadding } from '../../hooks/useMiniPlayerPadding';
 import { successFeedback, tapFeedback } from '../../utils/haptics';
 import { colors } from '../../constants/colors';
@@ -33,6 +34,9 @@ export default function LibraryScreen() {
   const createPlaylist = usePlaylists(s => s.createPlaylist);
   const importPlaylists = usePlaylists(s => s.importPlaylists);
   const likedSongs = useLikedSongs(s => s.songs);
+  const authStatus = useAuthStore(s => s.status);
+  const authUser = useAuthStore(s => s.user);
+  const authProfile = useAuthStore(s => s.profile);
 
   const [modalVisible, setModalVisible] = useState(false);
   const [importing, setImporting] = useState(false);
@@ -118,6 +122,11 @@ export default function LibraryScreen() {
     router.push('/podcast');
   }, []);
 
+  const handleAccountPress = useCallback(() => {
+    tapFeedback();
+    router.push(authStatus === 'authenticated' ? '/auth/profile' : '/auth/login');
+  }, [authStatus]);
+
   const handleAiPlaylistPress = useCallback(() => {
     tapFeedback();
     router.push('/ai-playlist');
@@ -162,6 +171,35 @@ export default function LibraryScreen() {
           </Pressable>
         </View>
       </View>
+
+      {/* Account / Profile entry */}
+      <Pressable
+        onPress={handleAccountPress}
+        accessibilityRole="button"
+        accessibilityLabel="Account ya Profile kholo"
+        style={({ pressed }) => [styles.likedCard, pressed && styles.pressed]}
+      >
+        <View style={styles.likedIcon}>
+          <Ionicons
+            name={authStatus === 'authenticated' ? 'person-circle' : 'person-circle-outline'}
+            size={24}
+            color={colors.primary}
+          />
+        </View>
+        <View style={styles.likedInfo}>
+          <Text style={styles.likedTitle}>
+            {authStatus === 'authenticated'
+              ? (authProfile?.display_name || authUser?.email?.split('@')[0] || 'Mera Account')
+              : 'Account & Login'}
+          </Text>
+          <Text style={styles.likedSubtitle}>
+            {authStatus === 'authenticated'
+              ? (authUser?.email || 'Signed in')
+              : 'Login ya Register karo — sync & backup'}
+          </Text>
+        </View>
+        <Ionicons name="chevron-forward" size={20} color={colors.subtext} />
+      </Pressable>
 
       <Pressable
         onPress={() => router.push('/liked')}

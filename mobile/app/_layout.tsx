@@ -71,6 +71,8 @@ function AppShell() {
           name="lyrics"
           options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
         />
+        {/* Auth stack (Phase 1) — login, register, profile */}
+        <Stack.Screen name="auth" />
       </Stack>
 
       {isFullPlayerOpen ? null : (

@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
 import { colors } from '../constants/colors';
 import { spacing } from '../constants/spacing';
 import { typography } from '../constants/typography';
@@ -11,6 +13,14 @@ interface AuthShellProps {
 }
 
 export default function AuthShell({ title, subtitle, children }: AuthShellProps) {
+  const handleBack = () => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/');
+    }
+  };
+
   return (
     <KeyboardAvoidingView
       style={styles.flex}
@@ -21,9 +31,21 @@ export default function AuthShell({ title, subtitle, children }: AuthShellProps)
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.brand}>
-          <Text style={styles.emoji}>🎵</Text>
-          <Text style={styles.brandName}>Punjabi Beats</Text>
+        <View style={styles.topBar}>
+          <Pressable
+            onPress={handleBack}
+            hitSlop={12}
+            accessibilityRole="button"
+            accessibilityLabel="Wapas jao"
+            style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}
+          >
+            <Ionicons name="chevron-back" size={24} color={colors.text} />
+          </Pressable>
+          <View style={styles.brand}>
+            <Text style={styles.emoji}>🎵</Text>
+            <Text style={styles.brandName}>Punjabi Beats</Text>
+          </View>
+          <View style={styles.spacer} />
         </View>
         <Text style={styles.title}>{title}</Text>
         <Text style={styles.subtitle}>{subtitle}</Text>
@@ -96,11 +118,25 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: spacing.xl,
   },
+  topBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.xl,
+  },
+  backButton: {
+    padding: spacing.xs,
+  },
+  pressed: {
+    opacity: 0.7,
+  },
+  spacer: {
+    width: 32,
+  },
   brand: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    marginBottom: spacing.xl,
   },
   emoji: { fontSize: 30 },
   brandName: { ...typography.h2, color: colors.text },
