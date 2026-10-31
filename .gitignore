@@ -27,3 +27,5 @@ Thumbs.db
 # Transient artifacts (not source)
 _backup-player.corrupt.bak.txt
 files.txt
+.vercel
+.env*

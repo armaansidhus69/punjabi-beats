@@ -186,16 +186,43 @@ export async function sendMessage(
     trimmed,
   );
 
-  const response = await axios.post(
-    `${BASE_URL}/api/ai-assistant`,
-    {
-      message: trimmed,
-      deviceId: identity.deviceId,
-      turns,
-      taste: privateSafeTaste(),
-    },
-    { timeout: REQUEST_TIMEOUT_MS, headers: { 'content-type': 'application/json' } },
-  );
+  let response;
+  try {
+    response = await axios.post(
+      `${BASE_URL}/api/ai-assistant`,
+      {
+        message: trimmed,
+        deviceId: identity.deviceId,
+        turns,
+        taste: privateSafeTaste(),
+      },
+      { timeout: REQUEST_TIMEOUT_MS, headers: { 'content-type': 'application/json' } },
+    );
+  } catch (err) {
+    if (axios.isAxiosError(err)) {
+      const data = err.response?.data as { error?: string; retryAfterSec?: number } | undefined;
+      const status = err.response?.status;
+      if (data?.error === 'no_key') {
+        throw new AiAssistantError('no_key', 'AI key server pe set nahi hai — deploy baad me feature live hoga');
+      }
+      if (status === 429 || data?.error === 'rate_limited') {
+        const retry = typeof data?.retryAfterSec === 'number' ? data.retryAfterSec : 60;
+        throw new AiAssistantError(
+          'rate_limited',
+          `Thoda ruk jao — try again ${Math.ceil(retry)}s me`,
+          { retryAfterSec: retry },
+        );
+      }
+      if (data?.error === 'bad_request' || status === 400) {
+        throw new AiAssistantError('bad_request', 'Message thoda lamba likh do (max 240 chars)');
+      }
+      if (status === 502 || data?.error === 'upstream') {
+        throw new AiAssistantError('upstream', 'AI assistant connect nahi hua — dobara try karo');
+      }
+      throw new AiAssistantError('network', 'Network ya CORS issue — internet ya server check karo');
+    }
+    throw err;
+  }
 
   const reply = validateAssistantReply(response.data);
   if (!reply) {
@@ -219,10 +246,22 @@ export function describeAiAssistantError(err: unknown): string {
       case 'bad_request':
         return 'Message thoda lamba likh do (max 240 chars)';
       case 'network':
-        return 'Network issue — internet check karo';
+        return err.message || 'Network issue — internet check karo';
       default:
         return 'AI assistant connect nahi hua — dobara try karo';
     }
+  }
+  if (axios.isAxiosError(err)) {
+    if (err.response?.data?.error === 'no_key') {
+      return 'AI key server pe set nahi hai — deploy baad me feature live hoga';
+    }
+    if (err.response?.status === 429) {
+      return 'Rate limit hit — thodi der baad try karo';
+    }
+    return 'Network ya CORS issue — server reach nahi hua';
+  }
+  if (err instanceof Error && err.message) {
+    return err.message;
   }
   return 'Assistant ne jawab nahi diya — dobara try karo';
 }

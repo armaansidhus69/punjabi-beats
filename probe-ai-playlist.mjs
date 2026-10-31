@@ -29,6 +29,7 @@ function mockRes() {
   res.status = (c) => { res.statusCode = c; return res; };
   res.json = (b) => { res.body = b; return res; };
   res.setHeader = (k, v) => { res.headers[k] = v; return res; };
+  res.end = () => res;
   return res;
 }
 
@@ -41,8 +42,13 @@ async function callLocal(method, body) {
 async function localTests() {
   console.log('--- Local handler tests (dummy GEMINI key) ---');
 
+  // 0) OPTIONS → 204 (CORS preflight)
+  let r = await callLocal('OPTIONS', {});
+  check('OPTIONS → 204', r.status === 204, `got ${r.status}`);
+  check('CORS origin header present', r.headers['Access-Control-Allow-Origin'] === '*', JSON.stringify(r.headers));
+
   // 1) GET → 405
-  let r = await callLocal('GET', {});
+  r = await callLocal('GET', {});
   check('GET → 405', r.status === 405, `got ${r.status}`);
 
   // 2) missing key → 400 no_key (fail-closed)
@@ -76,8 +82,13 @@ async function liveTests(base) {
   console.log(`--- Live probe: ${base}/api/ai-playlist ---`);
   const url = `${base.replace(/\/+$/, '')}/api/ai-playlist`;
 
+  // 0) OPTIONS → 204
+  let res = await fetchWithTimeout(url, { method: 'OPTIONS' });
+  check('OPTIONS → 204', res.status === 204, `got ${res.status}`);
+  check('CORS origin header present', res.headers.get('access-control-allow-origin') === '*', res.headers.get('access-control-allow-origin'));
+
   // 1) GET → 405
-  let res = await fetchWithTimeout(url, { method: 'GET' });
+  res = await fetchWithTimeout(url, { method: 'GET' });
   check('GET → 405', res.status === 405, `got ${res.status}`);
 
   // 2) empty prompt → 400 bad_request (key pehle check hoti hai)

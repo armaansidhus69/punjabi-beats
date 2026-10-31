@@ -1,6 +1,6 @@
 /**
- * AI Playlist â€” /ai-playlist (Phase 13b roadmap).
- * Prompt â†’ generate â†’ matchmaking preview â†’ Play All / Save / Refine.
+ * AI Playlist — /ai-playlist (Phase 13b roadmap).
+ * Prompt → generate → matchmaking preview → Play All / Save / Refine.
  * Entry point Library tab ka AI Playlist card. Render-only: logic
  * aiPlaylistStore. AI disclosure hamesha upar visible (spec Section 4.3).
  */
@@ -83,11 +83,11 @@ export default function AiPlaylistScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          {/* AI disclosure â€” hamesha visible (FR-11.4) */}
+          {/* AI disclosure — hamesha visible (FR-11.4) */}
           <View style={styles.disclosure}>
             <Ionicons name="sparkles-outline" size={16} color={colors.primary} />
             <Text style={styles.disclosureText}>
-              AI ne gaane sujhaye hain â€” match hamesha sahi nahi hota.
+              AI ne gaane sujhaye hain — match hamesha sahi nahi hota.
             </Text>
           </View>
 
@@ -95,7 +95,7 @@ export default function AiPlaylistScreen() {
             style={styles.promptInput}
             value={prompt}
             onChangeText={setPrompt}
-            placeholder="Kaisi playlist chahiye? (club ke liye bangerâ€¦)"
+            placeholder="Kaisi playlist chahiye? (club ke liye banger…)"
             placeholderTextColor={colors.subtext}
             maxLength={240}
             multiline
@@ -114,7 +114,7 @@ export default function AiPlaylistScreen() {
             ]}
           >
             <Ionicons name="sparkles" size={18} color={colors.background} />
-            <Text style={styles.generateText}>{busy ? 'Generate ho raha haiâ€¦' : 'Generate'}</Text>
+            <Text style={styles.generateText}>{busy ? 'Generate ho raha hai…' : 'Generate'}</Text>
           </Pressable>
 
           {history.length > 0 && (
@@ -145,13 +145,13 @@ export default function AiPlaylistScreen() {
             </View>
           )}
 
-          {busy && <LoadingSpinner label="AI playlist generate ho rahi haiâ€¦" />}
+          {busy && <LoadingSpinner label="AI playlist generate ho rahi hai…" />}
 
           {!isPlanEmpty && !busy && (
             <View style={styles.section}>
               <View style={styles.planHeaderRow}>
                 <Text style={styles.sectionTitle}>
-                  Preview Â· {planRows.filter(row => row.song !== null).length} matched
+                  Preview · {planRows.filter(row => row.song !== null).length} matched
                 </Text>
                 {remaining !== null && (
                   <Text style={styles.remainingNote}>Aaj {remaining} generations bache</Text>
@@ -170,7 +170,7 @@ export default function AiPlaylistScreen() {
                     </Text>
                     <Text style={styles.planMeta} numberOfLines={1}>
                       {row.track.artist}
-                      {row.song === null ? ' â€” match nahi mila' : ''}
+                      {row.song === null ? ' — match nahi mila' : ''}
                     </Text>
                   </View>
                   <Pressable
@@ -185,13 +185,13 @@ export default function AiPlaylistScreen() {
                 </View>
               ))}
 
-              {/* refine â€” same plan context + follow-up note (FR-11.2) */}
+              {/* refine — same plan context + follow-up note (FR-11.2) */}
               <View style={styles.refineRow}>
                 <TextInput
                   style={styles.refineInput}
                   value={refineText}
                   onChangeText={setRefineText}
-                  placeholder="Refine karo â€” thoda slow gaane loâ€¦"
+                  placeholder="Refine karo — thoda slow gaane lo…"
                   placeholderTextColor={colors.subtext}
                   maxLength={240}
                   accessibilityLabel="Refine note"

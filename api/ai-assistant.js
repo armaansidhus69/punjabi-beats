@@ -28,9 +28,29 @@ const DEFAULT_MODEL = (process.env.GEMINI_MODEL ?? DEFAULT_GEMINI_MODEL).replace
 
 const rateState = new Map(); // deviceId → {hits} — assistant apna bucket state
 
+function setCors(res) {
+  if (typeof res?.setHeader === 'function') {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'content-type, x-publish-token');
+  }
+}
+
 export default async function handler(req, res) {
+  setCors(res);
+  if (req.method === 'OPTIONS') {
+    if (typeof res?.setHeader === 'function') {
+      res.setHeader('Allow', 'POST, OPTIONS');
+    }
+    res.status(204);
+    if (typeof res?.end === 'function') res.end();
+    return;
+  }
+
   if (req.method !== 'POST') {
-    res.setHeader('Allow', 'POST');
+    if (typeof res?.setHeader === 'function') {
+      res.setHeader('Allow', 'POST, OPTIONS');
+    }
     res.status(405).json({ error: 'method_not_allowed' });
     return;
   }

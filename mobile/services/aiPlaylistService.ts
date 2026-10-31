@@ -100,16 +100,43 @@ export async function generatePlaylist(
     console.warn('[ai-playlist] taste snapshot failed, continuing without:', err);
   }
 
-  const response = await axios.post(
-    `${BASE_URL}/api/ai-playlist`,
-    {
-      prompt: trimmed,
-      deviceId: identity.deviceId,
-      taste,
-      refineText: options?.refineText?.trim() || undefined,
-    },
-    { timeout: REQUEST_TIMEOUT_MS, headers: { 'content-type': 'application/json' } },
-  );
+  let response;
+  try {
+    response = await axios.post(
+      `${BASE_URL}/api/ai-playlist`,
+      {
+        prompt: trimmed,
+        deviceId: identity.deviceId,
+        taste,
+        refineText: options?.refineText?.trim() || undefined,
+      },
+      { timeout: REQUEST_TIMEOUT_MS, headers: { 'content-type': 'application/json' } },
+    );
+  } catch (err) {
+    if (axios.isAxiosError(err)) {
+      const data = err.response?.data as { error?: string; retryAfterSec?: number } | undefined;
+      const status = err.response?.status;
+      if (data?.error === 'no_key') {
+        throw new AiPlaylistError('no_key', 'AI key server pe set nahi hai — deploy baad me feature live hoga');
+      }
+      if (status === 429 || data?.error === 'rate_limited') {
+        const retry = typeof data?.retryAfterSec === 'number' ? data.retryAfterSec : 60;
+        throw new AiPlaylistError(
+          'rate_limited',
+          `Thoda ruk jao — try again ${Math.ceil(retry)}s me`,
+          { retryAfterSec: retry },
+        );
+      }
+      if (data?.error === 'bad_request' || status === 400) {
+        throw new AiPlaylistError('bad_request', 'Prompt thoda sahi likho — min 2 chars, max 240');
+      }
+      if (status === 502 || data?.error === 'upstream') {
+        throw new AiPlaylistError('upstream', 'AI provider se connect nahi hua — dobara try karo');
+      }
+      throw new AiPlaylistError('network', 'Network ya CORS issue — internet ya server check karo');
+    }
+    throw err;
+  }
 
   const tracks = sanitizeAiTracks(response.data?.tracks);
   if (tracks.length === 0) {
@@ -203,12 +230,24 @@ export function describeAiPlaylistError(err: unknown): string {
       case 'not_enough':
         return `Match kam mile (${err.got ?? 0}) — dobara generate karo ya prompt badlo`;
       case 'network':
-        return 'Network issue — internet check karo';
+        return err.message || 'Network issue — internet check karo';
       case 'bad_request':
-        return 'Prompt thoda sahi likho — min 2 chars, max 240';
+        return err.message || 'Prompt thoda sahi likho — min 2 chars, max 240';
       default:
         return 'AI provider se connect nahi hua — dobara try karo';
     }
+  }
+  if (axios.isAxiosError(err)) {
+    if (err.response?.data?.error === 'no_key') {
+      return 'AI key server pe set nahi hai — deploy baad me feature live hoga';
+    }
+    if (err.response?.status === 429) {
+      return 'Rate limit hit — thodi der baad try karo';
+    }
+    return 'Network ya CORS issue — server reach nahi hua';
+  }
+  if (err instanceof Error && err.message) {
+    return err.message;
   }
   return 'Playlist generate nahi hua — dobara try karo';
 }

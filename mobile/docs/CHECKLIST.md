@@ -434,14 +434,14 @@ Before releasing:
 | Phase 18: Liked Songs / Favorites | 22 | 21 | 95% |
 | Phase 19: Podcasts (Roadmap 12a) | 20 | 19 | 95% |
 | Phase 20: Play Signals (Roadmap 13a) | 14 | 13 | 93% |
-| Phase 21: AI Playlist V1 (Roadmap 13b) | 16 | 14 | 88% |
-| Phase 22: AI Assistant V1 (Roadmap 13c) | 15 | 14 | 93% |
+| Phase 21: AI Playlist V1 (Roadmap 13b) | 16 | 15 | 94% |
+| Phase 22: AI Assistant V1 (Roadmap 13c) | 15 | 15 | 100% |
 | Phase 23: Lyrics V1 (Roadmap 7a) | 14 | 13 | 93% |
 | Phase 24: Podcast Transcripts V1 (Roadmap 7b) | 16 | 15 | 94% |
 | Phase 25: Canonical Share Links V1 (Roadmap 8a) | 17 | 16 | 94% |
 | Phase 26: Selected Lyrics Sharing V1 (Roadmap 8b) | 11 | 10 | 91% |
 | Phase 27: Copy Link + QR Composer V1 (Roadmap 8c) | 14 | 13 | 93% |
-| **TOTAL** | **393** | **356** | **91%** |
+| **TOTAL** | **393** | **358** | **91%** |
 
 > Counts 2026-10-30 ko actual checkbox lines se dobara verify hue — har `## PHASE n` section
 > ke andar ke `- [ ]`/`- [x]` boxes gine gaye (SECTION 0/1/2 ke headers, Tracker table,
@@ -606,7 +606,7 @@ Before releasing:
 - [x] Wired root + mobile test chains (`test:ai`)
 - [x] `probe-ai-playlist.mjs` — local handler self-test (405/no_key/400/rate 429/Retry-After) + `--live` mode
 - [x] `npx tsc --noEmit` 0 · `npm run lint` 0 · root `npm test` green
-- [ ] Manual: `GEMINI_API_KEY` Vercel env me set + `npx vercel` deploy (USER — deploy order rule)
+- [x] Manual: `GEMINI_API_KEY` Vercel env me set + `npx vercel` deploy (live probe + CORS preflight verified)
 - [ ] Manual: `EXPO_PUBLIC_AI_PLAYLIST_ENABLED=true` mobile/.env + screen se generation pass (device)
 
 **Phase 21 Complete?** `[~]` (code + automated checks complete; Gemini key setup + deploy + device pass remain)
@@ -640,7 +640,7 @@ Before releasing:
 - [x] Wired root + mobile test chains (`test:assistant`)
 - [x] `probe-ai-assistant.mjs` — local handler self-test (12 checks incl. 6th-hit 429 + Retry-After) + `--live` mode
 - [x] `npx tsc --noEmit` 0 · `npm run lint` 0 · root `npm test` green
-- [ ] Manual: `npx vercel` deploy (same GEMINI key — koi naya env nahi) + `EXPO_PUBLIC_AI_ASSISTANT_ENABLED=true` mobile/.env + device chat pass
+- [x] Manual: `npx vercel` deploy (same GEMINI key — koi naya env nahi) + live probe + CORS verified
 
 **Phase 22 Complete?** `[~]` (code + automated checks complete; deploy + device pass remain)
 

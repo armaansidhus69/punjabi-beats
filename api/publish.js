@@ -59,8 +59,29 @@ function getRealtime() {
   return realtime;
 }
 
+function setCors(res) {
+  if (typeof res?.setHeader === 'function') {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'content-type, x-publish-token');
+  }
+}
+
 export default async function handler(req, res) {
+  setCors(res);
+  if (req.method === 'OPTIONS') {
+    if (typeof res?.setHeader === 'function') {
+      res.setHeader('Allow', 'POST, OPTIONS');
+    }
+    res.status(204);
+    if (typeof res?.end === 'function') res.end();
+    return;
+  }
+
   if (req.method !== 'POST') {
+    if (typeof res?.setHeader === 'function') {
+      res.setHeader('Allow', 'POST, OPTIONS');
+    }
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
