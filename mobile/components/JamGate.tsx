@@ -64,9 +64,22 @@ export default function JamGate({ children }: { children: React.ReactNode }) {
         <Text style={styles.title}>Jam party lock hai 🔒</Text>
         <Text style={styles.subtitle}>
           {!gate.enabled
-            ? 'Jam + Listening Party abhi internal testing me hai.'
+            ? 'Jam (multi-host party) abhi internal testing me hai. Aap live Group Room use kar sakte ho!'
             : 'Jam ke liye login zaroori hai — login ke baad room banao ya code se jodo.'}
         </Text>
+        {!gate.enabled && (
+          <Pressable
+            style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}
+            onPress={() => {
+              tapFeedback();
+              router.push('/(tabs)/room');
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="Live Room tab kholo"
+          >
+            <Text style={styles.buttonText}>Live Group Room Kholo 👥</Text>
+          </Pressable>
+        )}
         {gate.enabled && (
           <Pressable
             style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}

@@ -28,8 +28,17 @@ const CACHE_TTL_MS = 15 * 60 * 1000; // 15 mins
 export async function fetchArtistCatalogue(
   artistNameOrSlug: string,
 ): Promise<{ profile: ArtistSummary; songs: Song[]; albums: AlbumSummary[] }> {
-  const cleanName = decodeURIComponent(artistNameOrSlug).trim();
-  const cacheKey = slugify(cleanName);
+  const rawName = typeof artistNameOrSlug === 'string' ? artistNameOrSlug : '';
+  let cleanName = rawName;
+
+  try {
+    cleanName = decodeURIComponent(rawName);
+  } catch {
+    cleanName = rawName;
+  }
+
+  const trimmedName = cleanName.trim();
+  const cacheKey = slugify(trimmedName);
 
   const cached = artistCache.get(cacheKey);
   if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
@@ -37,8 +46,8 @@ export async function fetchArtistCatalogue(
   }
 
   // 1. Resolve profile
-  const matched = matchCuratedArtist(cleanName, POPULAR_ARTISTS);
-  const displayName = matched ? matched.name : normalizeArtistName(cleanName) || cleanName;
+  const matched = matchCuratedArtist(trimmedName, POPULAR_ARTISTS);
+  const displayName = matched ? matched.name : normalizeArtistName(trimmedName) || trimmedName;
 
   // 2. Fetch tracks via existing search chain
   let songs: Song[] = [];
@@ -81,7 +90,9 @@ export async function fetchAlbumCatalogue(
   albumTitle: string,
   artistName?: string,
 ): Promise<{ album: AlbumSummary; songs: Song[] }> {
-  const query = `${albumTitle} ${artistName ?? ''}`.trim();
+  const safeTitle = typeof albumTitle === 'string' ? albumTitle : '';
+  const safeArtist = typeof artistName === 'string' ? artistName : '';
+  const query = `${safeTitle} ${safeArtist}`.trim();
   let songs: Song[] = [];
   try {
     songs = await searchSongs(query, 20);
@@ -91,9 +102,9 @@ export async function fetchAlbumCatalogue(
   }
 
   const album: AlbumSummary = {
-    id: slugify(albumTitle),
-    title: albumTitle,
-    artist: artistName || (songs[0]?.artist ?? 'Various Artists'),
+    id: slugify(safeTitle || 'untitled-album'),
+    title: safeTitle || 'Untitled Album',
+    artist: safeArtist || (songs[0]?.artist ?? 'Various Artists'),
     cover: songs[0]?.cover || '',
     year: new Date().getFullYear().toString(),
     trackCount: songs.length,
@@ -101,3 +112,4 @@ export async function fetchAlbumCatalogue(
 
   return { album, songs };
 }
+

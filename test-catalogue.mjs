@@ -15,6 +15,8 @@ test('normalizeArtistName — strips features, extras, and trims', () => {
   assert.equal(normalizeArtistName('  Sidhu Moose Wala [Official Audio]  '), 'Sidhu Moose Wala');
   assert.equal(normalizeArtistName('Karan Aujla, Ikky'), 'Karan Aujla');
   assert.equal(normalizeArtistName('AP Dhillon & Gurinder Gill'), 'AP Dhillon');
+  assert.equal(normalizeArtistName('AP Dhillon ft. Gurinder Gill'), 'AP Dhillon');
+  assert.equal(normalizeArtistName('Jazzy B x Gippy Grewal'), 'Jazzy B');
   assert.equal(normalizeArtistName(''), '');
 });
 
@@ -46,13 +48,16 @@ test('matchCuratedArtist — matches exact and case-insensitive names', () => {
 
 test('extractAlbumsFromSongs — extracts unique album names from song list', () => {
   const songs = [
-    { id: '1', title: 'G.O.A.T.', artist: 'Diljit Dosanjh', cover: 'cover1.jpg', duration: 180000, preview: '' },
-    { id: '2', title: 'Clash', artist: 'Diljit Dosanjh', cover: 'cover1.jpg', duration: 170000, preview: '' },
-    { id: '3', title: 'Born to Shine', artist: 'Diljit Dosanjh', cover: 'cover1.jpg', duration: 190000, preview: '' },
-    { id: '4', title: 'Lover', artist: 'Diljit Dosanjh', cover: 'cover2.jpg', duration: 200000, preview: '' },
+    { id: '1', title: 'G.O.A.T.', artist: 'Diljit Dosanjh', cover: 'cover1.jpg', duration: 180000, preview: '', album: 'G.O.A.T.' },
+    { id: '2', title: 'Clash', artist: 'Diljit Dosanjh', cover: 'cover1.jpg', duration: 170000, preview: '', album: 'G.O.A.T.' },
+    { id: '3', title: 'Born to Shine', artist: 'Diljit Dosanjh', cover: 'cover1.jpg', duration: 190000, preview: '', album: 'Born to Shine' },
+    { id: '4', title: 'Lover', artist: 'Diljit Dosanjh', cover: 'cover2.jpg', duration: 200000, preview: '', album: 'Born to Shine' },
   ];
 
   const albums = extractAlbumsFromSongs(songs, 'Diljit Dosanjh');
   assert.ok(albums.length >= 1);
   assert.equal(albums[0].artist, 'Diljit Dosanjh');
+  assert.equal(albums[0].title, 'G.O.A.T.');
+  assert.equal(albums[1].title, 'Born to Shine');
 });
+

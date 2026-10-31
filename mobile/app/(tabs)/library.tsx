@@ -110,7 +110,7 @@ export default function LibraryScreen() {
 
   const handleJamPress = useCallback(() => {
     tapFeedback();
-    router.push('/jam');
+    router.push('/(tabs)/room');
   }, []);
 
   const handlePodcastPress = useCallback(() => {
@@ -198,19 +198,19 @@ export default function LibraryScreen() {
         <Ionicons name="chevron-forward" size={20} color={colors.subtext} />
       </Pressable>
 
-      {/* Phase 11: Jam / Listening Party entry */}
+      {/* Group Room entry */}
       <Pressable
         onPress={handleJamPress}
         accessibilityRole="button"
-        accessibilityLabel="Jam rooms kholo"
+        accessibilityLabel="Group Room kholo"
         style={({ pressed }) => [styles.likedCard, pressed && styles.pressed]}
       >
         <View style={styles.likedIcon}>
           <Ionicons name="people-circle-outline" size={22} color={colors.primary} />
         </View>
         <View style={styles.likedInfo}>
-          <Text style={styles.likedTitle}>Jam Rooms</Text>
-          <Text style={styles.likedSubtitle}>Group suno — Jam & Listening Party</Text>
+          <Text style={styles.likedTitle}>Group Room 👥</Text>
+          <Text style={styles.likedSubtitle}>Doston naal milke sync suno</Text>
         </View>
         <Ionicons name="chevron-forward" size={20} color={colors.subtext} />
       </Pressable>

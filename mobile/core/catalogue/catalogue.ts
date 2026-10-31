@@ -4,19 +4,23 @@
  */
 import type { AlbumSummary, ArtistSummary, Song } from '../../types/index.ts';
 
+const COLLABORATOR_RE = /\s*(?:,|&|\/|\b(?:feat(?:uring)?|ft|with|x|vs)\.?\b)\s*/i;
+
 /**
  * Normalizes artist name by stripping bracketed extras like (feat. X),
  * [Official Video], and primary collaborator separators like ',' or '&'.
  */
 export function normalizeArtistName(raw: string): string {
   if (typeof raw !== 'string') return '';
+
   let clean = raw.trim();
-  // Strip bracketed text: (feat. ...), [Official ...], etc.
+  if (!clean) return '';
+
+  // Strip bracketed tags: (feat. X), [Official Audio], etc.
   clean = clean.replace(/[\(\[][^\)\]]*[\)\]]/g, '');
-  // Take primary artist if separated by comma or ampersand
-  const parts = clean.split(/[,&]/);
-  clean = parts[0]?.trim() ?? clean;
-  return clean.replace(/\s+/g, ' ').trim();
+
+  const primary = clean.split(COLLABORATOR_RE)[0]?.trim() ?? clean.trim();
+  return primary.replace(/\s+/g, ' ').trim();
 }
 
 /**
@@ -24,11 +28,19 @@ export function normalizeArtistName(raw: string): string {
  */
 export function slugify(text: string): string {
   if (typeof text !== 'string') return 'unknown';
-  const slug = text
-    .toLowerCase()
+
+  const normalized = text
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+
+  const slug = normalized
     .replace(/[^\w\s-]/g, '')
     .trim()
-    .replace(/[\s_-]+/g, '-');
+    .replace(/[\s_-]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+
   return slug.length > 0 ? slug : 'unknown';
 }
 
@@ -40,20 +52,18 @@ export function matchCuratedArtist(
   list: ArtistSummary[],
 ): ArtistSummary | null {
   if (typeof query !== 'string' || query.trim().length === 0) return null;
+
   const normalizedQuery = normalizeArtistName(query).toLowerCase();
   const slugQuery = slugify(normalizedQuery);
 
-  // 1. Exact match on id / slug
   for (const artist of list) {
     if (artist.id === slugQuery) return artist;
   }
 
-  // 2. Exact match on name
   for (const artist of list) {
     if (artist.name.toLowerCase() === normalizedQuery) return artist;
   }
 
-  // 3. Substring match
   for (const artist of list) {
     const artistLower = artist.name.toLowerCase();
     if (normalizedQuery.includes(artistLower) || artistLower.includes(normalizedQuery)) {
@@ -65,7 +75,8 @@ export function matchCuratedArtist(
 }
 
 /**
- * Groups songs by inferred releases / singles to construct album summaries.
+ * Groups songs by inferred release to build album summaries.
+ * Falls back to a single Top Hits & Singles bucket when no album metadata exists.
  */
 export function extractAlbumsFromSongs(
   songs: Song[],
@@ -73,17 +84,31 @@ export function extractAlbumsFromSongs(
 ): AlbumSummary[] {
   if (!Array.isArray(songs) || songs.length === 0) return [];
 
-  // Group top songs into albums/singles collection
-  const albums: AlbumSummary[] = [
-    {
-      id: slugify(`${artistName}-top-tracks`),
-      title: 'Top Hits & Singles',
-      artist: artistName,
-      cover: songs[0]?.cover || '',
-      year: new Date().getFullYear().toString(),
-      trackCount: songs.length,
-    },
-  ];
+  const albumMap = new Map<string, AlbumSummary>();
 
-  return albums;
+  for (const song of songs) {
+    const albumInfo = (song as Song & { album?: string }).album;
+    const albumTitle = typeof albumInfo === 'string' && albumInfo.trim().length > 0
+      ? albumInfo.trim()
+      : 'Top Hits & Singles';
+    const albumKey = slugify(`${artistName}-${albumTitle}`);
+
+    const existing = albumMap.get(albumKey);
+    if (existing) {
+      existing.trackCount = (existing.trackCount ?? 0) + 1;
+      if (!existing.cover && song.cover) existing.cover = song.cover;
+      continue;
+    }
+
+    albumMap.set(albumKey, {
+      id: albumKey,
+      title: albumTitle,
+      artist: artistName,
+      cover: song.cover || '',
+      year: new Date().getFullYear().toString(),
+      trackCount: 1,
+    });
+  }
+
+  return Array.from(albumMap.values());
 }
