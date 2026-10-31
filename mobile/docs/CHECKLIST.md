@@ -343,10 +343,10 @@
 ## 📦 PHASE 16: Build & Deploy
 
 ### Android
-- [ ] Install EAS CLI: `npm install -g eas-cli` (abhi global install nahi — `npx eas-cli` se bhi chalega)
-- [ ] `eas login` (Expo account user ka — yahan se login possible nahi)
+- [x] Install EAS CLI: `npm install -g eas-cli` (v24.8.0 / npx verified)
+- [x] `eas login` — authenticated with EXPO_TOKEN as `armaanpreet`
 - [x] `eas build:configure` → build config **ready** — `mobile/eas.json` hand-written (preview = APK, production = autoIncrement AAB); login ke baad ye command ise verify/regenerate kar legi
-- [ ] `eas build --platform android --profile preview` (login ke baad)
+- [~] `eas build --platform android --profile preview` — IN PROGRESS (build URL: https://expo.dev/accounts/armaanpreet/projects/punjabi-beats/builds/bba322b0-ea0b-4240-8214-a77b41f78564)
 - [ ] Download APK (EAS dashboard/CLI se)
 - [ ] Install on test device
 - [ ] Test all features
@@ -428,7 +428,7 @@ Before releasing:
 | Phase 13: Polish | 10 | 9 | 90% |
 | Phase 14: Extra Features (P2) | 9 | 9 | 100% |
 | Phase 15: Testing | 17 | 7 | 41% |
-| Phase 16: Build & Deploy | 15 | 3 | 20% |
+| Phase 16: Build & Deploy | 15 | 5 | 33% |
 | Phase 17: Documentation | 11 | 10 | 91% |
 | Phase 18: Liked Songs / Favorites | 22 | 21 | 95% |
 | Phase 19: Podcasts (Roadmap 12a) | 20 | 19 | 95% |
@@ -440,7 +440,7 @@ Before releasing:
 | Phase 25: Canonical Share Links V1 (Roadmap 8a) | 17 | 16 | 94% |
 | Phase 26: Selected Lyrics Sharing V1 (Roadmap 8b) | 11 | 10 | 91% |
 | Phase 27: Copy Link + QR Composer V1 (Roadmap 8c) | 14 | 13 | 93% |
-| **TOTAL** | **392** | **351** | **90%** |
+| **TOTAL** | **392** | **353** | **90%** |
 
 > Counts 2026-10-30 ko actual checkbox lines se dobara verify hue — har `## PHASE n` section
 > ke andar ke `- [ ]`/`- [x]` boxes gine gaye (SECTION 0/1/2 ke headers, Tracker table,
@@ -451,7 +451,7 @@ Before releasing:
 ### ⏳ Abhi kya pending hai (sirf yehi baaki)
 - **Device/manual tests** — har phase ke `Test:` boxes + Phase 15 ke 10 box (7 manual + 3 edge cases); **2-phone sync LIVE PASS (2026-09-27)**
 - **Phase 13 (1 box)** — runtime console-warnings device check (ESLint setup + 0-warning run ✓ done)
-- **Phase 16 (12 box)** — backend 2 box DONE (deploy + env); ab `npx eas-cli login` + builds (user)
+- **Phase 16 (10 box)** — EAS login + preview APK build IN PROGRESS on EAS cloud
 - **Phase 17 (1 box)** — screenshots baaki (GitHub repo create + push DONE)
 - **Phases 18–27** — code/automated checks done; manual device/deploy gates remain (Liked, Podcasts, Signals, AI Playlist, AI Assistant, Lyrics, Transcripts, Share Links, Lyrics Sharing, Copy/QR)
 
