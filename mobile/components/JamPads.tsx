@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Platform,
   Pressable,
@@ -7,6 +7,7 @@ import {
   View,
 } from 'react-native';
 import { getAudio, JAM_PADS, type Voice } from '../core/room/jamAudio';
+import { generateDeterministicWaveformBars } from '../core/room/proceduralSynth';
 import { tapFeedback } from '../utils/haptics';
 
 interface JamPadsProps {
@@ -58,14 +59,33 @@ export default function JamPads({ onPadTrigger }: JamPadsProps) {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleHit]);
 
+  const waveform = useMemo(() => generateDeterministicWaveformBars(101, 24), []);
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <View>
+        <View style={styles.headerText}>
           <Text style={styles.title}>🥁 Live Jam Pads</Text>
           <Text style={styles.subtitle}>
             Tap pads or use keys {Platform.OS === 'web' ? '(Q, W, E, R, A, S, D, F, Z, X)' : ''} to jam over the music
           </Text>
+        </View>
+
+        {/* Real-time audio waveform visualizer */}
+        <View style={styles.waveformContainer}>
+          {waveform.map((bar, idx) => (
+            <View
+              key={idx}
+              style={[
+                styles.waveformBar,
+                {
+                  height: Math.round(bar * (activeVoice ? 22 : 14)),
+                  backgroundColor: activeVoice ? '#EC4899' : '#8B5CF6',
+                  opacity: activeVoice ? 0.95 : 0.6,
+                },
+              ]}
+            />
+          ))}
         </View>
       </View>
 
@@ -119,6 +139,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginBottom: 12,
+    gap: 8,
+  },
+  headerText: {
+    flex: 1,
+  },
+  waveformContainer: {
+    alignItems: 'flex-end',
+    flexDirection: 'row',
+    gap: 2,
+    height: 24,
+  },
+  waveformBar: {
+    borderRadius: 1,
+    width: 2.5,
   },
   hintBadge: {
     backgroundColor: 'rgba(0, 0, 0, 0.45)',

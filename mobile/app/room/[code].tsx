@@ -15,9 +15,11 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CONNECTION_DOT, CONNECTION_LABEL } from '../../constants/connection';
 import { useRoom } from '../../stores/roomStore';
+import { usePlayer } from '../../stores/playerStore';
 import { setChatOpen } from '../../services/roomSync';
 import ChatModal from '../../components/ChatModal';
 import JamPads from '../../components/JamPads';
+import TrackSleeveArt from '../../components/TrackSleeveArt';
 import { useMiniPlayerPadding } from '../../hooks/useMiniPlayerPadding';
 import { successFeedback, tapFeedback, warningFeedback } from '../../utils/haptics';
 import { colors } from '../../constants/colors';
@@ -44,6 +46,8 @@ export default function RoomScreen() {
   const unreadCount = useRoom(s => s.unreadCount);
   const joinRoom = useRoom(s => s.joinRoom);
   const leaveRoom = useRoom(s => s.leaveRoom);
+  const currentSong = usePlayer(s => s.currentSong);
+  const isPlaying = usePlayer(s => s.isPlaying);
 
   const [joinError, setJoinError] = useState<string | null>(null);
   /** FR-5.12 chat modal open state (badge modal khulne pe reset hota hai) */
@@ -114,6 +118,15 @@ export default function RoomScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.body}>
+          <View style={styles.sleeveContainer}>
+            <TrackSleeveArt
+              title={currentSong ? currentSong.title : 'Live Jam'}
+              artist={currentSong ? currentSong.artist : 'Punjabi Beats'}
+              isPlaying={isPlaying}
+              size="md"
+            />
+          </View>
+
           <Text style={styles.label}>Room Code</Text>
           <Text style={styles.code} accessibilityLabel={`Room code ${routeCode}`}>
             {routeCode}
@@ -338,6 +351,9 @@ const styles = StyleSheet.create({
   padsContainer: {
     marginTop: spacing.md,
     width: '100%',
+  },
+  sleeveContainer: {
+    marginBottom: spacing.md,
   },
   pressed: { opacity: 0.7 },
   scrollContent: {

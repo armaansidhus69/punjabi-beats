@@ -24,7 +24,13 @@ import {
   smoothCorrectionDurationMs,
   isPresenceStale,
   NtpClock,
+  evaluatePllDrift,
+  calculateTargetPositionMs,
 } from './mobile/core/room/timeModel.ts';
+import {
+  generateDeterministicWaveformBars,
+  JAM_CATALOG_TRACKS,
+} from './mobile/core/room/proceduralSynth.ts';
 import {
   calculateQueueScore,
   applyVote,
@@ -382,6 +388,61 @@ test('JamAudio — voices, pad layout, and midi formula', () => {
   assert.equal(Math.round(midiToFreq(69)), 440);
   // A5 = MIDI note 81 = 880 Hz
   assert.equal(Math.round(midiToFreq(81)), 880);
+});
+
+/* ------------------------------ PLL Audio Sync & Waveform tests ------------------------------ */
+
+test('PLL Audio Sync — 3-tier drift evaluation (Deadband, PLL Nudge, Hard Seek)', () => {
+  // Target position calculation with wrap
+  const target = calculateTargetPositionMs(5000, 1000, 2000, 1.0, 60000);
+  assert.equal(target, 6000); // 5000 + (2000 - 1000) * 1.0
+
+  // Tier 1: Deadband (|drift| <= 18ms)
+  const tier1 = evaluatePllDrift(6010, 6000);
+  assert.equal(tier1.status, 'LOCKED');
+  assert.equal(tier1.playbackRate, 1.0);
+  assert.equal(tier1.seekTargetMs, null);
+
+  // Tier 2: Micro-pitch catch-up (18ms < |drift| <= 140ms)
+  // Local ahead by 50ms -> slow down rate slightly below 1.0
+  const tier2Fast = evaluatePllDrift(6050, 6000);
+  assert.equal(tier2Fast.status, 'PLL_ADJUST');
+  assert.ok(tier2Fast.playbackRate < 1.0);
+  assert.ok(tier2Fast.playbackRate >= 0.965);
+  assert.equal(tier2Fast.seekTargetMs, null);
+
+  // Local behind by 50ms -> speed up rate slightly above 1.0
+  const tier2Slow = evaluatePllDrift(5950, 6000);
+  assert.equal(tier2Slow.status, 'PLL_ADJUST');
+  assert.ok(tier2Slow.playbackRate > 1.0);
+  assert.ok(tier2Slow.playbackRate <= 1.035);
+  assert.equal(tier2Slow.seekTargetMs, null);
+
+  // Tier 3: Hard Frame Resync (|drift| > 140ms)
+  const tier3 = evaluatePllDrift(6200, 6000);
+  assert.equal(tier3.status, 'HARD_SEEK');
+  assert.equal(tier3.seekTargetMs, 6000);
+  assert.equal(tier3.playbackRate, 1.0);
+});
+
+test('Procedural Waveforms & Catalog — deterministic bars and blueprints', () => {
+  const bars = generateDeterministicWaveformBars(101, 24);
+  assert.equal(bars.length, 24);
+  for (const bar of bars) {
+    assert.ok(bar >= 0.18 && bar <= 1.0);
+  }
+
+  // Same seed produces identical waveform
+  const bars2 = generateDeterministicWaveformBars(101, 24);
+  assert.deepEqual(bars, bars2);
+
+  // Catalog tracks contain required blueprints
+  assert.ok(JAM_CATALOG_TRACKS.length >= 4);
+  const track1 = JAM_CATALOG_TRACKS[0];
+  assert.ok(track1.id);
+  assert.ok(track1.title);
+  assert.ok(track1.bpm > 60);
+  assert.ok(track1.coverGradient.length === 3);
 });
 
 /* ------------------------------ parity guard ------------------------------ */

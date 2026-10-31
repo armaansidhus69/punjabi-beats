@@ -184,3 +184,82 @@ export class NtpClock {
   }
 }
 
+/* ------------------------------------------------------------------ *
+ * Audio Phase-Locked Loop (PLL) Drift Evaluation
+ * ------------------------------------------------------------------ */
+
+export type PllStatus = 'LOCKED' | 'PLL_ADJUST' | 'HARD_SEEK';
+
+export interface PllEvaluation {
+  driftMs: number;
+  status: PllStatus;
+  playbackRate: number;
+  seekTargetMs: number | null;
+}
+
+export const PLL_DEADBAND_MS = 18;
+export const PLL_MAX_SMOOTH_MS = 140;
+export const PLL_MIN_RATE = 0.965;
+export const PLL_MAX_RATE = 1.035;
+
+/**
+ * Calculates authoritative playback position given server time anchor.
+ */
+export function calculateTargetPositionMs(
+  positionMsAtAnchor: number,
+  serverAnchorEpochMs: number,
+  serverNowMs: number,
+  playbackRate = 1.0,
+  trackDurationMs = 0
+): number {
+  const elapsed = Math.max(0, (serverNowMs - serverAnchorEpochMs) * playbackRate);
+  const target = positionMsAtAnchor + elapsed;
+
+  if (trackDurationMs > 0) {
+    return Math.max(0, Math.min(trackDurationMs, target % trackDurationMs));
+  }
+  return Math.max(0, target);
+}
+
+/**
+ * Evaluates local audio drift against authoritative target position
+ * and returns PLL rate correction or seek decision.
+ */
+export function evaluatePllDrift(
+  localCurrentTimeMs: number,
+  targetPositionMs: number
+): PllEvaluation {
+  const driftMs = Number((localCurrentTimeMs - targetPositionMs).toFixed(1));
+  const absDrift = Math.abs(driftMs);
+
+  if (absDrift > PLL_MAX_SMOOTH_MS) {
+    return {
+      driftMs,
+      status: 'HARD_SEEK',
+      playbackRate: 1.0,
+      seekTargetMs: targetPositionMs,
+    };
+  }
+
+  if (absDrift > PLL_DEADBAND_MS) {
+    // Micro-pitch catch-up: rate adjusted proportionally within [0.965, 1.035]
+    const correction = Math.max(-0.035, Math.min(0.035, -driftMs / 2200));
+    const playbackRate = Number((1.0 + correction).toFixed(3));
+    return {
+      driftMs,
+      status: 'PLL_ADJUST',
+      playbackRate,
+      seekTargetMs: null,
+    };
+  }
+
+  return {
+    driftMs,
+    status: 'LOCKED',
+    playbackRate: 1.0,
+    seekTargetMs: null,
+  };
+}
+
+
+
