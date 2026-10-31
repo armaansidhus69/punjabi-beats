@@ -14,6 +14,8 @@
 
 /** response array ka max size — Gemini ki lambi lists bhi yahin kaat (cap) */
 export const AI_MAX_TRACKS = 15;
+// Gemini 2.5 new projects ko 404 deta hai; ye current free-tier stable default hai.
+export const DEFAULT_GEMINI_MODEL = 'gemini-3.5-flash-lite';
 /** per-device per-day generations (free tier ke niche safe) */
 export const AI_DAILY_LIMIT = 10;
 /** per-device per-hour generations */

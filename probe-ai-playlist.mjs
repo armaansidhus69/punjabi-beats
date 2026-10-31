@@ -5,19 +5,18 @@
 //     hoti hai (no Gemini call fails fast — fetch errors branch cover hota);
 //     no_key / 405 / 400 / rate-limit branches yahin pure check hote.
 //
-// Deploy KE BAAD (live):    node probe-ai-playlist.mjs --live https://punjabi-beats-api.vercel.app
-//   → deployed /api/ai-playlist pe asli POST (400 bad_request guard +
-//     rate-limit/Googs key fail branch) — REAL generation 400 behavior ke
-//     liye GEMINI_API_KEY Vercel env me Pehle set honi chahiye.
+// Deploy KE BAAD (guards):  node probe-ai-playlist.mjs --live https://punjabi-beats-api.vercel.app
+// Full Gemini generation:   upar wale command ke end me `--generate` lagao.
 
 process.env.GEMINI_API_KEY = process.env.GEMINI_API_KEY || 'dummy_local_key_for_probe';
-process.env.GEMINI_MODEL = 'gemini-2.5-flash';
+process.env.GEMINI_MODEL = 'gemini-3.5-flash-lite';
 
 const { default: handler } = await import('./api/ai-playlist.js');
 
 const args = process.argv.slice(2);
 const liveIdx = args.indexOf('--live');
 const liveBase = liveIdx >= 0 ? args[liveIdx + 1] : null;
+const generateLive = args.includes('--generate');
 
 let failures = 0;
 function check(label, cond, detail) {
@@ -78,11 +77,11 @@ async function liveTests(base) {
   const url = `${base.replace(/\/+$/, '')}/api/ai-playlist`;
 
   // 1) GET → 405
-  let res = await fetch(url, { method: 'GET' });
+  let res = await fetchWithTimeout(url, { method: 'GET' });
   check('GET → 405', res.status === 405, `got ${res.status}`);
 
   // 2) empty prompt → 400 bad_request (key pehle check hoti hai)
-  res = await fetch(url, {
+  res = await fetchWithTimeout(url, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ prompt: '', deviceId: 'probe-live' }),
@@ -95,7 +94,36 @@ async function liveTests(base) {
     console.log('  WARN  GEMINI_API_KEY Vercel env me NAHI hai — user ke liye screen upsell dikhta rahega.');
   }
 
-  console.log('NOTE: full 200-generation live probe manual — Vercel env me GEMINI_API_KEY set karo, phir mobile/.env me EXPO_PUBLIC_YOUTUBE_MATCH_URL base pe screen se generate karo.');
+  if (!generateLive) {
+    console.log('NOTE: real Gemini 200-path ke liye `--generate` add karo.');
+    return;
+  }
+
+  res = await fetchWithTimeout(url, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      prompt: 'five upbeat Punjabi workout songs',
+      deviceId: `probe-generate-${Date.now().toString(36)}`,
+    }),
+  });
+  const generated = await res.json().catch(() => ({}));
+  check('real generation → 200', res.status === 200, `got ${res.status} ${JSON.stringify(generated)}`);
+  check(
+    'real generation has tracks + disclosure',
+    Array.isArray(generated?.tracks) && generated.tracks.length > 0 && generated.disclosure === true,
+    JSON.stringify(generated),
+  );
+}
+
+async function fetchWithTimeout(url, init) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 30_000);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 if (liveBase) {
@@ -104,4 +132,4 @@ if (liveBase) {
   await localTests();
 }
 console.log(failures === 0 ? '\nAll checks PASSED' : `\n${failures} check(s) FAILED`);
-process.exit(failures === 0 ? 0 : 1);
+process.exitCode = failures === 0 ? 0 : 1;

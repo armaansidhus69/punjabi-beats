@@ -20,11 +20,11 @@ import {
   parseAssistantResponse,
   rateLimitBucket,
 } from './_aiAssistantCore.js';
-import { extractGeminiText } from './_aiPlaylistCore.js';
+import { DEFAULT_GEMINI_MODEL, extractGeminiText } from './_aiPlaylistCore.js';
 
 /** Gemini timeout budget — free tier latency ~10s, 20s buffer (13b parity) */
 const GEMINI_TIMEOUT_MS = 20_000;
-const DEFAULT_MODEL = (process.env.GEMINI_MODEL ?? 'gemini-2.5-flash').replace(/[^a-z0-9.\-]/gi, '');
+const DEFAULT_MODEL = (process.env.GEMINI_MODEL ?? DEFAULT_GEMINI_MODEL).replace(/[^a-z0-9.\-]/gi, '');
 
 const rateState = new Map(); // deviceId → {hits} — assistant apna bucket state
 

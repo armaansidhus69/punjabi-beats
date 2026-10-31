@@ -15,6 +15,7 @@
 import {
   AI_DAILY_LIMIT,
   AI_HOURLY_LIMIT,
+  DEFAULT_GEMINI_MODEL,
   buildAiPrompt,
   buildGeminiRequest,
   extractGeminiText,
@@ -26,7 +27,7 @@ import {
 /** Gemini timeout budget — free tier latency ~10s, 20s buffer */
 const GEMINI_TIMEOUT_MS = 20_000;
 /** model pin — free-tier friendly flash; env override deployments ke liye */
-const DEFAULT_MODEL = (process.env.GEMINI_MODEL ?? 'gemini-2.5-flash').replace(/[^a-z0-9.\-]/gi, '');
+const DEFAULT_MODEL = (process.env.GEMINI_MODEL ?? DEFAULT_GEMINI_MODEL).replace(/[^a-z0-9.\-]/gi, '');
 
 const rateState = new Map(); // deviceId → {hits: number[]} — warm-instance only
 

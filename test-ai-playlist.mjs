@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   AI_MAX_TRACKS,
+  DEFAULT_GEMINI_MODEL,
   AI_DAILY_LIMIT,
   AI_HOURLY_LIMIT,
   AI_PROMPT_MAX_CHARS,
@@ -71,8 +72,9 @@ test('server core: prompt builder — user text isolation + taste block', () => 
 });
 
 test('server core: buildGeminiRequest + extractGeminiText', () => {
-  const { url, init } = buildGeminiRequest('gemini-2.5-flash', 'KEY', 'hi');
-  assert.match(url, /models\/gemini-2\.5-flash:generateContent$/);
+  assert.equal(DEFAULT_GEMINI_MODEL, 'gemini-3.5-flash-lite');
+  const { url, init } = buildGeminiRequest(DEFAULT_GEMINI_MODEL, 'KEY', 'hi');
+  assert.match(url, /models\/gemini-3\.5-flash-lite:generateContent$/);
   assert.equal(init.headers['x-goog-api-key'], 'KEY');
   assert.match(init.body, /responseMimeType/);
   const payload = { candidates: [{ content: { parts: [{ text: 'part1' }, { text: 'part2' }] }, finishReason: 'STOP' }, {}] };

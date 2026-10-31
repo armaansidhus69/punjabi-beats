@@ -1,8 +1,10 @@
 // probe-share.mjs — Phase 8a handler self-test + optional deployed guard smoke.
 //
 // Local: node probe-share.mjs
-// Live:  node probe-share.mjs --live https://your-vercel-app.vercel.app
+// Live guards: node probe-share.mjs --live https://your-vercel-app.vercel.app
+// Live create: PUBLISH_CLIENT_TOKEN=... same command (value kabhi log nahi hoti).
 
+const liveClientToken = process.env.PUBLISH_CLIENT_TOKEN ?? '';
 process.env.SHARE_SIGNING_SECRET = 'probe-secret-'.padEnd(40, 'x');
 process.env.SHARE_PUBLIC_BASE_URL = 'https://share-probe.example';
 process.env.PUBLISH_CLIENT_TOKEN = 'probe-client-token';
@@ -144,12 +146,46 @@ async function localProbe() {
 async function liveProbe(base) {
   const url = `${base.replace(/\/+$/, '')}/api/share`;
   console.log(`--- Share deployed guard probe: ${url} ---`);
-  let response = await fetch(url, { method: 'OPTIONS' });
+  let response = await fetchWithTimeout(url, { method: 'OPTIONS' });
   check('live OPTIONS → 204', response.status === 204, `got ${response.status}`);
-  response = await fetch(`${url}?token=invalid&format=json`);
+  response = await fetchWithTimeout(`${url}?token=invalid&format=json`);
   check('live invalid token rejected', response.status === 400 || response.status === 500, `got ${response.status}`);
   const body = await response.json().catch(() => ({}));
   if (body?.error === 'no_key') console.log('  WARN  SHARE_SIGNING_SECRET/SHARE_PUBLIC_BASE_URL/PUBLISH_CLIENT_TOKEN missing');
+  if (!liveClientToken) {
+    console.log('  INFO  PUBLISH_CLIENT_TOKEN missing locally; authorized create/resolve skipped');
+    return;
+  }
+
+  response = await fetchWithTimeout(url, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'x-publish-token': liveClientToken,
+    },
+    body: JSON.stringify(validBody(`probe-live-${Date.now().toString(36)}`)),
+  });
+  const created = await response.json().catch(() => ({}));
+  check('live authorized POST creates token', response.status === 200 && /^v1\./.test(created?.token ?? ''), `got ${response.status}`);
+  if (response.status !== 200 || typeof created?.token !== 'string') return;
+
+  response = await fetchWithTimeout(`${url}?token=${encodeURIComponent(created.token)}&format=json`);
+  const resolved = await response.json().catch(() => ({}));
+  check(
+    'live token resolves strict track payload',
+    response.status === 200 && resolved?.payload?.kind === 'track' && resolved?.payload?.data?.title === 'Softly',
+    `got ${response.status}`,
+  );
+}
+
+async function fetchWithTimeout(url, init = {}) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 15_000);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 if (liveBase) await liveProbe(liveBase);

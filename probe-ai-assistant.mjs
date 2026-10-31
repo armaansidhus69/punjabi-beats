@@ -5,18 +5,18 @@
 //     + Retry-After (dummy GEMINI key force — partial upstream fail bhi
 //     honest branch hota hai).
 //
-// Deploy KE BAAD (live):    node probe-ai-assistant.mjs --live https://punjabi-beats-api.vercel.app
-//   → deployed /api/ai-assistant pe 405 + guard checks; GEMINI key missing
-//     ho to no_key warning (upsell screen) dikhata hai.
+// Deploy KE BAAD (guards):  node probe-ai-assistant.mjs --live https://punjabi-beats-api.vercel.app
+// Full Gemini generation:   upar wale command ke end me `--generate` lagao.
 
 process.env.GEMINI_API_KEY = process.env.GEMINI_API_KEY || 'dummy_local_key_for_probe';
-process.env.GEMINI_MODEL = 'gemini-2.5-flash';
+process.env.GEMINI_MODEL = 'gemini-3.5-flash-lite';
 
 const { default: handler } = await import('./api/ai-assistant.js');
 
 const args = process.argv.slice(2);
 const liveIdx = args.indexOf('--live');
 const liveBase = liveIdx >= 0 ? args[liveIdx + 1] : null;
+const generateLive = args.includes('--generate');
 
 let failures = 0;
 function check(label, cond, detail) {
@@ -75,10 +75,10 @@ async function liveTests(base) {
   console.log(`--- Live probe: ${base}/api/ai-assistant ---`);
   const url = `${base.replace(/\/+$/, '')}/api/ai-assistant`;
 
-  let res = await fetch(url, { method: 'GET' });
+  let res = await fetchWithTimeout(url, { method: 'GET' });
   check('GET → 405', res.status === 405, `got ${res.status}`);
 
-  res = await fetch(url, {
+  res = await fetchWithTimeout(url, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ message: '', deviceId: 'probe-live' }),
@@ -90,7 +90,38 @@ async function liveTests(base) {
     console.log('  WARN  GEMINI_API_KEY Vercel env me NAHI hai — assistant 400 no_key dega.');
   }
 
-  console.log('NOTE: full live generation chat screen se — EXPO_PUBLIC_AI_ASSISTANT_ENABLED=true ke baad.');
+  if (!generateLive) {
+    console.log('NOTE: real Gemini 200-path ke liye `--generate` add karo.');
+    return;
+  }
+
+  res = await fetchWithTimeout(url, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      message: 'Recommend one upbeat Punjabi song',
+      deviceId: `probe-generate-${Date.now().toString(36)}`,
+    }),
+  });
+  const generated = await res.json().catch(() => ({}));
+  check('real generation → 200', res.status === 200, `got ${res.status} ${JSON.stringify(generated)}`);
+  check(
+    'real generation has action + reply + disclosure',
+    typeof generated?.action === 'string' &&
+      typeof generated?.reply === 'string' &&
+      generated.disclosure === true,
+    JSON.stringify(generated),
+  );
+}
+
+async function fetchWithTimeout(url, init) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 30_000);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 if (liveBase) {
@@ -99,4 +130,4 @@ if (liveBase) {
   await localTests();
 }
 console.log(failures === 0 ? '\nAll checks PASSED' : `\n${failures} check(s) FAILED`);
-process.exit(failures === 0 ? 0 : 1);
+process.exitCode = failures === 0 ? 0 : 1;

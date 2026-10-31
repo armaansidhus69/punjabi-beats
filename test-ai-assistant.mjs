@@ -83,8 +83,8 @@ test('server core: prompt builder — user text + turns isolation', () => {
 });
 
 test('server core: buildAssistantGeminiRequest shape', () => {
-  const { url, init } = buildAssistantGeminiRequest('gemini-2.5-flash', 'KEY', 'hi');
-  assert.match(url, /models\/gemini-2\.5-flash:generateContent$/);
+  const { url, init } = buildAssistantGeminiRequest('gemini-3.5-flash-lite', 'KEY', 'hi');
+  assert.match(url, /models\/gemini-3\.5-flash-lite:generateContent$/);
   assert.equal(init.headers['x-goog-api-key'], 'KEY');
   assert.match(init.body, /responseMimeType/);
 });
