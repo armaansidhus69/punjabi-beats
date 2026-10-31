@@ -27,10 +27,14 @@ export default function JamGate({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      const enabled = isFeatureEnabled('jam_enabled');
-      const user = await getCurrentUser();
-      if (cancelled) return;
-      setGate({ checking: false, enabled, authed: user !== null });
+      try {
+        const enabled = isFeatureEnabled('jam_enabled');
+        const user = await getCurrentUser();
+        if (cancelled) return;
+        setGate({ checking: false, enabled, authed: user !== null });
+      } catch {
+        if (!cancelled) setGate({ checking: false, enabled: false, authed: false });
+      }
     })();
     return () => {
       cancelled = true;

@@ -160,10 +160,14 @@ export function getAuthSession(): Promise<{ session: Session | null }> {
 }
 
 export async function getCurrentUser(): Promise<User | null> {
-  const client = requireClient();
-  const { data, error } = await client.auth.getUser();
-  if (error) throw mapError(error);
-  return data.user;
+  if (!supabase) return null;
+  try {
+    const { data, error } = await supabase.auth.getUser();
+    if (error) return null;
+    return data.user;
+  } catch {
+    return null;
+  }
 }
 
 export function subscribeToAuthState(listener: AuthStateListener): () => void {

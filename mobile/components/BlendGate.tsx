@@ -28,10 +28,14 @@ export default function BlendGate({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      const enabled = isFeatureEnabled('blend_enabled');
-      const user = await getCurrentUser();
-      if (cancelled) return;
-      setGate({ checking: false, enabled, authed: user !== null });
+      try {
+        const enabled = isFeatureEnabled('blend_enabled');
+        const user = await getCurrentUser();
+        if (cancelled) return;
+        setGate({ checking: false, enabled, authed: user !== null });
+      } catch {
+        if (!cancelled) setGate({ checking: false, enabled: false, authed: false });
+      }
     })();
     return () => {
       cancelled = true;

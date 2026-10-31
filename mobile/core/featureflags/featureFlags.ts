@@ -33,38 +33,26 @@ export const DEFAULT_FEATURE_FLAGS: FeatureFlags = {
   events_enabled: false,
 };
 
-let currentFlags: FeatureFlags = {
-  ...DEFAULT_FEATURE_FLAGS,
-  auth_enabled: process.env.EXPO_PUBLIC_AUTH_ENABLED === 'true',
-};
+export function resolveFlagsFromEnv(): FeatureFlags {
+  return {
+    ...DEFAULT_FEATURE_FLAGS,
+    auth_enabled: process.env.EXPO_PUBLIC_AUTH_ENABLED === 'true',
+    social_share_enabled: process.env.EXPO_PUBLIC_SOCIAL_SHARE_ENABLED === 'true',
+    blend_enabled: process.env.EXPO_PUBLIC_BLEND_ENABLED === 'true',
+    jam_enabled: process.env.EXPO_PUBLIC_JAM_ENABLED === 'true',
+    podcasts_enabled: process.env.EXPO_PUBLIC_PODCASTS_ENABLED === 'true',
+    lyrics_enabled: process.env.EXPO_PUBLIC_LYRICS_ENABLED === 'true',
+    ai_playlist_enabled: process.env.EXPO_PUBLIC_AI_PLAYLIST_ENABLED === 'true',
+    ai_assistant_enabled: process.env.EXPO_PUBLIC_AI_ASSISTANT_ENABLED === 'true',
+  };
+}
+
+let currentFlags: FeatureFlags = resolveFlagsFromEnv();
 
 export function initializeFeatureFlags(): void {
   // Internal/beta opt-in only. Production defaults remain disabled unless the
   // app bundle explicitly enables a feature for a controlled build.
-  if (process.env.EXPO_PUBLIC_AUTH_ENABLED === 'true') {
-    currentFlags = { ...currentFlags, auth_enabled: true };
-  }
-  if (process.env.EXPO_PUBLIC_SOCIAL_SHARE_ENABLED === 'true') {
-    currentFlags = { ...currentFlags, social_share_enabled: true };
-  }
-  if (process.env.EXPO_PUBLIC_BLEND_ENABLED === 'true') {
-    currentFlags = { ...currentFlags, blend_enabled: true };
-  }
-  if (process.env.EXPO_PUBLIC_JAM_ENABLED === 'true') {
-    currentFlags = { ...currentFlags, jam_enabled: true };
-  }
-  if (process.env.EXPO_PUBLIC_PODCASTS_ENABLED === 'true') {
-    currentFlags = { ...currentFlags, podcasts_enabled: true };
-  }
-  if (process.env.EXPO_PUBLIC_LYRICS_ENABLED === 'true') {
-    currentFlags = { ...currentFlags, lyrics_enabled: true };
-  }
-  if (process.env.EXPO_PUBLIC_AI_PLAYLIST_ENABLED === 'true') {
-    currentFlags = { ...currentFlags, ai_playlist_enabled: true };
-  }
-  if (process.env.EXPO_PUBLIC_AI_ASSISTANT_ENABLED === 'true') {
-    currentFlags = { ...currentFlags, ai_assistant_enabled: true };
-  }
+  currentFlags = resolveFlagsFromEnv();
 }
 
 export function isFeatureEnabled(flag: FeatureFlagName): boolean {
