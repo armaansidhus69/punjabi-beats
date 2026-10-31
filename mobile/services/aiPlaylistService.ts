@@ -36,6 +36,7 @@ export class AiPlaylistError extends Error {
   constructor(code: AiPlaylistErrorCode, message: string, extra?: { retryAfterSec?: number; got?: number }) {
     super(message);
     this.name = 'AiPlaylistError';
+    Object.setPrototypeOf(this, AiPlaylistError.prototype);
     this.code = code;
     this.retryAfterSec = extra?.retryAfterSec;
     this.got = extra?.got;
@@ -221,18 +222,23 @@ export async function appendPromptHistory(
 
 /** friendly Hinglish error surface — codes har action screen se aate hain */
 export function describeAiPlaylistError(err: unknown): string {
-  if (err instanceof AiPlaylistError) {
-    switch (err.code) {
+  const isCustomAiError =
+    err instanceof AiPlaylistError ||
+    (typeof err === 'object' && err !== null && (err as { name?: string }).name === 'AiPlaylistError');
+
+  if (isCustomAiError) {
+    const aiErr = err as AiPlaylistError;
+    switch (aiErr.code) {
       case 'no_key':
         return 'AI key server pe set nahi hai — deploy baad me feature live hoga';
       case 'rate_limited':
-        return `Thoda ruk jao — try again ${Math.ceil(err.retryAfterSec ?? 60)}s me`;
+        return `Thoda ruk jao — try again ${Math.ceil(aiErr.retryAfterSec ?? 60)}s me`;
       case 'not_enough':
-        return `Match kam mile (${err.got ?? 0}) — dobara generate karo ya prompt badlo`;
+        return `Match kam mile (${aiErr.got ?? 0}) — dobara generate karo ya prompt badlo`;
       case 'network':
-        return err.message || 'Network issue — internet check karo';
+        return aiErr.message || 'Network issue — internet check karo';
       case 'bad_request':
-        return err.message || 'Prompt thoda sahi likho — min 2 chars, max 240';
+        return aiErr.message || 'Prompt thoda sahi likho — min 2 chars, max 240';
       default:
         return 'AI provider se connect nahi hua — dobara try karo';
     }

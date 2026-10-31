@@ -38,9 +38,10 @@ export default function MiniPlayer({ bottomOffset = 0 }: MiniPlayerProps) {
 
   // Tab bar na hone pe (bottomOffset 0) safe-area inset khud handle karo
   const bottomPad = bottomOffset === 0 ? insets.bottom : 0;
+  const effectiveBottom = bottomOffset > 0 ? bottomOffset + 6 : 6 + bottomPad;
 
   return (
-    <View style={[styles.container, { bottom: bottomOffset, paddingBottom: bottomPad }]}>
+    <View style={[styles.container, { bottom: effectiveBottom }]}>
       {/* Thin progress bar top pe (non-interactive) */}
       <View style={styles.progress} pointerEvents="none">
         <ProgressBar position={position} duration={duration} variant="mini" />
@@ -56,7 +57,7 @@ export default function MiniPlayer({ bottomOffset = 0 }: MiniPlayerProps) {
           accessibilityRole="button"
           accessibilityLabel="Poora player kholo"
         >
-          <SongArtwork uri={currentSong.cover} size={44} radius={8} />
+          <SongArtwork uri={currentSong.cover} size={46} radius={10} />
           <View style={styles.info}>
             <Text style={styles.title} numberOfLines={1}>
               {currentSong.title}
@@ -81,11 +82,18 @@ export default function MiniPlayer({ bottomOffset = 0 }: MiniPlayerProps) {
 const styles = StyleSheet.create({
   container: {
     position: 'absolute',
-    left: 0,
-    right: 0,
-    backgroundColor: colors.surface,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
+    left: spacing.sm,
+    right: spacing.sm,
+    backgroundColor: '#161622',
+    borderRadius: 16,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.12)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.5,
+    shadowRadius: 12,
+    elevation: 8,
   },
   progress: { position: 'absolute', top: -5, left: 0, right: 0 },
   row: {

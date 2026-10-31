@@ -44,7 +44,9 @@ export default function MoodCard({ mood, onPress }: MoodCardProps) {
       }}
       style={[styles.card, animatedStyle]}
     >
-      <Text style={styles.emoji}>{mood.emoji}</Text>
+      <View style={styles.emojiContainer}>
+        <Text style={styles.emoji}>{mood.emoji}</Text>
+      </View>
       <View style={styles.footer}>
         <Text style={styles.title} numberOfLines={1}>
           {mood.title}
@@ -59,16 +61,29 @@ export default function MoodCard({ mood, onPress }: MoodCardProps) {
 const styles = StyleSheet.create({
   card: {
     flex: 1,
-    minHeight: 104,
-    backgroundColor: colors.card,
-    borderRadius: 15,
+    minHeight: 112,
+    backgroundColor: '#161622',
+    borderRadius: 18,
     borderWidth: 1,
-    borderColor: colors.border,
-    padding: spacing.lg,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    padding: spacing.md + 2,
     justifyContent: 'space-between',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 3,
   },
-  emoji: { fontSize: 26 },
-  footer: { gap: spacing.sm },
-  title: { ...typography.h2, color: colors.text },
-  accentBar: { width: 28, height: 3, borderRadius: 2 },
+  emojiContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emoji: { fontSize: 24 },
+  footer: { gap: spacing.xs + 2 },
+  title: { ...typography.body, fontSize: 16, fontWeight: '700', color: colors.text },
+  accentBar: { width: 32, height: 3.5, borderRadius: 2 },
 });

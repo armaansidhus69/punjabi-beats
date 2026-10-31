@@ -9,6 +9,7 @@ import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import LoadingSpinner from './LoadingSpinner';
 import { getCurrentUser } from '../core/auth/authService';
 import { isFeatureEnabled } from '../core/featureflags/featureFlags';
 import { colors } from '../constants/colors';
@@ -30,9 +31,16 @@ export default function BlendGate({ children }: { children: React.ReactNode }) {
     void (async () => {
       try {
         const enabled = isFeatureEnabled('blend_enabled');
-        const user = await getCurrentUser();
+        if (!enabled) {
+          if (!cancelled) setGate({ checking: false, enabled: false, authed: false });
+          return;
+        }
+        const user = await Promise.race([
+          getCurrentUser(),
+          new Promise<null>(resolve => setTimeout(() => resolve(null), 1500)),
+        ]);
         if (cancelled) return;
-        setGate({ checking: false, enabled, authed: user !== null });
+        setGate({ checking: false, enabled: true, authed: user !== null });
       } catch {
         if (!cancelled) setGate({ checking: false, enabled: false, authed: false });
       }
@@ -43,7 +51,11 @@ export default function BlendGate({ children }: { children: React.ReactNode }) {
   }, []);
 
   if (gate.checking) {
-    return null;
+    return (
+      <View style={styles.container}>
+        <LoadingSpinner label="Checking Blend..." />
+      </View>
+    );
   }
 
   if (!gate.enabled || !gate.authed) {

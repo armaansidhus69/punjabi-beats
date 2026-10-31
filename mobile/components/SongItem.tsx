@@ -5,6 +5,7 @@
  */
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
 import { Song } from '../types';
 import { colors } from '../constants/colors';
 import { typography } from '../constants/typography';
@@ -25,6 +26,8 @@ interface SongItemProps {
   /** diya jaaye tabhi heart button dikhta hai — liked songs toggle */
   isLiked?: boolean;
   onLikePress?: (song: Song) => void;
+  /** artist tap pe dedicated page navigation */
+  onArtistPress?: (artistName: string) => void;
 }
 
 export default function SongItem({
@@ -35,7 +38,17 @@ export default function SongItem({
   onRemovePress,
   isLiked = false,
   onLikePress,
+  onArtistPress,
 }: SongItemProps) {
+  const handleArtistClick = () => {
+    tapFeedback();
+    if (onArtistPress) {
+      onArtistPress(song.artist);
+    } else if (song.artist) {
+      router.push(`/artist/${encodeURIComponent(song.artist)}`);
+    }
+  };
+
   return (
     <View style={[styles.row, isActive && styles.rowActive]}>
       <Pressable
@@ -47,15 +60,22 @@ export default function SongItem({
         accessibilityLabel={`${song.title} — ${song.artist}`}
         style={({ pressed }) => [styles.mainContent, pressed && styles.pressed]}
       >
-        <SongArtwork uri={song.cover} size={45} radius={10} />
+        <SongArtwork uri={song.cover} size={48} radius={10} />
 
         <View style={styles.info}>
           <Text style={[styles.title, isActive && styles.titleActive]} numberOfLines={1}>
             {song.title}
           </Text>
-          <Text style={styles.artist} numberOfLines={1}>
-            {song.artist}
-          </Text>
+          <Pressable
+            onPress={handleArtistClick}
+            hitSlop={6}
+            accessibilityRole="button"
+            accessibilityLabel={`Artist: ${song.artist}`}
+          >
+            <Text style={[styles.artist, isActive && styles.artistActive]} numberOfLines={1}>
+              {song.artist}
+            </Text>
+          </Pressable>
         </View>
 
         {song.source === 'youtube_music' && !song.previewOnly ? (
@@ -68,7 +88,7 @@ export default function SongItem({
           </View>
         ) : null}
 
-        {isActive ? <Ionicons name="volume-medium" size={18} color={colors.primary} /> : null}
+        {isActive ? <Ionicons name="stats-chart" size={16} color={colors.primary} /> : null}
       </Pressable>
 
       {/* YouTube link-out — sirf preview-only gaano pe (full version dhundhne ke liye).
@@ -141,11 +161,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    paddingVertical: spacing.sm,
+    paddingVertical: spacing.sm + 2,
     paddingHorizontal: spacing.lg,
-    borderRadius: 12,
+    borderRadius: 14,
+    marginHorizontal: spacing.xs,
+    borderWidth: 1,
+    borderColor: 'transparent',
   },
-  rowActive: { backgroundColor: colors.surface },
+  rowActive: {
+    backgroundColor: 'rgba(255, 179, 71, 0.08)',
+    borderColor: 'rgba(255, 179, 71, 0.35)',
+  },
   mainContent: {
     flex: 1,
     minWidth: 0,
@@ -154,10 +180,11 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   pressed: { opacity: 0.65 },
-  info: { flex: 1, gap: 2 },
-  title: { ...typography.body, color: colors.text, fontWeight: '600' },
-  titleActive: { color: colors.primary },
-  artist: { ...typography.caption, color: colors.subtext },
+  info: { flex: 1, gap: 3 },
+  title: { ...typography.body, color: colors.text, fontWeight: '600', fontSize: 15 },
+  titleActive: { color: colors.primary, fontWeight: '700' },
+  artist: { ...typography.caption, color: colors.subtext, fontSize: 13 },
+  artistActive: { color: 'rgba(255, 179, 71, 0.85)' },
   actionButton: { padding: spacing.xs },
   previewBadge: {
     paddingHorizontal: 6,

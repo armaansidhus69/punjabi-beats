@@ -183,9 +183,20 @@ export default function PlayerScreen() {
         <Text style={styles.title} numberOfLines={2}>
           {currentSong.title}
         </Text>
-        <Text style={styles.artist} numberOfLines={1}>
-          {currentSong.artist}
-        </Text>
+        <Pressable
+          onPress={() => {
+            if (currentSong.artist) {
+              tapFeedback();
+              router.push(`/artist/${encodeURIComponent(currentSong.artist)}`);
+            }
+          }}
+          accessibilityRole="button"
+          accessibilityLabel={`Artist ${currentSong.artist} page`}
+        >
+          <Text style={styles.artist} numberOfLines={1}>
+            {currentSong.artist}
+          </Text>
+        </Pressable>
         {queueLength > 1 ? (
           <Text style={styles.queueInfo}>Queue me {queueLength} songs</Text>
         ) : null}

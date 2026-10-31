@@ -3,17 +3,28 @@
  * FR-3.1..FR-3.4 (moods), trending launch pe auto-fetch hota hai.
  */
 import { useCallback, useEffect, useState } from 'react';
-import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import {
+  FlatList,
+  Image,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Mood, Song } from '../../types';
 import { MOODS } from '../../constants/moods';
+import { POPULAR_ARTISTS } from '../../constants/artists';
 import { getTrendingSongs } from '../../services/musicApi';
 import { usePlayer } from '../../stores/playerStore';
 import { useLikedSongs } from '../../stores/likedSongsStore';
 import { promptAddSong } from '../../utils/songActions';
 import { useMiniPlayerPadding } from '../../hooks/useMiniPlayerPadding';
+import { tapFeedback } from '../../utils/haptics';
 import { colors } from '../../constants/colors';
 import { typography } from '../../constants/typography';
 import { spacing } from '../../constants/spacing';
@@ -116,6 +127,40 @@ export default function HomeScreen() {
           ) : null}
         </View>
       </View>
+
+      {/* Popular Artists Carousel */}
+      <Text style={styles.sectionTitle}>Popular Artists 🎤</Text>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.artistsScroll}
+      >
+        {POPULAR_ARTISTS.map(artist => (
+          <Pressable
+            key={artist.id}
+            onPress={() => {
+              tapFeedback();
+              router.push(`/artist/${encodeURIComponent(artist.name)}`);
+            }}
+            accessibilityRole="button"
+            accessibilityLabel={`${artist.name} artist profile`}
+            style={({ pressed }) => [styles.artistCard, pressed && styles.pressed]}
+          >
+            <View style={styles.avatarWrapper}>
+              <Image source={{ uri: artist.image }} style={styles.avatarImage} />
+              <View style={styles.verifiedDot}>
+                <Ionicons name="checkmark-circle" size={16} color={colors.primary} />
+              </View>
+            </View>
+            <Text style={styles.artistCardName} numberOfLines={1}>
+              {artist.name}
+            </Text>
+            <Text style={styles.artistCardGenre} numberOfLines={1}>
+              {artist.genre ? artist.genre.split('·')[0].trim() : 'Punjabi'}
+            </Text>
+          </Pressable>
+        ))}
+      </ScrollView>
 
       <Text style={styles.sectionTitle}>Moods</Text>
       <View style={styles.moodGrid}>
@@ -225,6 +270,47 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     marginTop: spacing.xl,
     marginBottom: spacing.md,
+  },
+  artistsScroll: {
+    paddingHorizontal: spacing.lg,
+    gap: spacing.md,
+    paddingBottom: spacing.sm,
+  },
+  artistCard: {
+    alignItems: 'center',
+    width: 82,
+  },
+  avatarWrapper: {
+    position: 'relative',
+    marginBottom: spacing.xs,
+  },
+  avatarImage: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: colors.surface,
+    borderWidth: 2,
+    borderColor: 'rgba(255, 179, 71, 0.45)',
+  },
+  verifiedDot: {
+    position: 'absolute',
+    bottom: -2,
+    right: -2,
+    backgroundColor: colors.background,
+    borderRadius: 10,
+  },
+  artistCardName: {
+    ...typography.caption,
+    fontWeight: '600',
+    color: colors.text,
+    textAlign: 'center',
+    width: '100%',
+  },
+  artistCardGenre: {
+    fontSize: 10,
+    color: colors.subtext,
+    textAlign: 'center',
+    width: '100%',
   },
   moodGrid: {
     flexDirection: 'row',

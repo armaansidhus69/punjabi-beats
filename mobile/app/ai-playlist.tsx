@@ -87,7 +87,7 @@ export default function AiPlaylistScreen() {
           <View style={styles.disclosure}>
             <Ionicons name="sparkles-outline" size={16} color={colors.primary} />
             <Text style={styles.disclosureText}>
-              AI ne gaane sujhaye hain — match hamesha sahi nahi hota.
+              AI ne gaane sujhaye hain - match hamesha sahi nahi hota.
             </Text>
           </View>
 

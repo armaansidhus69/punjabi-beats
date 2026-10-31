@@ -42,6 +42,7 @@ export class AiAssistantError extends Error {
   constructor(code: AiAssistantErrorCode, message: string, extra?: { retryAfterSec?: number; got?: number }) {
     super(message);
     this.name = 'AiAssistantError';
+    Object.setPrototypeOf(this, AiAssistantError.prototype);
     this.code = code;
     this.retryAfterSec = extra?.retryAfterSec;
     this.got = extra?.got;
@@ -235,18 +236,23 @@ export async function sendMessage(
 
 /** Hinglish error surface — store toasts isko call karte */
 export function describeAiAssistantError(err: unknown): string {
-  if (err instanceof AiAssistantError) {
-    switch (err.code) {
+  const isCustomAiError =
+    err instanceof AiAssistantError ||
+    (typeof err === 'object' && err !== null && (err as { name?: string }).name === 'AiAssistantError');
+
+  if (isCustomAiError) {
+    const aiErr = err as AiAssistantError;
+    switch (aiErr.code) {
       case 'no_key':
         return 'AI key server pe set nahi hai — deploy baad me feature live hoga';
       case 'rate_limited':
-        return `Thoda ruk jao — try again ${Math.ceil(err.retryAfterSec ?? 60)}s me`;
+        return `Thoda ruk jao — try again ${Math.ceil(aiErr.retryAfterSec ?? 60)}s me`;
       case 'not_enough':
-        return err.message;
+        return aiErr.message;
       case 'bad_request':
         return 'Message thoda lamba likh do (max 240 chars)';
       case 'network':
-        return err.message || 'Network issue — internet check karo';
+        return aiErr.message || 'Network issue — internet check karo';
       default:
         return 'AI assistant connect nahi hua — dobara try karo';
     }

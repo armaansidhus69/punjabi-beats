@@ -1,5 +1,6 @@
 # ✅ Punjabi Beats — Development Checklist
 
+
 > **Legend:** `[ ]` = Pending · `[x]` = Done · `[~]` = In Progress · `[!]` = Blocked
 
 ---
@@ -441,7 +442,8 @@ Before releasing:
 | Phase 25: Canonical Share Links V1 (Roadmap 8a) | 17 | 16 | 94% |
 | Phase 26: Selected Lyrics Sharing V1 (Roadmap 8b) | 11 | 10 | 91% |
 | Phase 27: Copy Link + QR Composer V1 (Roadmap 8c) | 14 | 13 | 93% |
-| **TOTAL** | **393** | **358** | **91%** |
+| Phase 28: Artist & Album Detail Screens & Modern UI (Roadmap 3) | 19 | 18 | 95% |
+| **TOTAL** | **412** | **376** | **91%** |
 
 > Counts 2026-10-30 ko actual checkbox lines se dobara verify hue — har `## PHASE n` section
 > ke andar ke `- [ ]`/`- [x]` boxes gine gaye (SECTION 0/1/2 ke headers, Tracker table,
@@ -805,3 +807,39 @@ Before releasing:
 - [ ] Manual: flag-off immediate share; flag-on six composers; Android/iOS/Web copy; second-device QR scan; API-off fallback; long-URL QR guard
 
 **Phase 27 Complete?** `[~]` (code + automated/Metro gates complete; cross-platform composer device pass remains)
+
+---
+
+## 🎤 PHASE 28: Artist & Album Detail Screens & Modern UI (Roadmap Phase 3)
+
+> Spec `docs/superpowers/specs/2026-10-31-catalogue-artist-album-design.md` + plan
+> `docs/superpowers/plans/2026-10-31-catalogue-artist-album-plan.md`. FR ids
+> REQUIREMENTS.md FR-3.1..FR-3.4 me.
+
+### Pure Core & Catalogue Service
+- [x] `mobile/types/index.ts` — `ArtistSummary` and `AlbumSummary` interfaces
+- [x] `mobile/constants/artists.ts` — Top 10 curated Punjabi artists (Diljit, Sidhu Moose Wala, Karan Aujla, AP Dhillon, Shubh, Nimrat Khaira, B Praak, Gurdas Maan, Amrit Maan, Sunanda Sharma) with verified banners, monthly listeners, and bios
+- [x] `mobile/core/catalogue/catalogue.ts` — pure helpers: `normalizeArtistName`, `slugify`, `matchCuratedArtist`, `extractAlbumsFromSongs`
+- [x] `mobile/services/catalogueService.ts` — `fetchArtistCatalogue` & `fetchAlbumCatalogue` with 15-minute in-memory caching and resilient song enrichment
+
+### Screens & Modern UI Enhancements
+- [x] `mobile/app/artist/[name].tsx` — Hero portrait banner, verified badge, listener count, bio, Play All, Shuffle, Albums & EPs horizontal carousel, popular tracks list
+- [x] `mobile/app/album/[id].tsx` — Album cover, title, artist link, year/tracks count, Play All, Shuffle, and tracklist
+- [x] `mobile/app/(tabs)/index.tsx` — "Popular Artists 🎤" circular avatar carousel with verified dots on Home
+- [x] `mobile/components/SongItem.tsx` — Card padding, active glow border, stats-chart playing indicator, interactive `onArtistPress` navigation
+- [x] `mobile/components/MiniPlayer.tsx` — Floating glassmorphic pill card with 16px radius, dark `#161622` background, elevated shadow, border, top-pinned progress bar
+- [x] `mobile/components/MoodCard.tsx` — Frosted circular emoji badge, improved typography, 18px radius
+- [x] `mobile/components/PlayerControls.tsx` — Golden circular shadow glow on main play/pause button
+- [x] `mobile/app/player.tsx` — Tappable artist subtitle navigating to `/artist/[name]`
+
+### Reliability & Cross-Platform Gates
+- [x] `JamGate.tsx` & `BlendGate.tsx` non-blocking fallback: immediate render if flag is disabled; 1.5s auth timeout avoids web blank screens
+- [x] `ai-playlist.tsx` character encoding fix (ASCII hyphen prevents UTF-8 mojibake on web)
+- [x] `test-catalogue.mjs` — 4/4 assertions passed; wired into `npm test` (all 15 suites green)
+- [x] `cd mobile && npx tsc --noEmit` — 0 errors
+- [x] `cd mobile && npm run lint` — 0 warnings
+- [x] `npx expo export --platform web` + `eas deploy --prod` — deployed live to `https://punjabi-beats.expo.app`
+- [ ] Manual verification on physical iOS/Android device
+
+**Phase 28 Complete?** `[x]` (code + automated tests + web production deploy live)
+
