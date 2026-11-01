@@ -12,7 +12,6 @@
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
   Animated,
   Easing,
   PanResponder,
@@ -25,7 +24,6 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import * as WebBrowser from 'expo-web-browser';
 import Toast from 'react-native-toast-message';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { usePlayer } from '../stores/playerStore';
@@ -37,7 +35,7 @@ import EmptyState from '../components/EmptyState';
 import PlayerControls from '../components/PlayerControls';
 import ProgressBar from '../components/ProgressBar';
 import SongArtwork from '../components/SongArtwork';
-import { isYouTubeMatchConfigured, openYouTubeSearch, resolveYouTubeMatch } from '../utils/youtubeLink';
+import { resolveYouTubeMatch } from '../utils/youtubeLink';
 import { successFeedback, tapFeedback, warningFeedback } from '../utils/haptics';
 import { isFeatureEnabled } from '../core/featureflags/featureFlags';
 import { shareTrack } from '../services/shareComposerFacade';
@@ -77,11 +75,10 @@ export default function PlayerScreen() {
   const lyricsEnabled = isFeatureEnabled('lyrics_enabled');
 
   const [inAppYouTubeVideoId, setInAppYouTubeVideoId] = useState<string | null>(null);
-  const [isResolvingYouTube, setIsResolvingYouTube] = useState(false);
   const [youTubeDuration, setYouTubeDuration] = useState<number | null>(null);
   const [youTubePosition, setYouTubePosition] = useState(0);
   const [isYouTubePlaying, setIsYouTubePlaying] = useState(false);
-  const iframeRef = useRef<any>(null);
+  const iframeRef = useRef<HTMLIFrameElement | null>(null);
 
   // Auto-resolve YouTube match for preview tracks
   useEffect(() => {
@@ -92,11 +89,9 @@ export default function PlayerScreen() {
     setIsYouTubePlaying(false);
 
     if (currentSong?.previewOnly) {
-      setIsResolvingYouTube(true);
       resolveYouTubeMatch(currentSong)
         .then(match => {
           if (!active) return;
-          setIsResolvingYouTube(false);
           if (match?.videoId) {
             if (Platform.OS === 'web') {
               // Pause 30s preview so full YouTube version plays cleanly
@@ -108,7 +103,7 @@ export default function PlayerScreen() {
               }
               Toast.show({
                 type: 'success',
-                text1: 'Full version auto-playing (YouTube)',
+                text1: 'Full version auto-playing',
                 text2: match.title ?? currentSong.title,
                 visibilityTime: 2500,
               });
@@ -117,7 +112,6 @@ export default function PlayerScreen() {
         })
         .catch(err => {
           if (!active) return;
-          setIsResolvingYouTube(false);
           console.warn('[player] Auto YouTube match failed:', err);
         });
     }
@@ -171,58 +165,32 @@ export default function PlayerScreen() {
     return () => clearInterval(interval);
   }, [inAppYouTubeVideoId, isYouTubePlaying, youTubeDuration, playNext]);
 
-  const handlePlayFullInApp = useCallback(async () => {
-    if (!currentSong) return;
-    tapFeedback();
-    setIsResolvingYouTube(true);
-    void usePlayer.getState().pause();
-
-    try {
-      const match = await resolveYouTubeMatch(currentSong);
-      if (match?.videoId) {
-        if (Platform.OS === 'web') {
-          setInAppYouTubeVideoId(match.videoId);
-          setIsYouTubePlaying(true);
-          if (match.durationSec) {
-            setYouTubeDuration(match.durationSec * 1000);
-          }
-          successFeedback();
-        } else {
-          await WebBrowser.openBrowserAsync(`https://www.youtube.com/watch?v=${match.videoId}`, {
-            presentationStyle: WebBrowser.WebBrowserPresentationStyle.PAGE_SHEET,
-            toolbarColor: colors.background,
-            controlsColor: colors.primary,
-          });
-        }
-      } else {
-        warningFeedback();
-        Toast.show({
-          type: 'info',
-          text1: 'Full version match nahi mila',
-          text2: 'YouTube pe search khol rahe hain...',
-        });
-        openYouTubeSearch(currentSong);
-      }
-    } catch (err) {
-      console.warn('[player] In-app YouTube match failed:', err);
-      openYouTubeSearch(currentSong);
-    } finally {
-      setIsResolvingYouTube(false);
+  // Sync volume to YouTube iframe
+  useEffect(() => {
+    if (inAppYouTubeVideoId && Platform.OS === 'web' && iframeRef.current?.contentWindow) {
+      iframeRef.current.contentWindow.postMessage(
+        JSON.stringify({ event: 'command', func: 'setVolume', args: [Math.round(volume * 100)] }),
+        '*',
+      );
     }
-  }, [currentSong]);
+  }, [inAppYouTubeVideoId, volume]);
 
-  const handleToggleLiked = useCallback(() => {
-    if (!currentSong) return;
-    const liked = toggleLiked(currentSong);
-    if (liked) successFeedback();
-    else warningFeedback();
-  }, [currentSong, toggleLiked]);
+  const activePosition = inAppYouTubeVideoId ? youTubePosition : position;
+  const activeDuration =
+    inAppYouTubeVideoId && youTubeDuration
+      ? youTubeDuration
+      : currentSong?.previewOnly && youTubeDuration
+        ? youTubeDuration
+        : currentSong?.previewOnly
+          ? 161_000
+          : duration;
+  const activePlaying = inAppYouTubeVideoId ? isYouTubePlaying : isPlaying;
 
   /* ---------- Album art rotation (sirf playing me ghoomta hai) ---------- */
   const spin = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    if (!isPlaying) return;
+    if (!activePlaying) return;
     const loop = Animated.loop(
       Animated.timing(spin, {
         toValue: 1,
@@ -236,9 +204,16 @@ export default function PlayerScreen() {
       loop.stop();
       spin.setValue(0);
     };
-  }, [isPlaying, spin]);
+  }, [activePlaying, spin]);
 
   const rotate = spin.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
+
+  const handleToggleLiked = useCallback(() => {
+    if (!currentSong) return;
+    const liked = toggleLiked(currentSong);
+    if (liked) successFeedback();
+    else warningFeedback();
+  }, [currentSong, toggleLiked]);
 
   /* ---------- Swipe down to close (Android + iOS dono) ---------- */
   const close = useCallback(() => {
@@ -259,8 +234,6 @@ export default function PlayerScreen() {
   const panResponder = useMemo(
     () =>
       PanResponder.create({
-        // Sirf clear neeche-wale drag pe claim karo, warna ProgressBar ka
-        // horizontal drag/tap bhi hijack ho jaayega
         onMoveShouldSetPanResponder: (_event, gesture) =>
           gesture.dy > 12 && Math.abs(gesture.dy) > Math.abs(gesture.dx) * 1.5,
         onPanResponderRelease: (_event, gesture) => {
@@ -306,6 +279,19 @@ export default function PlayerScreen() {
     }
   }, [inAppYouTubeVideoId, isYouTubePlaying, togglePlay]);
 
+  const handleVolumeChange = useCallback(
+    (v: number) => {
+      setVolume(v);
+      if (inAppYouTubeVideoId && Platform.OS === 'web' && iframeRef.current?.contentWindow) {
+        iframeRef.current.contentWindow.postMessage(
+          JSON.stringify({ event: 'command', func: 'setVolume', args: [Math.round(v * 100)] }),
+          '*',
+        );
+      }
+    },
+    [inAppYouTubeVideoId, setVolume],
+  );
+
   /* ---------- Koi song nahi (deep link se seedha /player khula) ---------- */
   if (!currentSong) {
     return (
@@ -321,20 +307,7 @@ export default function PlayerScreen() {
   }
 
   const artworkSize = Math.min(width - spacing.xl * 2, ARTWORK_MAX_SIZE);
-  const embedWidth = Math.min(width - spacing.xl * 2, 380);
-  const embedHeight = Math.round((embedWidth * 9) / 16) + 38;
   const repeatActive = repeat !== 'off';
-
-  const activePosition = inAppYouTubeVideoId ? youTubePosition : position;
-  const activeDuration =
-    inAppYouTubeVideoId && youTubeDuration
-      ? youTubeDuration
-      : currentSong?.previewOnly && youTubeDuration
-        ? youTubeDuration
-        : currentSong?.previewOnly
-          ? 161_000
-          : duration;
-  const activePlaying = inAppYouTubeVideoId ? isYouTubePlaying : isPlaying;
 
   return (
     <View
@@ -352,51 +325,29 @@ export default function PlayerScreen() {
       {/* Drag handle - swipe down ka visual hint (FR-6.6) */}
       <View style={styles.handle} />
 
-      {/* Album art ya In-App YouTube player (web pe embed) */}
+      {/* Album art disc (always circular spinning vinyl) */}
+      <View style={styles.artworkWrap}>
+        <Animated.View style={[styles.artworkDisc, { transform: [{ rotate }] }]}>
+          <SongArtwork uri={currentSong.cover} size={artworkSize} radius={artworkSize / 2} />
+        </Animated.View>
+      </View>
+
+      {/* Background YouTube audio engine (invisible off-screen on web) */}
       {inAppYouTubeVideoId && Platform.OS === 'web' ? (
-        <View style={[styles.youtubeEmbedWrap, { width: embedWidth, height: embedHeight }]}>
-          <View style={styles.youtubeEmbedHeader}>
-            <View style={styles.youtubeBadgeRow}>
-              <Ionicons name="logo-youtube" size={16} color="#ff0000" />
-              <Text style={styles.youtubeBadgeText} numberOfLines={1}>
-                In-App Full Song • YouTube
-              </Text>
-            </View>
-            <Pressable
-              onPress={() => {
-                setInAppYouTubeVideoId(null);
-                void usePlayer.getState().play();
-              }}
-              hitSlop={10}
-              accessibilityRole="button"
-              accessibilityLabel="Audio player te vapas jao"
-              style={styles.closeEmbedBtn}
-            >
-              <Ionicons name="close-circle" size={22} color={colors.subtext} />
-            </Pressable>
-          </View>
-          <View style={styles.iframeBox}>
-            {React.createElement('iframe', {
-              ref: iframeRef,
-              src: `https://www.youtube.com/embed/${inAppYouTubeVideoId}?autoplay=1&enablejsapi=1&playsinline=1`,
-              title: currentSong.title,
-              style: {
-                width: '100%',
-                height: '100%',
-                border: 'none',
-              },
-              allow: 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture',
-              allowFullScreen: true,
-            })}
-          </View>
+        <View style={styles.hiddenIframe}>
+          {React.createElement('iframe', {
+            ref: iframeRef,
+            src: `https://www.youtube.com/embed/${inAppYouTubeVideoId}?autoplay=1&enablejsapi=1&playsinline=1`,
+            title: currentSong.title,
+            style: {
+              width: '200px',
+              height: '200px',
+              border: 'none',
+            },
+            allow: 'autoplay; encrypted-media',
+          })}
         </View>
-      ) : (
-        <View style={styles.artworkWrap}>
-          <Animated.View style={[styles.artworkDisc, { transform: [{ rotate }] }]}>
-            <SongArtwork uri={currentSong.cover} size={artworkSize} radius={artworkSize / 2} />
-          </Animated.View>
-        </View>
-      )}
+      ) : null}
 
       {/* Song title + artist */}
       <View style={styles.meta}>
@@ -427,60 +378,10 @@ export default function PlayerScreen() {
         <ProgressBar position={activePosition} duration={activeDuration} onSeek={handleSeek} showTimes />
       </View>
 
-      {/* iTunes 30s preview note (FR-2.8 ke alawa full song nahi milta).
-          Ab YouTube link-out bhi yahan hai — scored match (exact/partial) se
-          full version kholta hai. WebView player NAHI (room sync + background
-          play bachane ke liye — utils/youtubeLink.ts header dekho). */}
-      {currentSong.previewOnly ? (
-        <View style={styles.previewNoteWrap}>
-          <Text style={styles.previewNote}>
-            {inAppYouTubeVideoId
-              ? '▶ Playing Full Song in App (YouTube)'
-              : isResolvingYouTube
-                ? 'Matching full song from YouTube...'
-                : 'Full version via YouTube'}
-          </Text>
-          {isYouTubeMatchConfigured() ? (
-            <Pressable
-              onPress={
-                inAppYouTubeVideoId
-                  ? () => {
-                      setInAppYouTubeVideoId(null);
-                      void usePlayer.getState().play();
-                    }
-                  : handlePlayFullInApp
-              }
-              disabled={isResolvingYouTube}
-              accessibilityRole="button"
-              accessibilityLabel="App vich full song play karo"
-              style={({ pressed }) => [styles.youtubeButton, pressed && styles.pressed]}
-            >
-              {isResolvingYouTube ? (
-                <ActivityIndicator size="small" color={colors.background} />
-              ) : (
-                <Ionicons
-                  name={inAppYouTubeVideoId ? 'disc' : 'play-circle'}
-                  size={18}
-                  color={colors.background}
-                />
-              )}
-              <Text style={styles.youtubeButtonText}>
-                {isResolvingYouTube
-                  ? 'Matching full song...'
-                  : inAppYouTubeVideoId
-                    ? 'Switch back to Audio Disc'
-                    : '▶ Play Full Song (YouTube)'}
-              </Text>
-            </Pressable>
-          ) : null}
-        </View>
-      ) : null}
-
       {/* Volume slider (FR-2.11) — sirf local device, room sync me kabhi broadcast nahi */}
-      <VolumeSlider value={volume} onChange={setVolume} />
+      <VolumeSlider value={volume} onChange={handleVolumeChange} />
 
-      {/* Play/pause/next/prev + shuffle/repeat (FR-2.9, FR-2.10).
-          Shuffle/repeat buttons PlayerControls khud render karta hai (haptics bhi wahi). */}
+      {/* Play/pause/next/prev + shuffle/repeat (FR-2.9, FR-2.10) */}
       <View style={styles.controls}>
         <PlayerControls
           isPlaying={activePlaying}
@@ -500,8 +401,6 @@ export default function PlayerScreen() {
     </View>
   );
 }
-
-
 
 /** Header — close + liked toggle + share actions */
 function PlayerHeader({
@@ -596,7 +495,7 @@ function VolumeSlider({ value, onChange }: { value: number; onChange: (v: number
   const panResponder = useMemo(
     () =>
       PanResponder.create({
-        onStartShouldSetPanResponder: () => true, // tap se bhi set ho (grant me update)
+        onStartShouldSetPanResponder: () => true,
         onMoveShouldSetPanResponder: (_event, gesture) =>
           Math.abs(gesture.dx) > 3 && Math.abs(gesture.dx) > Math.abs(gesture.dy),
         onPanResponderGrant: event => updateFromX(event.nativeEvent.locationX),
@@ -663,49 +562,14 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
   },
   artworkWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  youtubeEmbedWrap: {
-    alignSelf: 'center',
-    justifyContent: 'center',
-    marginVertical: spacing.sm,
-    borderRadius: 16,
-    backgroundColor: '#0a0a0c',
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: colors.border,
-    shadowColor: colors.primary,
-    shadowOpacity: 0.3,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 8,
-  },
-  youtubeEmbedHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 6,
-    backgroundColor: '#16161d',
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  youtubeBadgeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  youtubeBadgeText: {
-    ...typography.caption,
-    color: colors.text,
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  closeEmbedBtn: {
-    padding: 2,
-  },
-  iframeBox: {
-    flex: 1,
-    width: '100%',
-    height: '100%',
+  hiddenIframe: {
+    position: 'absolute',
+    top: -9999,
+    left: -9999,
+    width: 200,
+    height: 200,
+    opacity: 0.01,
+    pointerEvents: 'none',
   },
   artworkDisc: {
     borderRadius: 999,
@@ -724,27 +588,7 @@ const styles = StyleSheet.create({
   artist: { ...typography.body, color: colors.subtext, textAlign: 'center', marginTop: spacing.xs },
   queueInfo: { ...typography.caption, color: colors.primary, marginTop: spacing.sm },
   progressSection: { paddingHorizontal: spacing.lg, marginTop: spacing.lg },
-  previewNote: {
-    ...typography.caption,
-    color: colors.subtext,
-    textAlign: 'center',
-    paddingHorizontal: spacing.xl,
-    marginTop: spacing.sm,
-  },
-  previewNoteWrap: { alignItems: 'center', gap: spacing.sm },
-  youtubeButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.lg,
-    borderRadius: 999,
-    backgroundColor: colors.primary,
-    marginTop: spacing.xs,
-  },
-  youtubeButtonText: { ...typography.caption, color: colors.background, fontWeight: '700' },
   controls: { marginTop: spacing.xl, marginBottom: spacing.xl },
-  /* Volume slider (FR-2.11) */
   volumeRow: {
     flexDirection: 'row',
     alignItems: 'center',
