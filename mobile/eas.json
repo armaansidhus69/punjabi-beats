@@ -14,12 +14,48 @@
       "distribution": "internal",
       "android": {
         "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_APINATOR_KEY": "app_a54ab3299e28152c806ff0998d319d5736fd9632",
+        "EXPO_PUBLIC_APINATOR_CLUSTER": "eu",
+        "EXPO_PUBLIC_PUBLISH_URL": "https://punjabi-beats-api.vercel.app/api/publish",
+        "EXPO_PUBLIC_PUBLISH_TOKEN": "BmBOGOtnNTbhlwhB6xSDwPSn-_lY_natVmCcmJq4adM",
+        "EXPO_PUBLIC_ITUNES_COUNTRY": "IN",
+        "EXPO_PUBLIC_YOUTUBE_MATCH_URL": "https://punjabi-beats-api.vercel.app",
+        "EXPO_PUBLIC_VEROME_API": "https://verome-api.armaansidhus69.deno.net",
+        "EXPO_PUBLIC_SUPABASE_URL": "https://xlprzushieqhlqrwafeq.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY": "sb_publishable_oC7svhH7WJrGVyF1ZjSECA_AY8cYnzN",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhscHJ6dXNoaWVxaGxxcndhZmVxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMwMDQ3NTYsImV4cCI6MjEwODU4MDc1Nn0.RP-CpDNKaN6SSRmeH7VJeSkXDVPqjOYR8QmwfNnAqXs",
+        "EXPO_PUBLIC_AUTH_ENABLED": "true",
+        "EXPO_PUBLIC_API_BASE_URL": "https://punjabi-beats-api.vercel.app",
+        "EXPO_PUBLIC_LYRICS_ENABLED": "true",
+        "EXPO_PUBLIC_AI_PLAYLIST_ENABLED": "true",
+        "EXPO_PUBLIC_AI_ASSISTANT_ENABLED": "true",
+        "EXPO_PUBLIC_PODCASTS_ENABLED": "true"
       }
     },
     "production": {
       "autoIncrement": true,
       "android": {
         "buildType": "app-bundle"
+      },
+      "env": {
+        "EXPO_PUBLIC_APINATOR_KEY": "app_a54ab3299e28152c806ff0998d319d5736fd9632",
+        "EXPO_PUBLIC_APINATOR_CLUSTER": "eu",
+        "EXPO_PUBLIC_PUBLISH_URL": "https://punjabi-beats-api.vercel.app/api/publish",
+        "EXPO_PUBLIC_PUBLISH_TOKEN": "BmBOGOtnNTbhlwhB6xSDwPSn-_lY_natVmCcmJq4adM",
+        "EXPO_PUBLIC_ITUNES_COUNTRY": "IN",
+        "EXPO_PUBLIC_YOUTUBE_MATCH_URL": "https://punjabi-beats-api.vercel.app",
+        "EXPO_PUBLIC_VEROME_API": "https://verome-api.armaansidhus69.deno.net",
+        "EXPO_PUBLIC_SUPABASE_URL": "https://xlprzushieqhlqrwafeq.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY": "sb_publishable_oC7svhH7WJrGVyF1ZjSECA_AY8cYnzN",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhscHJ6dXNoaWVxaGxxcndhZmVxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMwMDQ3NTYsImV4cCI6MjEwODU4MDc1Nn0.RP-CpDNKaN6SSRmeH7VJeSkXDVPqjOYR8QmwfNnAqXs",
+        "EXPO_PUBLIC_AUTH_ENABLED": "true",
+        "EXPO_PUBLIC_API_BASE_URL": "https://punjabi-beats-api.vercel.app",
+        "EXPO_PUBLIC_LYRICS_ENABLED": "true",
+        "EXPO_PUBLIC_AI_PLAYLIST_ENABLED": "true",
+        "EXPO_PUBLIC_AI_ASSISTANT_ENABLED": "true",
+        "EXPO_PUBLIC_PODCASTS_ENABLED": "true"
       }
     }
   },
