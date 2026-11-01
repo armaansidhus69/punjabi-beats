@@ -43,6 +43,7 @@ export interface YouTubeAudioResult {
   title?: string;
   /** Selected video ka channel */
   channel?: string;
+  durationSec?: number;
   score?: number;
   /** partial pe "May not be exact version", unavailable pe reason message */
   warning?: string;
@@ -156,6 +157,7 @@ export async function findYouTubeAudio(
     videoId: best.videoId,
     title: best.title,
     channel: best.channel,
+    durationSec: best.durationSec,
     score: best.score,
     reasons: best.reasons,
     candidatesConsidered: decision.ranked.length,

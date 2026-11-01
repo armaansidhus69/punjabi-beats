@@ -283,15 +283,19 @@ export function scoreCandidate(candidate: MatchCandidate, source: MatchSource): 
   // --- Duration (unknown ko mismatch NA maano) ---
   const srcSec = Math.round((source.durationMs || 0) / 1000);
   if (srcSec > 0 && candidate.durationSec > 0) {
-    const diff = Math.abs(candidate.durationSec - srcSec);
-    if (diff <= DURATION_MATCH_SEC) {
-      score += 20;
-      reasons.push(`duration: ±${diff}s → +20`);
-    } else if (diff > DURATION_MAX_DIFF_SEC) {
-      score -= 30;
-      reasons.push(`duration: ${diff}s off (>${DURATION_MAX_DIFF_SEC}s) → -30`);
+    if (srcSec <= 30 && candidate.durationSec >= 30 && candidate.durationSec <= 600) {
+      reasons.push('duration: preview source upgraded to full song length');
     } else {
-      reasons.push(`duration: ${diff}s off → 0`);
+      const diff = Math.abs(candidate.durationSec - srcSec);
+      if (diff <= DURATION_MATCH_SEC) {
+        score += 20;
+        reasons.push(`duration: ±${diff}s → +20`);
+      } else if (diff > DURATION_MAX_DIFF_SEC) {
+        score -= 30;
+        reasons.push(`duration: ${diff}s off (>${DURATION_MAX_DIFF_SEC}s) → -30`);
+      } else {
+        reasons.push(`duration: ${diff}s off → 0`);
+      }
     }
   } else {
     reasons.push('duration: unknown → 0 (skip)');

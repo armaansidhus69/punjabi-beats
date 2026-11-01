@@ -74,6 +74,7 @@ export async function resolveYouTubeMatch(song: Song) {
         videoId: candidates[0].videoId,
         title: candidates[0].title,
         channel: candidates[0].channel,
+        durationSec: candidates[0].durationSec,
         candidatesConsidered: candidates.length,
       };
     }

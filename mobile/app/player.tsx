@@ -78,11 +78,98 @@ export default function PlayerScreen() {
 
   const [inAppYouTubeVideoId, setInAppYouTubeVideoId] = useState<string | null>(null);
   const [isResolvingYouTube, setIsResolvingYouTube] = useState(false);
+  const [youTubeDuration, setYouTubeDuration] = useState<number | null>(null);
+  const [youTubePosition, setYouTubePosition] = useState(0);
+  const [isYouTubePlaying, setIsYouTubePlaying] = useState(false);
+  const iframeRef = useRef<any>(null);
 
+  // Auto-resolve YouTube match for preview tracks
   useEffect(() => {
+    let active = true;
     setInAppYouTubeVideoId(null);
-    setIsResolvingYouTube(false);
-  }, [currentSong?.id]);
+    setYouTubeDuration(null);
+    setYouTubePosition(0);
+    setIsYouTubePlaying(false);
+
+    if (currentSong?.previewOnly) {
+      setIsResolvingYouTube(true);
+      resolveYouTubeMatch(currentSong)
+        .then(match => {
+          if (!active) return;
+          setIsResolvingYouTube(false);
+          if (match?.videoId) {
+            if (Platform.OS === 'web') {
+              // Pause 30s preview so full YouTube version plays cleanly
+              void usePlayer.getState().pause();
+              setInAppYouTubeVideoId(match.videoId);
+              setIsYouTubePlaying(true);
+              if (match.durationSec) {
+                setYouTubeDuration(match.durationSec * 1000);
+              }
+              Toast.show({
+                type: 'success',
+                text1: 'Full version auto-playing (YouTube)',
+                text2: match.title ?? currentSong.title,
+                visibilityTime: 2500,
+              });
+            }
+          }
+        })
+        .catch(err => {
+          if (!active) return;
+          setIsResolvingYouTube(false);
+          console.warn('[player] Auto YouTube match failed:', err);
+        });
+    }
+
+    return () => {
+      active = false;
+    };
+  }, [currentSong]);
+
+  // Listen to YouTube player state changes via postMessage (Web)
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    const handleMessage = (e: MessageEvent) => {
+      try {
+        const data = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
+        if (data?.event === 'onStateChange') {
+          if (data.info === 0) {
+            // Track ended -> play next
+            void playNext();
+          } else if (data.info === 1) {
+            setIsYouTubePlaying(true);
+          } else if (data.info === 2) {
+            setIsYouTubePlaying(false);
+          }
+        } else if (data?.event === 'infoDelivery' && typeof data.info?.currentTime === 'number') {
+          setYouTubePosition(data.info.currentTime * 1000);
+          if (typeof data.info.duration === 'number' && data.info.duration > 0) {
+            setYouTubeDuration(data.info.duration * 1000);
+          }
+        }
+      } catch {
+        // ignore non-json messages
+      }
+    };
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, [playNext]);
+
+  // Position increment ticker while YouTube is playing
+  useEffect(() => {
+    if (!inAppYouTubeVideoId || !isYouTubePlaying || Platform.OS !== 'web') return;
+    const interval = setInterval(() => {
+      setYouTubePosition(pos => {
+        if (youTubeDuration && pos >= youTubeDuration) {
+          void playNext();
+          return pos;
+        }
+        return pos + 500;
+      });
+    }, 500);
+    return () => clearInterval(interval);
+  }, [inAppYouTubeVideoId, isYouTubePlaying, youTubeDuration, playNext]);
 
   const handlePlayFullInApp = useCallback(async () => {
     if (!currentSong) return;
@@ -95,6 +182,10 @@ export default function PlayerScreen() {
       if (match?.videoId) {
         if (Platform.OS === 'web') {
           setInAppYouTubeVideoId(match.videoId);
+          setIsYouTubePlaying(true);
+          if (match.durationSec) {
+            setYouTubeDuration(match.durationSec * 1000);
+          }
           successFeedback();
         } else {
           await WebBrowser.openBrowserAsync(`https://www.youtube.com/watch?v=${match.videoId}`, {
@@ -181,10 +272,39 @@ export default function PlayerScreen() {
 
   const handleSeek = useCallback(
     (positionMs: number) => {
-      void seek(positionMs);
+      if (inAppYouTubeVideoId && Platform.OS === 'web') {
+        setYouTubePosition(positionMs);
+        if (iframeRef.current?.contentWindow) {
+          iframeRef.current.contentWindow.postMessage(
+            JSON.stringify({ event: 'command', func: 'seekTo', args: [positionMs / 1000, true] }),
+            '*',
+          );
+        }
+      } else {
+        void seek(positionMs);
+      }
     },
-    [seek],
+    [inAppYouTubeVideoId, seek],
   );
+
+  const handlePlayPause = useCallback(() => {
+    if (inAppYouTubeVideoId && Platform.OS === 'web') {
+      const nextPlaying = !isYouTubePlaying;
+      setIsYouTubePlaying(nextPlaying);
+      if (iframeRef.current?.contentWindow) {
+        iframeRef.current.contentWindow.postMessage(
+          JSON.stringify({
+            event: 'command',
+            func: nextPlaying ? 'playVideo' : 'pauseVideo',
+            args: [],
+          }),
+          '*',
+        );
+      }
+    } else {
+      void togglePlay();
+    }
+  }, [inAppYouTubeVideoId, isYouTubePlaying, togglePlay]);
 
   /* ---------- Koi song nahi (deep link se seedha /player khula) ---------- */
   if (!currentSong) {
@@ -201,7 +321,13 @@ export default function PlayerScreen() {
   }
 
   const artworkSize = Math.min(width - spacing.xl * 2, ARTWORK_MAX_SIZE);
+  const embedWidth = Math.min(width - spacing.xl * 2, 380);
+  const embedHeight = Math.round((embedWidth * 9) / 16) + 38;
   const repeatActive = repeat !== 'off';
+
+  const activePosition = inAppYouTubeVideoId ? youTubePosition : position;
+  const activeDuration = inAppYouTubeVideoId && youTubeDuration ? youTubeDuration : duration;
+  const activePlaying = inAppYouTubeVideoId ? isYouTubePlaying : isPlaying;
 
   return (
     <View
@@ -221,16 +347,19 @@ export default function PlayerScreen() {
 
       {/* Album art ya In-App YouTube player (web pe embed) */}
       {inAppYouTubeVideoId && Platform.OS === 'web' ? (
-        <View style={[styles.youtubeEmbedWrap, { width: artworkSize, height: artworkSize }]}>
+        <View style={[styles.youtubeEmbedWrap, { width: embedWidth, height: embedHeight }]}>
           <View style={styles.youtubeEmbedHeader}>
             <View style={styles.youtubeBadgeRow}>
-              <Ionicons name="logo-youtube" size={15} color="#ff0000" />
+              <Ionicons name="logo-youtube" size={16} color="#ff0000" />
               <Text style={styles.youtubeBadgeText} numberOfLines={1}>
-                In-App Full Song
+                In-App Full Song • YouTube
               </Text>
             </View>
             <Pressable
-              onPress={() => setInAppYouTubeVideoId(null)}
+              onPress={() => {
+                setInAppYouTubeVideoId(null);
+                void usePlayer.getState().play();
+              }}
               hitSlop={10}
               accessibilityRole="button"
               accessibilityLabel="Audio player te vapas jao"
@@ -241,13 +370,13 @@ export default function PlayerScreen() {
           </View>
           <View style={styles.iframeBox}>
             {React.createElement('iframe', {
-              src: `https://www.youtube-nocookie.com/embed/${inAppYouTubeVideoId}?autoplay=1&enablejsapi=1&playsinline=1`,
+              ref: iframeRef,
+              src: `https://www.youtube-nocookie.com/embed/${inAppYouTubeVideoId}?autoplay=1&enablejsapi=1&playsinline=1&origin=${typeof window !== 'undefined' ? window.location.origin : ''}`,
               title: currentSong.title,
               style: {
                 width: '100%',
                 height: '100%',
                 border: 'none',
-                borderRadius: 12,
               },
               allow: 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture',
               allowFullScreen: true,
@@ -288,7 +417,7 @@ export default function PlayerScreen() {
 
       {/* Seek bar - drag to seek (FR-2.5) + current/total time (FR-2.6) */}
       <View style={styles.progressSection}>
-        <ProgressBar position={position} duration={duration} onSeek={handleSeek} showTimes />
+        <ProgressBar position={activePosition} duration={activeDuration} onSeek={handleSeek} showTimes />
       </View>
 
       {/* iTunes 30s preview note (FR-2.8 ke alawa full song nahi milta).
@@ -300,11 +429,20 @@ export default function PlayerScreen() {
           <Text style={styles.previewNote}>
             {inAppYouTubeVideoId
               ? '▶ Playing Full Song in App (YouTube)'
-              : 'Preview mode (30s) — Full version available on YouTube'}
+              : isResolvingYouTube
+                ? 'Matching full song from YouTube...'
+                : 'Preview mode (30s) — Full version available on YouTube'}
           </Text>
           {isYouTubeMatchConfigured() ? (
             <Pressable
-              onPress={inAppYouTubeVideoId ? () => setInAppYouTubeVideoId(null) : handlePlayFullInApp}
+              onPress={
+                inAppYouTubeVideoId
+                  ? () => {
+                      setInAppYouTubeVideoId(null);
+                      void usePlayer.getState().play();
+                    }
+                  : handlePlayFullInApp
+              }
               disabled={isResolvingYouTube}
               accessibilityRole="button"
               accessibilityLabel="App vich full song play karo"
@@ -338,10 +476,8 @@ export default function PlayerScreen() {
           Shuffle/repeat buttons PlayerControls khud render karta hai (haptics bhi wahi). */}
       <View style={styles.controls}>
         <PlayerControls
-          isPlaying={isPlaying}
-          onPlayPause={() => {
-            void togglePlay();
-          }}
+          isPlaying={activePlaying}
+          onPlayPause={handlePlayPause}
           onNext={() => {
             void playNext();
           }}
