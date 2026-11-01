@@ -443,7 +443,8 @@ Before releasing:
 | Phase 26: Selected Lyrics Sharing V1 (Roadmap 8b) | 11 | 10 | 91% |
 | Phase 27: Copy Link + QR Composer V1 (Roadmap 8c) | 14 | 13 | 93% |
 | Phase 28: Artist & Album Detail Screens & Modern UI (Roadmap 3) | 19 | 18 | 95% |
-| **TOTAL** | **412** | **376** | **91%** |
+| Phase 29: Cultural Polish, Gurmukhi Engine, Resilience, & Acoustic Architecture | 21 | 20 | 95% |
+| **TOTAL** | **433** | **396** | **91%** |
 
 > Counts 2026-10-30 ko actual checkbox lines se dobara verify hue — har `## PHASE n` section
 > ke andar ke `- [ ]`/`- [x]` boxes gine gaye (SECTION 0/1/2 ke headers, Tracker table,
@@ -842,4 +843,38 @@ Before releasing:
 - [ ] Manual verification on physical iOS/Android device
 
 **Phase 28 Complete?** `[x]` (code + automated tests + web production deploy live)
+
+---
+
+## 🌟 PHASE 29: Cultural Polish, Gurmukhi Engine, Resilience, & Acoustic Architecture
+
+### Core Engines & Services
+- [x] `mobile/core/lyrics/lyrics.ts` — Gurmukhi transliteration engine (`transliterateToGurmukhi`, `withGurmukhi`, `WORD_GURMUKHI_MAP`, `CHAR_GURMUKHI_MAP`)
+- [x] `mobile/core/network/apiClient.ts` — Exponential backoff retry engine (`fetchWithBackoff`) handling 429 Rate Limits and 503 Outages with jitter
+- [x] `mobile/constants/equalizer.ts` — 5-Band Acoustic Punjabi EQ Presets (Studio Flat, Bhangra Dhol +6dB, Sufi Warmth, Midnight Drive, Gym Pump)
+- [x] `mobile/constants/concerts.ts` — Live Punjabi Tour & Concert Radar across Delhi, Toronto, London, Vancouver, Amritsar, Melbourne, Mumbai with 1-tap Jam Room codes
+- [x] `mobile/services/offlineCache.ts` — Cross-platform binary offline audio caching (`hasLocalCachedBlob`, `getCachedAudioBlobUrl`, `downloadAudioToLocalCache`)
+- [x] `mobile/core/auth/passphrase.ts` — 16-word Punjabi recovery & pairing passphrase engine (`derivePunjabiPassphrase`, `validatePunjabiPassphrase`)
+- [x] `mobile/constants/legal.ts` — Play Store & App Store compliant Privacy Policy and Terms of Service
+- [x] `mobile/utils/graphEngine.ts` — Pure Kahn's topological sort dependency engine with cycle detection and critical-path analysis
+- [x] `mobile/utils/format.ts` — SSRF security guard (`isPublicHttpUrl`), cleanName, albumKey, parseAlbumKey, initials
+
+### UI & Presentation Layer
+- [x] `mobile/app/(tabs)/index.tsx` — Hero Mehfil Card with 1-tap "Play trending" and "Open a room" actions
+- [x] `mobile/constants/moods.ts` — Authentic Gurmukhi script titles and culturally resonant taglines across all 8 moods
+- [x] `mobile/components/MoodCard.tsx` — Frosted circular emoji badge, Gurmukhi pill, subtitle note, and accent bar
+- [x] `mobile/app/mood/[id].tsx` — "Play mood" & "Shuffle" action buttons, Gurmukhi pill, and tagline
+- [x] `mobile/app/lyrics.tsx` — Real-time Romanized <-> Gurmukhi script toggle switch (`[ ਪੰਜਾਬੀ / EN ]`)
+
+### Reliability & Verification
+- [x] `test-lyrics.mjs` — Gurmukhi transliteration dictionary, phonetic fallback, and native script pass-through tests
+- [x] `test-format-helpers.mjs` — 5 automated assertions for duration, SSRF guard, cleanName, and albumKey
+- [x] `npm test` — All 17 automated test suites green
+- [x] `cd mobile && npx tsc --noEmit` — 0 errors
+- [x] `cd mobile && npm run lint` — 0 warnings
+- [x] Live EAS production deployment: `https://punjabi-beats.expo.app`
+- [ ] Manual verification on physical iOS/Android device
+
+**Phase 29 Complete?** `[x]` (code + automated tests + web production deploy live)
+
 

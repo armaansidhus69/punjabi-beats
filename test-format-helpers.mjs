@@ -65,3 +65,4 @@ test('isPublicHttpUrl: blocks SSRF targets, loopbacks & internal subnets', () =>
   assert.equal(isPublicHttpUrl('https://service.internal/api'), false);
   assert.equal(isPublicHttpUrl('not a url'), false);
 });
+
