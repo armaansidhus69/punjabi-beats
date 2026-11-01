@@ -42,12 +42,39 @@ async function parseBody(response: Response): Promise<unknown> {
   }
 }
 
+/**
+ * 429 (Rate Limit) aur 503 (Unavailable) errors par Retry-After header
+ * aur exponential jitter backoff ke sath safe fetch retry karta hai.
+ */
+export async function fetchWithBackoff(
+  url: string,
+  init: RequestInit = {},
+  maxRetries = 2
+): Promise<Response> {
+  let attempt = 0;
+  while (true) {
+    const res = await fetch(url, init);
+    if ((res.status === 429 || res.status === 503) && attempt < maxRetries) {
+      const retryHeader = Number(res.headers.get('retry-after'));
+      const baseMs =
+        Number.isFinite(retryHeader) && retryHeader > 0
+          ? Math.min(2500, retryHeader * 1000)
+          : 350 * Math.pow(2, attempt);
+      const jitterMs = Math.floor(Math.random() * 180);
+      await new Promise(r => setTimeout(r, baseMs + jitterMs));
+      attempt += 1;
+      continue;
+    }
+    return res;
+  }
+}
+
 export async function apiRequest<T>(path: string, options: ApiRequestOptions = {}): Promise<T> {
   const { query, headers, body, ...request } = options;
   const url = buildUrl(path, query);
   if (!getApiBaseUrl()) throw new Error('EXPO_PUBLIC_API_BASE_URL is not configured');
 
-  const response = await fetch(url, {
+  const response = await fetchWithBackoff(url, {
     ...request,
     body: typeof body === 'string' ? body : body === undefined ? undefined : JSON.stringify(body),
     headers: {

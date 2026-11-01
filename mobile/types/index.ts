@@ -629,6 +629,8 @@ export interface AssistantTurn {
 export interface LyricsLine {
   text: string;
   timeMs: number;
+  /** Romanized line ka Gurmukhi script transliteration (ਪੰਜਾਬੀ) */
+  gurmukhi?: string;
 }
 
 /** ek song ka fetched lyrics record — @pb_lyrics cache value shape */

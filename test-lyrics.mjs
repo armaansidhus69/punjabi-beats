@@ -18,6 +18,8 @@ import {
   parseLrc,
   plainToLines,
   selectionRange,
+  transliterateToGurmukhi,
+  withGurmukhi,
 } from './mobile/core/lyrics/lyrics.ts';
 
 function lyricsData(index, fetchedAt = index) {
@@ -192,3 +194,22 @@ test('cachePut: cap 50 oldest-drop + duplicate refresh', () => {
   assert.equal(Object.keys(cache).length, LYRICS_CACHE_CAP);
   assert.equal(cachePut(cache, '', lyricsData(99)), cache);
 });
+
+test('Gurmukhi transliteration: dictionary match, phonetic fallback & native script pass-through', () => {
+  // Dictionary word match
+  assert.equal(transliterateToGurmukhi('dil bhangra dhol punjab'), 'ਦਿਲ ਭੰਗੜਾ ਢੋਲ ਪੰਜਾਬ');
+
+  // Existing Gurmukhi preserved intact
+  assert.equal(transliterateToGurmukhi('ਸਤਿ ਸ੍ਰੀ ਅਕਾਲ'), 'ਸਤਿ ਸ੍ਰੀ ਅਕਾਲ');
+
+  // withGurmukhi enriches lines
+  const lines = [
+    { text: 'dil dhol', timeMs: 1000 },
+    { text: 'punjabi vibe', timeMs: 2000 },
+  ];
+  const enriched = withGurmukhi(lines);
+  assert.equal(enriched[0].gurmukhi, 'ਦਿਲ ਢੋਲ');
+  assert.equal(enriched[1].gurmukhi, 'ਪੰਜਾਬੀ ਵਾਈਬ');
+  assert.equal(enriched[0].timeMs, 1000);
+});
+

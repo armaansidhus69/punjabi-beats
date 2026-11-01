@@ -289,3 +289,121 @@ export function cachePut(cache: CacheMap, songId: string, data: LyricsData): Cac
   const kept = sorted.slice(sorted.length - LYRICS_CACHE_CAP);
   return Object.fromEntries(kept);
 }
+
+/* ------------------------------ Gurmukhi Transliteration Engine ------------------------------ */
+
+export const WORD_GURMUKHI_MAP: Record<string, string> = {
+  dil: 'ਦਿਲ',
+  punjab: 'ਪੰਜਾਬ',
+  punjabi: 'ਪੰਜਾਬੀ',
+  pyar: 'ਪਿਆਰ',
+  ishq: 'ਇਸ਼ਕ',
+  raat: 'ਰਾਤ',
+  chan: 'ਚੰਨ',
+  chann: 'ਚੰਨ',
+  yaar: 'ਯਾਰ',
+  mitran: 'ਮਿੱਤਰਾਂ',
+  jatt: 'ਜੱਟ',
+  gabru: 'ਗੱਭਰੂ',
+  nach: 'ਨੱਚ',
+  bhangra: 'ਭੰਗੜਾ',
+  dhol: 'ਢੋਲ',
+  beat: 'ਬੀਟ',
+  tere: 'ਤੇਰੇ',
+  mera: 'ਮੇਰਾ',
+  meri: 'ਮੇਰੀ',
+  asi: 'ਅਸੀਂ',
+  tusi: 'ਤੁਸੀਂ',
+  sohniye: 'ਸੋਹਣੀਏ',
+  heeriye: 'ਹੀਰੀਏ',
+  geet: 'ਗੀਤ',
+  kalam: 'ਕਲਾਮ',
+  zindagi: 'ਜ਼ਿੰਦਗੀ',
+  amber: 'ਅੰਬਰ',
+  sitare: 'ਸਿਤਾਰੇ',
+  vibe: 'ਵਾਈਬ',
+  rolly: 'ਰੋਲੀ',
+  goat: 'ਗੋਟ',
+  crown: 'ਤਾਜ',
+  forever: 'ਹਮੇਸ਼ਾ',
+  love: 'ਪਿਆਰ',
+  night: 'ਰਾਤ',
+  fire: 'ਅੱਗ',
+};
+
+export const CHAR_GURMUKHI_MAP: [RegExp, string][] = [
+  [/kh/gi, 'ਖ'],
+  [/gh/gi, 'ਘ'],
+  [/ch/gi, 'ਚ'],
+  [/sh/gi, 'ਸ਼'],
+  [/th/gi, 'ਥ'],
+  [/dh/gi, 'ਧ'],
+  [/ph/gi, 'ਫ'],
+  [/bh/gi, 'ਭ'],
+  [/aa/gi, 'ਆ'],
+  [/ee/gi, 'ਈ'],
+  [/oo/gi, 'ਊ'],
+  [/a/gi, 'ਅ'],
+  [/b/gi, 'ਬ'],
+  [/c/gi, 'ਕ'],
+  [/d/gi, 'ਦ'],
+  [/e/gi, 'ਏ'],
+  [/f/gi, 'ਫ਼'],
+  [/g/gi, 'ਗ'],
+  [/h/gi, 'ਹ'],
+  [/i/gi, 'ਇ'],
+  [/j/gi, 'ਜ'],
+  [/k/gi, 'ਕ'],
+  [/l/gi, 'ਲ'],
+  [/m/gi, 'ਮ'],
+  [/n/gi, 'ਨ'],
+  [/o/gi, 'ਓ'],
+  [/p/gi, 'ਪ'],
+  [/q/gi, 'ਕ'],
+  [/r/gi, 'ਰ'],
+  [/s/gi, 'ਸ'],
+  [/t/gi, 'ਤ'],
+  [/u/gi, 'ਉ'],
+  [/v/gi, 'ਵ'],
+  [/w/gi, 'ਵ'],
+  [/x/gi, 'ਕਸ'],
+  [/y/gi, 'ਯ'],
+  [/z/gi, 'ਜ਼'],
+];
+
+/**
+ * Romanized Punjabi lyrics line ko native Gurmukhi script me transliterate karta hai.
+ * Agar already Gurmukhi script present ho to untouched return karta hai.
+ */
+export function transliterateToGurmukhi(line: string): string {
+  if (typeof line !== 'string' || line.trim().length === 0) return '';
+  // Agar line me already Gurmukhi Unicode codepoints hon to as-is return karo
+  if (/[\u0A00-\u0A7F]/.test(line)) return line;
+
+  return line
+    .split(/\s+/)
+    .map(word => {
+      const clean = word.toLowerCase().replace(/[^a-z]/g, '');
+      if (!clean) return word;
+      if (WORD_GURMUKHI_MAP[clean]) {
+        return WORD_GURMUKHI_MAP[clean];
+      }
+      let out = clean;
+      for (const [regex, glyph] of CHAR_GURMUKHI_MAP) {
+        out = out.replace(regex, glyph);
+      }
+      return out;
+    })
+    .join(' ');
+}
+
+/**
+ * Lyrics lines array ko Gurmukhi script transliterations se enrich karta hai.
+ */
+export function withGurmukhi(lines: LyricsLine[]): LyricsLine[] {
+  return lines.map(line => ({
+    ...line,
+    gurmukhi: transliterateToGurmukhi(line.text),
+  }));
+}
+
