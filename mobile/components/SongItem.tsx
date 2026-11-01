@@ -55,6 +55,9 @@ export default function SongItem({
         onPress={() => {
           tapFeedback();
           onPress(song);
+          if (song.previewOnly) {
+            router.push('/player');
+          }
         }}
         accessibilityRole="button"
         accessibilityLabel={`${song.title} — ${song.artist}`}
@@ -83,8 +86,9 @@ export default function SongItem({
             <Text style={styles.youtubeBadgeText}>YT Music</Text>
           </View>
         ) : song.previewOnly ? (
-          <View style={styles.previewBadge}>
-            <Text style={styles.previewBadgeText}>30s</Text>
+          <View style={[styles.previewBadge, styles.youtubePreviewBadge]}>
+            <Ionicons name="logo-youtube" size={12} color="#ff3b30" />
+            <Text style={styles.youtubePreviewBadgeText}>Full Song</Text>
           </View>
         ) : null}
 
@@ -204,4 +208,12 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary + '22',
   },
   youtubeBadgeText: { fontSize: 10, fontWeight: '700', color: colors.primary },
+  youtubePreviewBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    borderColor: '#ff3b3066',
+    backgroundColor: 'rgba(255, 59, 48, 0.1)',
+  },
+  youtubePreviewBadgeText: { fontSize: 10, fontWeight: '700', color: '#ff453a' },
 });

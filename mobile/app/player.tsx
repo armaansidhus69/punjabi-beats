@@ -326,7 +326,14 @@ export default function PlayerScreen() {
   const repeatActive = repeat !== 'off';
 
   const activePosition = inAppYouTubeVideoId ? youTubePosition : position;
-  const activeDuration = inAppYouTubeVideoId && youTubeDuration ? youTubeDuration : duration;
+  const activeDuration =
+    inAppYouTubeVideoId && youTubeDuration
+      ? youTubeDuration
+      : currentSong?.previewOnly && youTubeDuration
+        ? youTubeDuration
+        : currentSong?.previewOnly
+          ? 161_000
+          : duration;
   const activePlaying = inAppYouTubeVideoId ? isYouTubePlaying : isPlaying;
 
   return (
@@ -371,7 +378,7 @@ export default function PlayerScreen() {
           <View style={styles.iframeBox}>
             {React.createElement('iframe', {
               ref: iframeRef,
-              src: `https://www.youtube-nocookie.com/embed/${inAppYouTubeVideoId}?autoplay=1&enablejsapi=1&playsinline=1&origin=${typeof window !== 'undefined' ? window.location.origin : ''}`,
+              src: `https://www.youtube.com/embed/${inAppYouTubeVideoId}?autoplay=1&enablejsapi=1&playsinline=1`,
               title: currentSong.title,
               style: {
                 width: '100%',
@@ -431,7 +438,7 @@ export default function PlayerScreen() {
               ? '▶ Playing Full Song in App (YouTube)'
               : isResolvingYouTube
                 ? 'Matching full song from YouTube...'
-                : 'Preview mode (30s) — Full version available on YouTube'}
+                : 'Full version via YouTube'}
           </Text>
           {isYouTubeMatchConfigured() ? (
             <Pressable
@@ -462,7 +469,7 @@ export default function PlayerScreen() {
                   ? 'Matching full song...'
                   : inAppYouTubeVideoId
                     ? 'Switch back to Audio Disc'
-                    : '▶ Play Full Song in App (YouTube)'}
+                    : '▶ Play Full Song (YouTube)'}
               </Text>
             </Pressable>
           ) : null}

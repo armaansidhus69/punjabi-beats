@@ -39,12 +39,13 @@ export default function MiniPlayer({ bottomOffset = 0 }: MiniPlayerProps) {
   // Tab bar na hone pe (bottomOffset 0) safe-area inset khud handle karo
   const bottomPad = bottomOffset === 0 ? insets.bottom : 0;
   const effectiveBottom = bottomOffset > 0 ? bottomOffset + 6 : 6 + bottomPad;
+  const effectiveDuration = currentSong.previewOnly && duration <= 30000 ? 161000 : duration;
 
   return (
     <View style={[styles.container, { bottom: effectiveBottom }]}>
       {/* Thin progress bar top pe (non-interactive) */}
       <View style={styles.progress} pointerEvents="none">
-        <ProgressBar position={position} duration={duration} variant="mini" />
+        <ProgressBar position={position} duration={effectiveDuration} variant="mini" />
       </View>
 
       <View style={styles.row}>
