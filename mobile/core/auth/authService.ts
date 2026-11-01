@@ -79,9 +79,15 @@ function normalizeEmail(email: string): string {
 }
 
 function getGoogleRedirectUrl(): string {
+  if (Platform.OS === 'web') {
+    if (typeof window !== 'undefined' && window.location?.origin) {
+      return `${window.location.origin}/auth/login`;
+    }
+    return 'https://punjabi-beats.expo.app/auth/login';
+  }
   return makeRedirectUri({
     scheme: 'punjabi-beats',
-    path: Platform.OS === 'web' ? 'auth/login' : 'auth/callback',
+    path: 'auth/callback',
   });
 }
 
