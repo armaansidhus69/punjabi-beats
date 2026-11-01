@@ -15,7 +15,7 @@ import {
   getPersistedPlayerState,
   savePersistedPlayerState,
 } from '../services/storage';
-import { resolveSongPlaybackUrl } from '../services/musicApi';
+import { resolveSongPlaybackUrl, resolveFullAudioStream } from '../services/musicApi';
 
 let setupPromise: Promise<void> | null = null;
 let listenersRegistered = false;
@@ -127,6 +127,24 @@ function schedulePersistedState(): void {
 
 async function resolveTrack(song: Song, openFallback = true): Promise<ResolvedTrack> {
   if (song.source !== 'youtube_music' || !song.videoId) {
+    // Preview tracks dynamic upgrade pass — resolve 320kbps full stream on-the-fly
+    if (song.previewOnly || !song.preview || (song.duration && song.duration <= 30_000)) {
+      try {
+        const resolvedFull = await resolveFullAudioStream(song);
+        if (resolvedFull.url && !resolvedFull.previewOnly) {
+          const upgradedSong: Song = {
+            ...song,
+            preview: resolvedFull.url,
+            duration: resolvedFull.duration ?? song.duration,
+            previewOnly: false,
+            source: song.source === 'itunes' ? 'jiosaavn' : song.source,
+          };
+          return { song: upgradedSong, url: resolvedFull.url };
+        }
+      } catch (err) {
+        console.warn('[playerStore] Full audio stream upgrade failed:', err);
+      }
+    }
     return { song, url: song.preview || null };
   }
 

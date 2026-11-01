@@ -50,6 +50,7 @@
   - [x] **Audio guard** — JioSaavn mirror ke download URL ka HEAD check; zombie mirror (metadata sahi, CDN 404) skip hota hai
   - [x] `previewOnly` flag: sirf iTunes pe `true` → SongItem ka "30s" badge + player note
 - [x] Response mapping (har source ka mapper → common `Song`; JioSaavn ke 3 shapes + `link`/`url` dono)
+- [x] Dynamic on-the-fly 320kbps full stream upgrade (`resolveFullAudioStream` in `musicApi.ts` & `playerStore.ts`): any preview track automatically upgrades to JioSaavn 320kbps full audio track at playback time
 - [x] Error handling with fallback (har source ka try/catch + `[musicApi] … → source` console log)
 - [x] Test: `searchSongs('Diljit')` → **JioSaavn full songs** with Audius/iTunes fallback — `probe-search.mjs` live PASS
 - [x] Test: Karan Aujla / Sidhu Moose Wala / Satinder Sartaaj → full songs; `xyzabc` → 0 full (clips filter)

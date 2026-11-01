@@ -1312,6 +1312,28 @@ async function upgradeITunesWithAudius(songs: Song[], cap: number): Promise<Song
   const upgraded = await Promise.all(
     targets.map(async idx => {
       const song = songs[idx];
+      // 1. Try JioSaavn first for full 320kbps stream
+      try {
+        const cleanTitle = song.title.replace(/\s*[\(\[].*?[\)\]]/g, '').trim();
+        const jioCandidates = await searchJioSaavn(`${cleanTitle} ${song.artist}`, 2);
+        const hit =
+          jioCandidates.find(c => !c.previewOnly && c.preview && titleMatches(cleanTitle, c.title)) ??
+          jioCandidates.find(c => !c.previewOnly && c.preview);
+        if (hit && hit.preview) {
+          return {
+            ...song,
+            preview: hit.preview,
+            duration: hit.duration || song.duration,
+            cover: song.cover || hit.cover,
+            previewOnly: false,
+            source: 'jiosaavn' as const,
+          };
+        }
+      } catch {
+        // JioSaavn upgrade failed, fall through to Audius
+      }
+
+      // 2. Fallback to Audius
       try {
         const candidates = await searchAudius(`${song.title} ${song.artist}`, 10);
         const hit = candidates.find(c => titleMatches(song.title, c.title));
@@ -1334,6 +1356,79 @@ async function upgradeITunesWithAudius(songs: Song[], cap: number): Promise<Song
     out[idx] = upgraded[k];
   });
   return out;
+}
+
+const fullStreamCache = new Map<string, { url: string; duration: number }>();
+
+/**
+ * On-the-fly full song audio resolver.
+ * Agar koi song previewOnly hai (jaise iTunes 30s preview), ye runtime pe
+ * JioSaavn se 320kbps full stream nikalta hai taaki song 30 second pe na kate.
+ */
+export async function resolveFullAudioStream(
+  song: Song,
+): Promise<{ url: string; duration?: number; previewOnly: boolean }> {
+  if (!song) return { url: '', previewOnly: true };
+
+  // Agar pehle se full stream hai aur > 30s hai to wahi use karo
+  if (!song.previewOnly && song.preview && (!song.duration || song.duration > 30_000)) {
+    return { url: song.preview, duration: song.duration, previewOnly: false };
+  }
+
+  const cleanTitle = song.title.replace(/\s*[\(\[].*?[\)\]]/g, '').trim();
+  const cacheKey = `${normalizeTitle(cleanTitle)}|${normalizeTitle(song.artist)}`;
+  const cached = fullStreamCache.get(cacheKey);
+  if (cached) {
+    return { url: cached.url, duration: cached.duration, previewOnly: false };
+  }
+
+  // 1. Primary: JioSaavn 320kbps full song lookup
+  try {
+    const query = `${cleanTitle} ${song.artist}`.trim();
+    const jioMatches = await searchJioSaavn(query, 5);
+    const hit =
+      jioMatches.find(m => !m.previewOnly && m.preview && titleMatches(cleanTitle, m.title)) ??
+      jioMatches.find(m => !m.previewOnly && m.preview);
+    if (hit && hit.preview) {
+      const duration = hit.duration || song.duration;
+      fullStreamCache.set(cacheKey, { url: hit.preview, duration });
+      return {
+        url: hit.preview,
+        duration,
+        previewOnly: false,
+      };
+    }
+  } catch {
+    // JioSaavn lookup failed, continue fallback
+  }
+
+  // 2. Secondary: Audius full track lookup
+  try {
+    const audiusMatches = await searchAudius(`${cleanTitle} ${song.artist}`, 5);
+    const hit = audiusMatches.find(m => !m.previewOnly && m.preview && titleMatches(cleanTitle, m.title));
+    if (hit && hit.preview) {
+      const duration = hit.duration || song.duration;
+      fullStreamCache.set(cacheKey, { url: hit.preview, duration });
+      return {
+        url: hit.preview,
+        duration,
+        previewOnly: false,
+      };
+    }
+  } catch {
+    // Audius fallback failure
+  }
+
+  // 3. Fallback: original preview clip agar kuch na mila
+  if (song.preview) {
+    return {
+      url: song.preview,
+      duration: song.duration || 30_000,
+      previewOnly: true,
+    };
+  }
+
+  return { url: '', previewOnly: true };
 }
 
 /* ---------- Public API ---------- */
@@ -1467,6 +1562,18 @@ export async function searchSongs(query: string, limit = 30): Promise<Song[]> {
  * ki list full songs ki hai. Rotation kam pade to wahi query fallback.
  */
 export async function getTrendingSongs(limit = 20): Promise<Song[]> {
+  // Try 1: JioSaavn real top Punjabi hits (100% 320kbps full songs)
+  try {
+    const hits = await searchJioSaavn('top punjabi songs', limit);
+    if (hits.length >= Math.min(10, limit)) {
+      logSource('trending', 'jiosaavn(top punjabi)', hits.length, 'full');
+      return hits.slice(0, limit);
+    }
+  } catch (err) {
+    console.warn('[musicApi] JioSaavn trending fail:', err);
+  }
+
+  // Try 2: Audius artist rotation fallback
   try {
     const picked = shuffle(TRENDING_ARTISTS).slice(0, 3);
     const songs = await searchAudiusByArtists(picked, Math.ceil(limit / 2) + 5);
