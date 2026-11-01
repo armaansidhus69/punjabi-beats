@@ -347,8 +347,8 @@
 - [x] Install EAS CLI: `npm install -g eas-cli` (v24.8.0 / npx verified)
 - [x] `eas login` — authenticated with EXPO_TOKEN as `armaanpreet`
 - [x] `eas build:configure` → build config **ready** — `mobile/eas.json` hand-written (preview = APK, production = autoIncrement AAB); login ke baad ye command ise verify/regenerate kar legi
-- [x] `eas build --platform android --profile preview` — BUILD COMPLETE (build ID: `86da9957-9271-4e3d-bbcb-aad1e31826f0`)
-- [x] Download APK (EAS dashboard/CLI se) — https://expo.dev/artifacts/eas/zbO8U0N61l1Sv06IfVudcHRU3nwm1z7VrWjYAUlVR7g.apk
+- [x] `eas build --platform android --profile preview` — BUILD COMPLETE (build ID: `a79535d5-c74a-468b-93f4-3ade457f9929`)
+- [x] Download APK (EAS dashboard/CLI se) — https://expo.dev/artifacts/eas/7zaid4t3ZL8AIsc-o5aq_xYPblriSui83I1lnJ1aceQ.apk
 - [ ] Install on test device
 - [ ] Test all features
 - [ ] `eas build --platform android --profile production` (AAB for Play Store)
