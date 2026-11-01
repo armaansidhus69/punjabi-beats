@@ -44,13 +44,25 @@ export default function MoodCard({ mood, onPress }: MoodCardProps) {
       }}
       style={[styles.card, animatedStyle]}
     >
-      <View style={styles.emojiContainer}>
-        <Text style={styles.emoji}>{mood.emoji}</Text>
+      <View style={styles.topRow}>
+        <View style={styles.emojiContainer}>
+          <Text style={styles.emoji}>{mood.emoji}</Text>
+        </View>
+        {mood.punjabi ? (
+          <View style={[styles.punjabiBadge, { borderColor: `${accent}40` }]}>
+            <Text style={[styles.punjabiText, { color: accent }]}>{mood.punjabi}</Text>
+          </View>
+        ) : null}
       </View>
       <View style={styles.footer}>
         <Text style={styles.title} numberOfLines={1}>
           {mood.title}
         </Text>
+        {mood.note ? (
+          <Text style={styles.note} numberOfLines={1}>
+            {mood.note}
+          </Text>
+        ) : null}
         {/* Accent bar — har mood ka apna rang */}
         <View style={[styles.accentBar, { backgroundColor: accent }]} />
       </View>
@@ -61,12 +73,12 @@ export default function MoodCard({ mood, onPress }: MoodCardProps) {
 const styles = StyleSheet.create({
   card: {
     flex: 1,
-    minHeight: 112,
+    minHeight: 124,
     backgroundColor: '#161622',
     borderRadius: 18,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.08)',
-    padding: spacing.md + 2,
+    padding: spacing.md,
     justifyContent: 'space-between',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
@@ -74,16 +86,34 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 3,
   },
+  topRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
   emojiContainer: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: 'rgba(255, 255, 255, 0.06)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  emoji: { fontSize: 24 },
-  footer: { gap: spacing.xs + 2 },
+  emoji: { fontSize: 22 },
+  punjabiBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    borderWidth: 1,
+  },
+  punjabiText: {
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.2,
+  },
+  footer: { gap: spacing.xs },
   title: { ...typography.body, fontSize: 16, fontWeight: '700', color: colors.text },
-  accentBar: { width: 32, height: 3.5, borderRadius: 2 },
+  note: { ...typography.caption, fontSize: 11, color: colors.subtext },
+  accentBar: { width: 28, height: 3, borderRadius: 2, marginTop: 2 },
 });

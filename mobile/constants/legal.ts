@@ -63,3 +63,4 @@ export const TERMS_OF_SERVICE = {
     },
   ],
 };
+

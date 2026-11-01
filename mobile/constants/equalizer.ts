@@ -78,3 +78,4 @@ export function formatGainDb(gain: number): string {
   if (gain < 0) return `${gain} dB`;
   return '0 dB';
 }
+

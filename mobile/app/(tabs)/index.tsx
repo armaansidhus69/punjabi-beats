@@ -125,6 +125,50 @@ export default function HomeScreen() {
         </View>
       </View>
 
+      {/* Hero Mehfil Card */}
+      <View style={styles.heroCard}>
+        <View style={styles.heroCopy}>
+          <Text style={styles.heroKicker}>🥁 A Mehfil In Your Pocket</Text>
+          <Text style={styles.heroTitle}>The room is already playing.</Text>
+          <Text style={styles.heroLede}>
+            Punjabi hits by mood, 320kbps streams, and live rooms for friends across cities.
+          </Text>
+          <View style={styles.heroActions}>
+            <Pressable
+              onPress={() => {
+                if (songs.length > 0) {
+                  tapFeedback();
+                  void playSong(songs[0], songs);
+                }
+              }}
+              disabled={songs.length === 0}
+              accessibilityRole="button"
+              accessibilityLabel="Play trending songs"
+              style={({ pressed }) => [
+                styles.heroPlayBtn,
+                pressed && styles.pressed,
+                songs.length === 0 && styles.disabled,
+              ]}
+            >
+              <Ionicons name="play" size={16} color="#07070c" />
+              <Text style={styles.heroPlayText}>Play trending</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => {
+                tapFeedback();
+                router.push('/(tabs)/room');
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="Open a group room"
+              style={({ pressed }) => [styles.heroRoomBtn, pressed && styles.pressed]}
+            >
+              <Ionicons name="radio-outline" size={16} color={colors.text} />
+              <Text style={styles.heroRoomText}>Open a room</Text>
+            </Pressable>
+          </View>
+        </View>
+      </View>
+
       {/* Popular Artists Carousel */}
       <Text style={styles.sectionTitle}>Popular Artists 🎤</Text>
       <ScrollView
@@ -260,6 +304,80 @@ const styles = StyleSheet.create({
     ...typography.body,
     color: colors.subtext,
     marginTop: spacing.xs,
+  },
+  heroCard: {
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.md,
+    padding: spacing.lg,
+    borderRadius: 20,
+    backgroundColor: '#141420',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 179, 71, 0.2)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    elevation: 4,
+  },
+  heroCopy: {
+    gap: spacing.xs + 2,
+  },
+  heroKicker: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.primary,
+    letterSpacing: 0.3,
+    textTransform: 'uppercase',
+  },
+  heroTitle: {
+    ...typography.h2,
+    fontSize: 20,
+    fontWeight: '800',
+    color: colors.text,
+  },
+  heroLede: {
+    ...typography.caption,
+    color: colors.subtext,
+    lineHeight: 18,
+  },
+  heroActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginTop: spacing.xs + 2,
+  },
+  heroPlayBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 999,
+    backgroundColor: colors.primary,
+  },
+  heroPlayText: {
+    ...typography.caption,
+    fontWeight: '700',
+    color: '#07070c',
+  },
+  heroRoomBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255, 255, 255, 0.07)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  heroRoomText: {
+    ...typography.caption,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  disabled: {
+    opacity: 0.4,
   },
   sectionTitle: {
     ...typography.h2,

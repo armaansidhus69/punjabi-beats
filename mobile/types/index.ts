@@ -40,6 +40,10 @@ export interface Mood {
   color?: string;
   /** Search query (iTunes IN store pe probe-verified, constants/moods.ts me list) */
   query: string;
+  /** Gurmukhi script representation (e.g. ਭੰਗੜਾ, ਸੂਫ਼ੀ, ਰੋਮਾਂਟਿਕ) */
+  punjabi?: string;
+  /** Cultural mood tagline / description */
+  note?: string;
 }
 
 /* ---------- Phase 3: Music Catalogue (Artists & Albums) ---------- */

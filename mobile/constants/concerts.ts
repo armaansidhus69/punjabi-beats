@@ -154,3 +154,4 @@ export function getConcertsByCity(city: string): ConcertEvent[] {
     c => c.city.toLowerCase().includes(city.toLowerCase()),
   );
 }
+

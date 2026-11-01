@@ -17,6 +17,7 @@ import { useMiniPlayerPadding } from '../../hooks/useMiniPlayerPadding';
 import { colors } from '../../constants/colors';
 import { typography } from '../../constants/typography';
 import { spacing } from '../../constants/spacing';
+import { tapFeedback } from '../../utils/haptics';
 import EmptyState from '../../components/EmptyState';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import SongItem from '../../components/SongItem';
@@ -79,6 +80,19 @@ export default function MoodScreen() {
     [playSong, songs],
   );
 
+  const handlePlayAll = useCallback(() => {
+    if (songs.length === 0) return;
+    tapFeedback();
+    void playSong(songs[0], songs);
+  }, [playSong, songs]);
+
+  const handleShuffle = useCallback(() => {
+    if (songs.length === 0) return;
+    tapFeedback();
+    const shuffled = [...songs].sort(() => Math.random() - 0.5);
+    void playSong(shuffled[0], shuffled);
+  }, [playSong, songs]);
+
   // Invalid/missing mood id — crash ki jagah friendly screen
   if (!mood) {
     return (
@@ -89,14 +103,72 @@ export default function MoodScreen() {
     );
   }
 
+  const moodColor = mood.color ?? colors.primary;
+
+  const listHeader = (
+    <View style={styles.headerBlock}>
+      {mood.punjabi || mood.note ? (
+        <View style={styles.kickerRow}>
+          {mood.punjabi ? (
+            <View style={[styles.punjabiPill, { borderColor: `${moodColor}50` }]}>
+              <Text style={[styles.punjabiPillText, { color: moodColor }]}>{mood.punjabi}</Text>
+            </View>
+          ) : null}
+          {mood.note ? (
+            <Text style={styles.noteText} numberOfLines={1}>
+              {mood.note}
+            </Text>
+          ) : null}
+        </View>
+      ) : null}
+
+      <View style={styles.actionRow}>
+        <Pressable
+          onPress={handlePlayAll}
+          disabled={songs.length === 0}
+          accessibilityRole="button"
+          accessibilityLabel="Play all songs in this mood"
+          style={({ pressed }) => [
+            styles.playBtn,
+            { backgroundColor: moodColor },
+            pressed && styles.pressed,
+            songs.length === 0 && styles.disabled,
+          ]}
+        >
+          <Ionicons name="play" size={18} color="#07070c" />
+          <Text style={styles.playBtnText}>Play mood</Text>
+        </Pressable>
+
+        <Pressable
+          onPress={handleShuffle}
+          disabled={songs.length === 0}
+          accessibilityRole="button"
+          accessibilityLabel="Shuffle songs in this mood"
+          style={({ pressed }) => [
+            styles.shuffleBtn,
+            pressed && styles.pressed,
+            songs.length === 0 && styles.disabled,
+          ]}
+        >
+          <Ionicons name="shuffle" size={18} color={colors.text} />
+          <Text style={styles.shuffleBtnText}>Shuffle</Text>
+        </Pressable>
+      </View>
+
+      <Text style={styles.subtitle}>
+        {mood.query} • {songs.length} songs
+      </Text>
+    </View>
+  );
+
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      <BackHeader title={`${mood.emoji}  ${mood.title}`} color={mood.color ?? colors.primary} />
-      <Text style={styles.subtitle}>{mood.query} • {songs.length} songs</Text>
+      <BackHeader title={`${mood.emoji}  ${mood.title}`} color={moodColor} />
 
       <FlatList
         data={songs}
         keyExtractor={song => song.id}
+        ListHeaderComponent={listHeader}
         renderItem={({ item }) => (
           <SongItem
             song={item}
@@ -185,6 +257,73 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     marginBottom: spacing.sm,
     textTransform: 'capitalize',
+  },
+  headerBlock: {
+    paddingBottom: spacing.xs,
+  },
+  kickerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.md,
+  },
+  punjabiPill: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderWidth: 1,
+  },
+  punjabiPillText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  noteText: {
+    ...typography.caption,
+    color: colors.subtext,
+    flex: 1,
+  },
+  actionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.md,
+  },
+  playBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    paddingVertical: 12,
+    borderRadius: 999,
+  },
+  playBtnText: {
+    ...typography.body,
+    fontWeight: '700',
+    color: '#07070c',
+  },
+  shuffleBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    paddingVertical: 12,
+    borderRadius: 999,
+    backgroundColor: '#1b1b29',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  shuffleBtnText: {
+    ...typography.body,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  disabled: {
+    opacity: 0.4,
   },
   retryButton: {
     paddingVertical: spacing.md,

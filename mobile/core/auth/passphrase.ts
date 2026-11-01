@@ -86,3 +86,4 @@ export function validatePunjabiPassphrase(passphrase: string): boolean {
   const num = Number(parts[5]);
   return Number.isInteger(num) && num >= 100 && num <= 999;
 }
+

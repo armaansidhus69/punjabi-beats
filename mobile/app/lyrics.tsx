@@ -19,7 +19,7 @@ import Toast from 'react-native-toast-message';
 import LyricsGate from '../components/LyricsGate';
 import EmptyState from '../components/EmptyState';
 import LoadingSpinner from '../components/LoadingSpinner';
-import { lineAt, lyricsExcerpt, selectionRange } from '../core/lyrics/lyrics';
+import { lineAt, lyricsExcerpt, selectionRange, transliterateToGurmukhi } from '../core/lyrics/lyrics';
 import { fetchLyrics, describeLyricsError, LyricsError } from '../services/lyricsApi';
 import { shareLyrics } from '../services/shareComposerFacade';
 import { usePlayer } from '../stores/playerStore';
@@ -60,6 +60,7 @@ function LyricsContent() {
   const [selectionAnchor, setSelectionAnchor] = useState<number | null>(null);
   const [selectedIndices, setSelectedIndices] = useState<number[]>([]);
   const [sharing, setSharing] = useState(false);
+  const [showGurmukhi, setShowGurmukhi] = useState(false);
 
   const listRef = useRef<FlatList<LyricsLine> | null>(null);
   const currentSongRef = useRef(currentSong);
@@ -252,9 +253,12 @@ function LyricsContent() {
             style={[
               isActive ? styles.lineActive : styles.lineRegular,
               isSelected && styles.lineSelectedText,
+              showGurmukhi && styles.gurmukhiText,
             ]}
           >
-            {item.text}
+            {showGurmukhi
+              ? (item.gurmukhi || transliterateToGurmukhi(item.text))
+              : item.text}
           </Text>
         </Pressable>
       );
@@ -267,6 +271,7 @@ function LyricsContent() {
       handleTapLine,
       selectedIndices,
       selecting,
+      showGurmukhi,
       state.phase,
     ],
   );
@@ -346,21 +351,43 @@ function LyricsContent() {
               <Ionicons name="share-outline" size={18} color={colors.background} />
               <Text style={styles.shareText}>{sharing ? 'Wait…' : 'Share'}</Text>
             </Pressable>
-          ) : !following ? (
-            <Pressable
-              onPress={() => {
-                tapFeedback();
-                scrolledTo.current = -1;
-                setFollowing(true);
-              }}
-              accessibilityRole="button"
-              accessibilityLabel="Follow wapas on karo"
-              style={({ pressed }) => [styles.followChip, pressed && styles.pressed]}
-            >
-              <Ionicons name="locate" size={14} color={colors.primary} />
-              <Text style={styles.followText}>Follow</Text>
-            </Pressable>
-          ) : null}
+          ) : (
+            <View style={styles.headerRightControls}>
+              <Pressable
+                onPress={() => {
+                  tapFeedback();
+                  setShowGurmukhi(prev => !prev);
+                }}
+                accessibilityRole="button"
+                accessibilityLabel="Gurmukhi script toggle"
+                style={({ pressed }) => [
+                  styles.scriptChip,
+                  showGurmukhi && styles.scriptChipActive,
+                  pressed && styles.pressed,
+                ]}
+              >
+                <Text style={[styles.scriptText, showGurmukhi && styles.scriptTextActive]}>
+                  {showGurmukhi ? 'ਪੰਜਾਬੀ' : 'EN'}
+                </Text>
+              </Pressable>
+
+              {!following ? (
+                <Pressable
+                  onPress={() => {
+                    tapFeedback();
+                    scrolledTo.current = -1;
+                    setFollowing(true);
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Follow wapas on karo"
+                  style={({ pressed }) => [styles.followChip, pressed && styles.pressed]}
+                >
+                  <Ionicons name="locate" size={14} color={colors.primary} />
+                  <Text style={styles.followText}>Follow</Text>
+                </Pressable>
+              ) : null}
+            </View>
+          )}
         </View>
 
         {state.phase === 'loading' && <LoadingSpinner label="Lyrics dhoond rahe…" />}
@@ -433,6 +460,36 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.sm,
   },
   headerInfo: { flex: 1 },
+  headerRightControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  scriptChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.12)',
+  },
+  scriptChipActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  scriptText: {
+    ...typography.caption,
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  scriptTextActive: {
+    color: colors.background,
+  },
+  gurmukhiText: {
+    fontSize: 22,
+    lineHeight: 34,
+  },
   iconButton: { padding: spacing.xs },
   pressed: { opacity: 0.7 },
   disabled: { opacity: 0.5 },
