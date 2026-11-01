@@ -31,7 +31,10 @@
         "EXPO_PUBLIC_LYRICS_ENABLED": "true",
         "EXPO_PUBLIC_AI_PLAYLIST_ENABLED": "true",
         "EXPO_PUBLIC_AI_ASSISTANT_ENABLED": "true",
-        "EXPO_PUBLIC_PODCASTS_ENABLED": "true"
+        "EXPO_PUBLIC_PODCASTS_ENABLED": "true",
+        "EXPO_PUBLIC_SOCIAL_SHARE_ENABLED": "true",
+        "EXPO_PUBLIC_CHAT_ENABLED": "true",
+        "EXPO_PUBLIC_CATALOG_ENABLED": "true"
       }
     },
     "production": {
@@ -55,7 +58,10 @@
         "EXPO_PUBLIC_LYRICS_ENABLED": "true",
         "EXPO_PUBLIC_AI_PLAYLIST_ENABLED": "true",
         "EXPO_PUBLIC_AI_ASSISTANT_ENABLED": "true",
-        "EXPO_PUBLIC_PODCASTS_ENABLED": "true"
+        "EXPO_PUBLIC_PODCASTS_ENABLED": "true",
+        "EXPO_PUBLIC_SOCIAL_SHARE_ENABLED": "true",
+        "EXPO_PUBLIC_CHAT_ENABLED": "true",
+        "EXPO_PUBLIC_CATALOG_ENABLED": "true"
       }
     }
   },
