@@ -39,7 +39,7 @@ export function isYouTubeMatchConfigured(): boolean {
 }
 
 /** Fallback: match na mile to plain YouTube search results kholo (best effort) */
-function openYouTubeSearch(song: Song): void {
+export function openYouTubeSearch(song: Song): void {
   const q = encodeURIComponent(`${song.title} ${song.artist}`);
   void Linking.openURL(`https://www.youtube.com/results?search_query=${q}`).catch(() => {
     Toast.show({ type: 'error', text1: 'YouTube nahi khul paya' });
@@ -54,6 +54,35 @@ function openYouTubeSearch(song: Song): void {
  *
  * @returns true agar exact/partial match khula, false par fallback khula.
  */
+/**
+ * Match metadata to best YouTube candidate videoId.
+ * Used for In-App YouTube playback.
+ */
+export async function resolveYouTubeMatch(song: Song) {
+  if (!isYouTubeMatchConfigured()) return null;
+
+  try {
+    const result = await findYouTubeAudio(song, createRemoteSearchFn(MATCH_URL));
+    if (result.status !== 'unavailable' && result.videoId) {
+      return result;
+    }
+    // Fallback: direct candidate query
+    const candidates = await createRemoteSearchFn(MATCH_URL)(`${song.artist} - ${song.title}`, 3);
+    if (candidates[0]?.videoId) {
+      return {
+        status: 'partial' as const,
+        videoId: candidates[0].videoId,
+        title: candidates[0].title,
+        channel: candidates[0].channel,
+        candidatesConsidered: candidates.length,
+      };
+    }
+  } catch (err) {
+    console.warn('[youtubeLink] resolveMatch fail:', err);
+  }
+  return null;
+}
+
 export async function openOnYouTube(song: Song): Promise<boolean> {
   if (!isYouTubeMatchConfigured()) {
     warningFeedback();

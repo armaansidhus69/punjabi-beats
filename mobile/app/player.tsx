@@ -10,11 +10,13 @@
  * (Phase 11 room sync) automatically broadcast kar deta hai, isliye is file me
  * real-time ka koi code nahi hai.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Animated,
   Easing,
   PanResponder,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -23,6 +25,8 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import * as WebBrowser from 'expo-web-browser';
+import Toast from 'react-native-toast-message';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { usePlayer } from '../stores/playerStore';
 import { useLikedSongs } from '../stores/likedSongsStore';
@@ -33,7 +37,7 @@ import EmptyState from '../components/EmptyState';
 import PlayerControls from '../components/PlayerControls';
 import ProgressBar from '../components/ProgressBar';
 import SongArtwork from '../components/SongArtwork';
-import { handleOpenOnYouTube, isYouTubeMatchConfigured } from '../utils/youtubeLink';
+import { isYouTubeMatchConfigured, openYouTubeSearch, resolveYouTubeMatch } from '../utils/youtubeLink';
 import { successFeedback, tapFeedback, warningFeedback } from '../utils/haptics';
 import { isFeatureEnabled } from '../core/featureflags/featureFlags';
 import { shareTrack } from '../services/shareComposerFacade';
@@ -71,6 +75,50 @@ export default function PlayerScreen() {
 
   const isLiked = currentSong ? likedSongs.some(song => song.id === currentSong.id) : false;
   const lyricsEnabled = isFeatureEnabled('lyrics_enabled');
+
+  const [inAppYouTubeVideoId, setInAppYouTubeVideoId] = useState<string | null>(null);
+  const [isResolvingYouTube, setIsResolvingYouTube] = useState(false);
+
+  useEffect(() => {
+    setInAppYouTubeVideoId(null);
+    setIsResolvingYouTube(false);
+  }, [currentSong?.id]);
+
+  const handlePlayFullInApp = useCallback(async () => {
+    if (!currentSong) return;
+    tapFeedback();
+    setIsResolvingYouTube(true);
+    void usePlayer.getState().pause();
+
+    try {
+      const match = await resolveYouTubeMatch(currentSong);
+      if (match?.videoId) {
+        if (Platform.OS === 'web') {
+          setInAppYouTubeVideoId(match.videoId);
+          successFeedback();
+        } else {
+          await WebBrowser.openBrowserAsync(`https://www.youtube.com/watch?v=${match.videoId}`, {
+            presentationStyle: WebBrowser.WebBrowserPresentationStyle.PAGE_SHEET,
+            toolbarColor: colors.background,
+            controlsColor: colors.primary,
+          });
+        }
+      } else {
+        warningFeedback();
+        Toast.show({
+          type: 'info',
+          text1: 'Full version match nahi mila',
+          text2: 'YouTube pe search khol rahe hain...',
+        });
+        openYouTubeSearch(currentSong);
+      }
+    } catch (err) {
+      console.warn('[player] In-app YouTube match failed:', err);
+      openYouTubeSearch(currentSong);
+    } finally {
+      setIsResolvingYouTube(false);
+    }
+  }, [currentSong]);
 
   const handleToggleLiked = useCallback(() => {
     if (!currentSong) return;
@@ -171,12 +219,48 @@ export default function PlayerScreen() {
       {/* Drag handle - swipe down ka visual hint (FR-6.6) */}
       <View style={styles.handle} />
 
-      {/* Album art - disc ki tarah ghoomta hai jab song chal raha ho */}
-      <View style={styles.artworkWrap}>
-        <Animated.View style={[styles.artworkDisc, { transform: [{ rotate }] }]}>
-          <SongArtwork uri={currentSong.cover} size={artworkSize} radius={artworkSize / 2} />
-        </Animated.View>
-      </View>
+      {/* Album art ya In-App YouTube player (web pe embed) */}
+      {inAppYouTubeVideoId && Platform.OS === 'web' ? (
+        <View style={[styles.youtubeEmbedWrap, { width: artworkSize, height: artworkSize }]}>
+          <View style={styles.youtubeEmbedHeader}>
+            <View style={styles.youtubeBadgeRow}>
+              <Ionicons name="logo-youtube" size={15} color="#ff0000" />
+              <Text style={styles.youtubeBadgeText} numberOfLines={1}>
+                In-App Full Song
+              </Text>
+            </View>
+            <Pressable
+              onPress={() => setInAppYouTubeVideoId(null)}
+              hitSlop={10}
+              accessibilityRole="button"
+              accessibilityLabel="Audio player te vapas jao"
+              style={styles.closeEmbedBtn}
+            >
+              <Ionicons name="close-circle" size={22} color={colors.subtext} />
+            </Pressable>
+          </View>
+          <View style={styles.iframeBox}>
+            {React.createElement('iframe', {
+              src: `https://www.youtube-nocookie.com/embed/${inAppYouTubeVideoId}?autoplay=1&enablejsapi=1&playsinline=1`,
+              title: currentSong.title,
+              style: {
+                width: '100%',
+                height: '100%',
+                border: 'none',
+                borderRadius: 12,
+              },
+              allow: 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture',
+              allowFullScreen: true,
+            })}
+          </View>
+        </View>
+      ) : (
+        <View style={styles.artworkWrap}>
+          <Animated.View style={[styles.artworkDisc, { transform: [{ rotate }] }]}>
+            <SongArtwork uri={currentSong.cover} size={artworkSize} radius={artworkSize / 2} />
+          </Animated.View>
+        </View>
+      )}
 
       {/* Song title + artist */}
       <View style={styles.meta}>
@@ -213,16 +297,35 @@ export default function PlayerScreen() {
           play bachane ke liye — utils/youtubeLink.ts header dekho). */}
       {currentSong.previewOnly ? (
         <View style={styles.previewNoteWrap}>
-          <Text style={styles.previewNote}>Preview mode — full song abhi available nahi</Text>
+          <Text style={styles.previewNote}>
+            {inAppYouTubeVideoId
+              ? '▶ Playing Full Song in App (YouTube)'
+              : 'Preview mode (30s) — Full version available on YouTube'}
+          </Text>
           {isYouTubeMatchConfigured() ? (
             <Pressable
-              onPress={() => handleOpenOnYouTube(currentSong)}
+              onPress={inAppYouTubeVideoId ? () => setInAppYouTubeVideoId(null) : handlePlayFullInApp}
+              disabled={isResolvingYouTube}
               accessibilityRole="button"
-              accessibilityLabel="YouTube pe full version kholo"
+              accessibilityLabel="App vich full song play karo"
               style={({ pressed }) => [styles.youtubeButton, pressed && styles.pressed]}
             >
-              <Ionicons name="logo-youtube" size={18} color={colors.background} />
-              <Text style={styles.youtubeButtonText}>Full version on YouTube</Text>
+              {isResolvingYouTube ? (
+                <ActivityIndicator size="small" color={colors.background} />
+              ) : (
+                <Ionicons
+                  name={inAppYouTubeVideoId ? 'disc' : 'play-circle'}
+                  size={18}
+                  color={colors.background}
+                />
+              )}
+              <Text style={styles.youtubeButtonText}>
+                {isResolvingYouTube
+                  ? 'Matching full song...'
+                  : inAppYouTubeVideoId
+                    ? 'Switch back to Audio Disc'
+                    : '▶ Play Full Song in App (YouTube)'}
+              </Text>
             </Pressable>
           ) : null}
         </View>
@@ -417,6 +520,50 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
   },
   artworkWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  youtubeEmbedWrap: {
+    alignSelf: 'center',
+    justifyContent: 'center',
+    marginVertical: spacing.sm,
+    borderRadius: 16,
+    backgroundColor: '#0a0a0c',
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: colors.border,
+    shadowColor: colors.primary,
+    shadowOpacity: 0.3,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 8,
+  },
+  youtubeEmbedHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 6,
+    backgroundColor: '#16161d',
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  youtubeBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  youtubeBadgeText: {
+    ...typography.caption,
+    color: colors.text,
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  closeEmbedBtn: {
+    padding: 2,
+  },
+  iframeBox: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+  },
   artworkDisc: {
     borderRadius: 999,
     borderWidth: 1,
