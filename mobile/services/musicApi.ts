@@ -71,10 +71,10 @@ const JIOSAAVN_DEFAULT_BASE = 'https://saavn.sumit.co';
 const JIOSAAVN_MIRRORS: string[] = [
   ...(process.env.EXPO_PUBLIC_JIOSAAVN_BASE ? [process.env.EXPO_PUBLIC_JIOSAAVN_BASE] : []),
   JIOSAAVN_DEFAULT_BASE,
+  'https://jiosaavn-api-2.vercel.app',
   'https://jiosaavn-api-v3.vercel.app',
   'https://jiosaavn-api-sumitkolhe-v2.vercel.app',
   'https://saavn-api.vercel.app',
-  'https://jiosaavn-api-2.vercel.app',
   'https://jiosaavn-api.vercel.app',
 ].map(u => u.replace(/\/+$/, ''));
 
@@ -1383,52 +1383,66 @@ export async function resolveFullAudioStream(
   }
 
   // 1. Primary: JioSaavn 320kbps full song lookup
-  try {
-    const query = `${cleanTitle} ${song.artist}`.trim();
-    const jioMatches = await searchJioSaavn(query, 5);
-    const hit =
-      jioMatches.find(m => !m.previewOnly && m.preview && titleMatches(cleanTitle, m.title)) ??
-      jioMatches.find(m => !m.previewOnly && m.preview);
-    if (hit && hit.preview) {
-      const duration = hit.duration || song.duration;
-      fullStreamCache.set(cacheKey, { url: hit.preview, duration });
+  const resolvePromise = (async () => {
+    try {
+      const query = `${cleanTitle} ${song.artist}`.trim();
+      const jioMatches = await searchJioSaavn(query, 5);
+      const hit =
+        jioMatches.find(m => !m.previewOnly && m.preview && titleMatches(cleanTitle, m.title)) ??
+        jioMatches.find(m => !m.previewOnly && m.preview);
+      if (hit && hit.preview) {
+        const duration = hit.duration || song.duration;
+        fullStreamCache.set(cacheKey, { url: hit.preview, duration });
+        return {
+          url: hit.preview,
+          duration,
+          previewOnly: false,
+        };
+      }
+    } catch {
+      // JioSaavn lookup failed, continue fallback
+    }
+
+    // 2. Secondary: Audius full track lookup
+    try {
+      const audiusMatches = await searchAudius(`${cleanTitle} ${song.artist}`, 5);
+      const hit = audiusMatches.find(m => !m.previewOnly && m.preview && titleMatches(cleanTitle, m.title));
+      if (hit && hit.preview) {
+        const duration = hit.duration || song.duration;
+        fullStreamCache.set(cacheKey, { url: hit.preview, duration });
+        return {
+          url: hit.preview,
+          duration,
+          previewOnly: false,
+        };
+      }
+    } catch {
+      // Audius fallback failure
+    }
+
+    // 3. Fallback: original preview clip agar kuch na mila
+    if (song.preview) {
       return {
-        url: hit.preview,
-        duration,
-        previewOnly: false,
+        url: song.preview,
+        duration: song.duration || 30_000,
+        previewOnly: true,
       };
     }
-  } catch {
-    // JioSaavn lookup failed, continue fallback
-  }
 
-  // 2. Secondary: Audius full track lookup
-  try {
-    const audiusMatches = await searchAudius(`${cleanTitle} ${song.artist}`, 5);
-    const hit = audiusMatches.find(m => !m.previewOnly && m.preview && titleMatches(cleanTitle, m.title));
-    if (hit && hit.preview) {
-      const duration = hit.duration || song.duration;
-      fullStreamCache.set(cacheKey, { url: hit.preview, duration });
-      return {
-        url: hit.preview,
-        duration,
-        previewOnly: false,
-      };
-    }
-  } catch {
-    // Audius fallback failure
-  }
+    return { url: '', previewOnly: true };
+  })();
 
-  // 3. Fallback: original preview clip agar kuch na mila
-  if (song.preview) {
-    return {
-      url: song.preview,
-      duration: song.duration || 30_000,
-      previewOnly: true,
-    };
-  }
+  const timeoutPromise = new Promise<{ url: string; duration?: number; previewOnly: boolean }>(resolve => {
+    setTimeout(() => {
+      resolve({
+        url: song.preview || '',
+        duration: song.duration || 30_000,
+        previewOnly: Boolean(song.previewOnly),
+      });
+    }, 2500);
+  });
 
-  return { url: '', previewOnly: true };
+  return Promise.race([resolvePromise, timeoutPromise]);
 }
 
 /* ---------- Public API ---------- */

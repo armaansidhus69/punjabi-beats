@@ -125,10 +125,14 @@ function schedulePersistedState(): void {
   }, 500);
 }
 
-async function resolveTrack(song: Song, openFallback = true): Promise<ResolvedTrack> {
+async function resolveTrack(
+  song: Song,
+  openFallback = true,
+  isCurrentTrack = true,
+): Promise<ResolvedTrack> {
   if (song.source !== 'youtube_music' || !song.videoId) {
-    // Preview tracks dynamic upgrade pass — resolve 320kbps full stream on-the-fly
-    if (song.previewOnly || !song.preview || (song.duration && song.duration <= 30_000)) {
+    // Sirf CURRENT track ko on-the-fly upgrade karo taaki pura queue 30+ network calls se block na ho
+    if (isCurrentTrack && (song.previewOnly || !song.preview || (song.duration && song.duration <= 30_000))) {
       try {
         const resolvedFull = await resolveFullAudioStream(song);
         if (resolvedFull.url && !resolvedFull.previewOnly) {
@@ -359,7 +363,7 @@ async function loadAndPlaySong(
       if (token !== loadGeneration) return;
       const tracks = usePlayer.getState().shuffle ? shuffleTracks(queue) : queue;
       const resolvedTracks = await Promise.all(
-        tracks.map(item => resolveTrack(item, item.id === song.id)),
+        tracks.map(item => resolveTrack(item, item.id === song.id, item.id === song.id)),
       );
       if (token !== loadGeneration) return;
       const resolvedById = new Map(resolvedTracks.map(item => [item.song.id, item.song] as const));
