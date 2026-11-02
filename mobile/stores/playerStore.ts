@@ -1,4 +1,3 @@
-import { Alert, Linking } from 'react-native';
 import { create } from 'zustand';
 import TrackPlayer, {
   AppKilledPlaybackBehavior,
@@ -10,6 +9,14 @@ import TrackPlayer, {
 import { PlayerActionEvent, PlayerState, RepeatMode, Song } from '../types';
 import { trackEvent } from '../core/analytics/analytics';
 import { classifyPlayback } from '../core/signals/skip';
+import {
+  clearUpcoming as clearUpcomingOps,
+  insertNext as insertNextOps,
+  moveQueueItem,
+  removeQueueItem,
+  type QueueMove,
+} from '../core/queue/ops';
+import { getDownloadedUrl } from '../services/downloadsService';
 import {
   addRecentlyPlayed,
   getPersistedPlayerState,
@@ -127,9 +134,15 @@ function schedulePersistedState(): void {
 
 async function resolveTrack(
   song: Song,
-  openFallback = true,
+  _openFallback = true,
   isCurrentTrack = true,
 ): Promise<ResolvedTrack> {
+  // Phase 6 downloads-first: local file ho to network resolve hi nahi karte
+  // (offline playback + data bachat). getDownloadedUrl in-memory sync hai.
+  const localUrl = getDownloadedUrl(song.id);
+  if (localUrl) {
+    return { song: { ...song, preview: localUrl, previewOnly: false }, url: localUrl };
+  }
   if (song.source !== 'youtube_music' || !song.videoId) {
     // Sirf CURRENT track ko on-the-fly upgrade karo taaki pura queue 30+ network calls se block na ho
     if (isCurrentTrack && (song.previewOnly || !song.preview || (song.duration && song.duration <= 30_000))) {
@@ -141,7 +154,9 @@ async function resolveTrack(
             preview: resolvedFull.url,
             duration: resolvedFull.duration ?? song.duration,
             previewOnly: false,
-            source: song.source === 'itunes' ? 'jiosaavn' : song.source,
+            // Badge = jahan se AUDIO aa raha hai (metadata Spotify/ITunes se
+            // ho sakta hai, par stream JioSaavn/Audius chain se resolve hua)
+            source: song.source === 'itunes' || song.source === 'spotify' ? 'jiosaavn' : song.source,
           };
           return { song: upgradedSong, url: resolvedFull.url };
         }
@@ -164,18 +179,13 @@ async function resolveTrack(
     console.warn('[playerStore] Playback lookup failed:', err);
   }
 
-  if (openFallback) {
-    try {
-      await Linking.openURL(`https://www.youtube.com/watch?v=${song.videoId}`);
-    } catch {
-      // ignore if unable to open browser
-    }
-    Alert.alert(
-      'Song Not Available',
-      'Ye track abhi stream nahi ho pa raha. YouTube pe khol diya gaya hai.',
-    );
-  }
-
+  // DESIGN RULE (multi-source in-app): stream na mile to YouTube app/browser
+  // KABHI nahi kholte (pehle Linking.openURL hota tha — music app se bahar
+  // chali jaati thi). url null return hota hai → loadAndPlaySong queue ke agle
+  // playable track pe khud skip karta hai. Music is app me hi rehti hai.
+  console.warn(
+    `[playerStore] '${song.title}' stream resolve nahi hua — agla playable track chalega`,
+  );
   return { song, url: null };
 }
 
@@ -373,9 +383,20 @@ async function loadAndPlaySong(
           ? resolvedById.get(state.currentSong.id) ?? state.currentSong
           : state.currentSong,
       }));
-      const playableTracks = resolvedTracks.filter(
-        (item): item is ResolvedTrack & { url: string } => Boolean(item.url),
+      // FULL-ONLY policy: jab queue me ek bhi full track hai, 30s preview clips
+      // native playback queue me NAHI jaate — na current, na auto-advance
+      // (TrackPlayer isi queue se chalta hai, isliye filter yahi zaroori hai).
+      // Zero-full case me previews last resort hain (single preview tap abhi
+      // bhi bajta hai — kuch bajna > dead air; badge honest rehta hai).
+      const fullTracks = resolvedTracks.filter(
+        (item): item is ResolvedTrack & { url: string } =>
+          Boolean(item.url) && item.song.previewOnly !== true,
       );
+      const previewTracks = resolvedTracks.filter(
+        (item): item is ResolvedTrack & { url: string } =>
+          Boolean(item.url) && item.song.previewOnly === true,
+      );
+      const playableTracks = fullTracks.length > 0 ? fullTracks : previewTracks;
       let activeTrackIndex = playableTracks.findIndex(item => item.song.id === song.id);
       if (activeTrackIndex < 0) {
         const selectedIndex = resolvedTracks.findIndex(item => item.song.id === song.id);
@@ -454,6 +475,14 @@ interface PlayerActions {
    * queue me ho to false (spec: already present → skip). Unavailable → reject.
    */
   addToQueue: (song: Song) => Promise<boolean>;
+  /** 'Play next' — current ke theek baad (pehle se queue me ho to move). */
+  playSongNext: (song: Song) => Promise<boolean>;
+  /** Upcoming list se item hatao (current remove nahi hota). */
+  removeFromQueue: (songId: string) => Promise<void>;
+  /** Upcoming zone ke andar up/down move (Queue screen arrows). */
+  moveInQueue: (songId: string, direction: QueueMove) => Promise<void>;
+  /** Current ke baad sab clear. */
+  clearUpcoming: () => Promise<void>;
   play: (options?: PlaybackOptions) => Promise<void>;
   pause: (options?: PlaybackOptions) => Promise<void>;
   togglePlay: (options?: { remote?: boolean }) => Promise<void>;
@@ -591,6 +620,88 @@ export const usePlayer = create<PlayerStore>()((set, get) => ({
       manualAdvancePending = false;
       if (repeat !== 'all') set({ isPlaying: false, position: get().duration });
       else console.warn('Skip to next failed:', err);
+    }
+  },
+
+  /* ---------- Phase 5 completion — dedicated queue management ---------- */
+  // Queue-only local actions: koi PlayerActionEvent emit NAHI hota (room ke
+  // 'song' event pura queue replace karta hai — host ke ilawa edits sirf
+  // local hote hain; room queue-add apne SYNC_EVENT_QUEUE_ADD se aata hai).
+
+  playSongNext: async song => {
+    try {
+      const resolved = await resolveTrack(song, false, false);
+      if (!resolved.url) return false;
+      const { currentSong, queue } = get();
+      const nextQueue = insertNextOps(queue, currentSong?.id ?? null, resolved.song);
+      if (nextQueue === queue) return false; // koi change nahi
+      set({ queue: nextQueue });
+      schedulePersistedState();
+      // Native: naya track ho to active ke baad insert, phir order sync
+      // (reorderUpcoming logical order ko TrackPlayer me mirror karta hai).
+      try {
+        const nativeQueue = await TrackPlayer.getQueue();
+        if (!nativeQueue.some(track => track.id === resolved.song.id)) {
+          const activeIndex = await TrackPlayer.getActiveTrackIndex();
+          await TrackPlayer.add([toTrack(resolved.song, resolved.url)],
+            (activeIndex ?? -1) + 1);
+        }
+        await reorderUpcoming(get().shuffle);
+      } catch (err) {
+        console.warn('playSongNext: TrackPlayer sync failed:', err);
+      }
+      return true;
+    } catch (err) {
+      console.warn('playSongNext failed:', err);
+      return false;
+    }
+  },
+
+  removeFromQueue: async songId => {
+    const { currentSong } = get();
+    if (currentSong?.id === songId) return; // current playing kabhi remove nahi
+    const nextQueue = removeQueueItem(get().queue, songId);
+    if (nextQueue === get().queue) return;
+    set({ queue: nextQueue });
+    schedulePersistedState();
+    try {
+      const nativeQueue = await TrackPlayer.getQueue();
+      const nativeIndex = nativeQueue.findIndex(track => track.id === songId);
+      if (nativeIndex >= 0) await TrackPlayer.remove([nativeIndex]);
+    } catch (err) {
+      console.warn('removeFromQueue: TrackPlayer remove failed:', err);
+    }
+  },
+
+  moveInQueue: async (songId, direction) => {
+    const nextQueue = moveQueueItem(get().queue, songId, direction);
+    if (nextQueue === get().queue) return;
+    set({ queue: nextQueue });
+    schedulePersistedState();
+    try {
+      await reorderUpcoming(get().shuffle);
+    } catch (err) {
+      console.warn('moveInQueue: TrackPlayer reorder failed:', err);
+    }
+  },
+
+  clearUpcoming: async () => {
+    const { queue, index } = get();
+    const nextQueue = clearUpcomingOps(queue, index);
+    if (nextQueue === queue) return;
+    set({ queue: nextQueue });
+    schedulePersistedState();
+    try {
+      const nativeQueue = await TrackPlayer.getQueue();
+      const activeIndex = await TrackPlayer.getActiveTrackIndex();
+      if (activeIndex === undefined) return;
+      const stale = nativeQueue
+        .map((track, nativeIdx) => ({ track, nativeIdx }))
+        .filter(({ nativeIdx }) => nativeIdx > activeIndex)
+        .map(({ nativeIdx }) => nativeIdx);
+      if (stale.length > 0) await TrackPlayer.remove(stale);
+    } catch (err) {
+      console.warn('clearUpcoming: TrackPlayer remove failed:', err);
     }
   },
 

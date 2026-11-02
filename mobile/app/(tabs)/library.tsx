@@ -15,6 +15,7 @@ import { Playlist } from '../../types';
 import { usePlaylists } from '../../stores/playlistStore';
 import { useLikedSongs } from '../../stores/likedSongsStore';
 import { useAuthStore } from '../../stores/authStore';
+import { isFeatureEnabled } from '../../core/featureflags/featureFlags';
 import { useMiniPlayerPadding } from '../../hooks/useMiniPlayerPadding';
 import { successFeedback, tapFeedback } from '../../utils/haptics';
 import { colors } from '../../constants/colors';
@@ -35,6 +36,8 @@ export default function LibraryScreen() {
   const importPlaylists = usePlaylists(s => s.importPlaylists);
   const likedSongs = useLikedSongs(s => s.songs);
   const authStatus = useAuthStore(s => s.status);
+  // Phase 6 v1 — downloads flag
+  const downloadsEnabled = isFeatureEnabled('downloads_enabled');
   const authUser = useAuthStore(s => s.user);
   const authProfile = useAuthStore(s => s.profile);
 
@@ -120,6 +123,12 @@ export default function LibraryScreen() {
   const handlePodcastPress = useCallback(() => {
     tapFeedback();
     router.push('/podcast');
+  }, []);
+
+  /* Phase 6 v1 — Downloads (flag-gated) */
+  const handleDownloadsPress = useCallback(() => {
+    tapFeedback();
+    router.push('/downloads');
   }, []);
 
   const handleAccountPress = useCallback(() => {
@@ -218,6 +227,25 @@ export default function LibraryScreen() {
         </View>
         <Ionicons name="chevron-forward" size={20} color={colors.subtext} />
       </Pressable>
+
+      {/* Phase 6 v1: Downloads entry — flag-gated */}
+      {downloadsEnabled ? (
+        <Pressable
+          onPress={handleDownloadsPress}
+          accessibilityRole="button"
+          accessibilityLabel="Downloads kholo"
+          style={({ pressed }) => [styles.likedCard, pressed && styles.pressed]}
+        >
+          <View style={styles.likedIcon}>
+            <Ionicons name="arrow-down-circle-outline" size={22} color={colors.success} />
+          </View>
+          <View style={styles.likedInfo}>
+            <Text style={styles.likedTitle}>Downloads</Text>
+            <Text style={styles.likedSubtitle}>Offline songs — bina net ke bajao</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color={colors.subtext} />
+        </Pressable>
+      ) : null}
 
       {/* Phase 10: Blend entry */}
       <Pressable

@@ -16,6 +16,7 @@ import { create } from 'zustand';
 import { ChatMessage, ConnectionState, Room, RoomMember } from '../types';
 import { generateRoomCode } from '../services/apinator';
 import { getRoomName, saveRoomName } from '../services/storage';
+import { mergeReaction, type ReactionEmoji, type ReactionMap } from '../core/chat/reactions';
 
 /** Room enter/leave event — roomSync ka listener isi pe channel manage karta hai */
 export type RoomLifecycleEvent =
@@ -64,6 +65,9 @@ interface RoomStore extends Room {
   /** modal band hone pe aaye messages (badge; modal khulne pe reset) */
   unreadCount: number;
   addMessage: (message: ChatMessage) => void;
+  /** Phase 9 slice — messageId → emoji → senderIds (ephemeral, leave pe clear) */
+  reactions: ReactionMap;
+  addReaction: (messageId: string, emoji: ReactionEmoji, senderId: string) => void;
   clearMessages: () => void;
   setUnreadCount: (count: number) => void;
   /** Naya 6-digit code banao aur room enter karo (code return — screens navigate karte hain) */
@@ -89,6 +93,7 @@ export const useRoom = create<RoomStore>()((set, get) => ({
   name: defaultGuestName(),
   messages: [],
   unreadCount: 0,
+  reactions: {},
 
   addMessage: message => {
     set(state => {
@@ -103,9 +108,13 @@ export const useRoom = create<RoomStore>()((set, get) => ({
   },
 
   clearMessages: () => {
-    if (get().messages.length > 0 || get().unreadCount > 0) {
-      set({ messages: [], unreadCount: 0 });
+    if (get().messages.length > 0 || get().unreadCount > 0 || Object.keys(get().reactions).length > 0) {
+      set({ messages: [], unreadCount: 0, reactions: {} });
     }
+  },
+
+  addReaction: (messageId, emoji, senderId) => {
+    set(state => ({ reactions: mergeReaction(state.reactions, { messageId, emoji, senderId, sentAt: Date.now() }) }));
   },
 
   setUnreadCount: count => {
@@ -115,7 +124,7 @@ export const useRoom = create<RoomStore>()((set, get) => ({
 
   createRoom: () => {
     const code = generateRoomCode();
-    set({ code, isHost: true, error: null, members: [], messages: [], unreadCount: 0, connectionState: 'connecting' });
+    set({ code, isHost: true, error: null, members: [], messages: [], unreadCount: 0, reactions: {}, connectionState: 'connecting' });
     emitLifecycle({ type: 'entered', code, isHost: true });
     return code;
   },
@@ -127,13 +136,13 @@ export const useRoom = create<RoomStore>()((set, get) => ({
     }
     // Host apne hi room me hai → dobara join nahi (warna host badge ud jaata hai)
     if (get().code === clean && get().isHost) return;
-    set({ code: clean, isHost: false, error: null, members: [], messages: [], unreadCount: 0, connectionState: 'connecting' });
+    set({ code: clean, isHost: false, error: null, members: [], messages: [], unreadCount: 0, reactions: {}, connectionState: 'connecting' });
     emitLifecycle({ type: 'entered', code: clean, isHost: false });
   },
 
   leaveRoom: () => {
     if (!get().code) return; // idempotent (screen unmount pe dobara call hota hai)
-    set({ code: null, isHost: false, members: [], messages: [], unreadCount: 0, error: null });
+    set({ code: null, isHost: false, members: [], messages: [], unreadCount: 0, reactions: {}, error: null });
     emitLifecycle({ type: 'left' });
   },
 

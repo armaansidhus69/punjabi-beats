@@ -34,7 +34,7 @@ export const CONCERT_EVENTS: ConcertEvent[] = [
     ticketProvider: 'Zomato Live Official',
     ticketUrl: 'https://www.zomato.com/live',
     jamRoomCode: '918234',
-    accentColor: '#ffb347',
+    accentColor: '#FF416C',
   },
   {
     slug: 'karan-vancouver-2026',
@@ -94,7 +94,7 @@ export const CONCERT_EVENTS: ConcertEvent[] = [
     ticketProvider: 'AXS Official UK',
     ticketUrl: 'https://www.axs.com/uk',
     jamRoomCode: '918235',
-    accentColor: '#ffb347',
+    accentColor: '#FF416C',
   },
   {
     slug: 'gurdas-maan-amritsar-2027',

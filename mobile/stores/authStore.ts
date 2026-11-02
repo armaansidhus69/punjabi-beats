@@ -9,6 +9,8 @@ import {
   signInWithGoogle,
   signInWithPassword,
   signOut,
+  signOutEverywhere,
+  deleteAccount as deleteAccountRequest,
   subscribeToAuthState,
   updateProfile,
 } from '../core/auth/authService';
@@ -31,6 +33,10 @@ interface AuthStore {
   loginWithGoogle: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
   logout: () => Promise<void>;
+  /** Phase 1 completion — sab devices revoke (refresh tokens global signout) */
+  logoutEverywhere: () => Promise<void>;
+  /** Phase 1 completion — profile anonymize (RPC) + global signout */
+  deleteAccount: () => Promise<void>;
   saveProfile: (input: UpdateProfileInput) => Promise<void>;
   clearError: () => void;
 }
@@ -160,6 +166,30 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
     set({ error: null });
     try {
       await signOut();
+      set({ status: 'guest', session: null, user: null, profile: null });
+    } catch (error) {
+      const authError = toAuthError(error);
+      set({ error: authError });
+      throw authError;
+    }
+  },
+
+  logoutEverywhere: async () => {
+    set({ error: null });
+    try {
+      await signOutEverywhere();
+      set({ status: 'guest', session: null, user: null, profile: null });
+    } catch (error) {
+      const authError = toAuthError(error);
+      set({ error: authError });
+      throw authError;
+    }
+  },
+
+  deleteAccount: async () => {
+    set({ error: null });
+    try {
+      await deleteAccountRequest();
       set({ status: 'guest', session: null, user: null, profile: null });
     } catch (error) {
       const authError = toAuthError(error);

@@ -25,7 +25,6 @@
  * sirf broadcast fail hoti hai — local playback normally chalta rehta hai
  * (ek hi baar friendly warning log hoti hai).
  */
-import { Channel } from '@apinator/client';
 import Toast from 'react-native-toast-message';
 import {
   ChatMessagePayload,
@@ -38,9 +37,10 @@ import {
 import { usePlayer, setPlayerActionListener } from '../stores/playerStore';
 import { RoomLifecycleEvent, setRoomLifecycleListener, useRoom } from '../stores/roomStore';
 import {
+  GroupChannel,
   SUBSCRIBED_EVENT,
   SUBSCRIPTION_ERROR_EVENT,
-  ensureClient,
+  ensureTransport,
   getClientState,
   getSubscribedCode,
   isChannelSubscribed,
@@ -49,7 +49,7 @@ import {
   publishEvent,
   subscribeChannel,
   unsubscribeChannel,
-} from './apinator';
+} from './groupTransport';
 import {
   SEEK_THROTTLE_MS,
   SYNC_EVENT_CHAT_MESSAGE,
@@ -72,6 +72,13 @@ import {
   shouldThrottleSeek,
   syncEventForAction,
 } from '../utils/syncPayload';
+import {
+  SYNC_EVENT_REACTION,
+  buildReactionPayload,
+  parseReactionPayload,
+  type ReactionEmoji,
+  type ReactionPayload,
+} from '../core/chat/reactions';
 
 let initialized = false;
 let senderId = '';
@@ -168,7 +175,7 @@ export function initRoomSync(): void {
         joinSyncChannel(room.code);
       }
     });
-    ensureClient(); // connect() — state 'connecting' ho jaata hai
+    ensureTransport(); // connect() — state 'connecting' ho jaata hai
 
     if (!isPublishConfigured()) {
       console.warn(
@@ -264,7 +271,7 @@ export function joinSyncChannel(code: string): void {
  * `queue-add` (member ne queue me naya song daala) aur `member-list` (Phase 14
  * presence ke liye reserved — abhi sirf bind hai).
  */
-function bindChannelEvents(ch: Channel): void {
+function bindChannelEvents(ch: GroupChannel): void {
   ch.bind(SYNC_EVENT_SONG, (data: unknown) => {
     dlog('[roomSync][DEBUG] event received:', SYNC_EVENT_SONG);
     void handleRemoteEvent(data);
@@ -282,6 +289,11 @@ function bindChannelEvents(ch: Channel): void {
     dlog('[roomSync][DEBUG] event received:', SYNC_EVENT_CHAT_MESSAGE);
     handleChatMessage(data);
   });
+  // Phase 9 slice — chat reactions (ephemeral, toggle)
+  ch.bind(SYNC_EVENT_REACTION, (data: unknown) => {
+    dlog('[roomSync][DEBUG] event received:', SYNC_EVENT_REACTION);
+    handleReaction(data);
+  });
   ch.bind(SYNC_EVENT_MEMBERS, (data: unknown) => {
     dlog('[roomSync][DEBUG] event received:', SYNC_EVENT_MEMBERS);
     handleMemberList(data);
@@ -296,7 +308,7 @@ function bindChannelEvents(ch: Channel): void {
   });
   // SDK ka asli subscribe-success event
   ch.bind(SUBSCRIBED_EVENT, () => {
-    dlog('[roomSync][DEBUG] channel subscribed:', ch.name);
+    dlog('[roomSync][DEBUG] channel subscribed:', getSubscribedCode());
     subscribeAttempts = 0;
     if (subscribeRetryTimer) {
       clearTimeout(subscribeRetryTimer);
@@ -440,7 +452,12 @@ function flushSeek(positionMs: number): void {
 async function publish(
   code: string,
   event: string,
-  payload: SyncPayload | QueueAddPayload | ChatMessagePayload | Record<string, unknown>,
+  payload:
+    | SyncPayload
+    | QueueAddPayload
+    | ChatMessagePayload
+    | ReactionPayload
+    | Record<string, unknown>,
 ): Promise<void> {
   try {
     dlog('[roomSync][DEBUG] event sent:', event, '→ room-' + code);
@@ -485,6 +502,36 @@ export async function sendChatMessage(text: string): Promise<'sent' | 'empty' | 
   });
   await publish(chatCode, SYNC_EVENT_CHAT_MESSAGE, payload);
   return 'sent';
+}
+
+/* ---------- Phase 9 slice — message reactions (ephemeral) ---------- */
+
+/**
+ * Reaction toggle bhejo — local store pehle update (turant dikhe), phir
+ * broadcast. Room na ho to 'no-room'; invalid emoji/message → 'invalid'.
+ */
+export async function sendReaction(
+  messageId: string,
+  emoji: ReactionEmoji,
+): Promise<'sent' | 'no-room' | 'invalid'> {
+  const room = useRoom.getState();
+  if (!room.code) return 'no-room';
+  const payload = buildReactionPayload(messageId, emoji, { senderId: getSenderId(), sentAt: Date.now() });
+  if (!payload) return 'invalid';
+  room.addReaction(payload.messageId, payload.emoji, payload.senderId);
+  await publish(room.code, SYNC_EVENT_REACTION, payload);
+  return 'sent';
+}
+
+/**
+ * Incoming reaction — apna echo skip (sender ne pehle local toggle kiya),
+ * baaki mergeReaction (toggle semantics idempotent hai).
+ */
+function handleReaction(raw: unknown): void {
+  const payload = parseReactionPayload(raw);
+  if (!payload) return;
+  if (payload.senderId === getSenderId()) return;
+  useRoom.getState().addReaction(payload.messageId, payload.emoji, payload.senderId);
 }
 
 /**

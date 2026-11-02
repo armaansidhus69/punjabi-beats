@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput } from 'react-native';
+import { Alert, Pressable, StyleSheet, Text, TextInput } from 'react-native';
 import { router } from 'expo-router';
 import AuthShell, { authStyles } from '../../components/AuthShell';
 import { colors } from '../../constants/colors';
@@ -13,6 +13,8 @@ export default function ProfileScreen() {
   const storeError = useAuthStore(state => state.error);
   const saveProfile = useAuthStore(state => state.saveProfile);
   const logout = useAuthStore(state => state.logout);
+  const logoutEverywhere = useAuthStore(state => state.logoutEverywhere);
+  const deleteAccountAction = useAuthStore(state => state.deleteAccount);
   const clearError = useAuthStore(state => state.clearError);
   const [displayName, setDisplayName] = useState('');
   const [username, setUsername] = useState('');
@@ -51,6 +53,50 @@ export default function ProfileScreen() {
     } finally {
       setBusy(false);
     }
+  };
+
+  /* Phase 1 completion — sab devices logout + account deletion */
+  const handleLogoutEverywhere = async () => {
+    setBusy(true);
+    clearError();
+    try {
+      await logoutEverywhere();
+      setLoggedOut(true);
+      router.replace('/');
+    } catch {
+      // store.error set ho chuka — storeError render karta hai
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      'Account delete karo?',
+      'Profile anonymize ho jayegi te tu sign out ho jayega. Ye wapas nahi hunda.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            void (async () => {
+              setBusy(true);
+              clearError();
+              try {
+                await deleteAccountAction();
+                setLoggedOut(true);
+                router.replace('/');
+              } catch {
+                // store.error set ho chuka — storeError render karta hai
+              } finally {
+                setBusy(false);
+              }
+            })();
+          },
+        },
+      ],
+    );
   };
 
   return (
@@ -101,6 +147,31 @@ export default function ProfileScreen() {
         style={authStyles.secondaryButton}
       >
         <Text style={[authStyles.secondaryButtonText, styles.logoutText]}>Log out</Text>
+      </Pressable>
+
+      {/* Phase 1 completion — multi-device + deletion */}
+      <Pressable
+        onPress={() => void handleLogoutEverywhere()}
+        disabled={busy}
+        accessibilityRole="button"
+        accessibilityLabel="Sab devices se log out"
+        style={authStyles.secondaryButton}
+      >
+        <Text style={[authStyles.secondaryButtonText, styles.logoutText]}>
+          Log out of all devices
+        </Text>
+      </Pressable>
+
+      <Pressable
+        onPress={handleDeleteAccount}
+        disabled={busy}
+        accessibilityRole="button"
+        accessibilityLabel="Account delete karo"
+        style={authStyles.secondaryButton}
+      >
+        <Text style={[authStyles.secondaryButtonText, { color: colors.danger }]}>
+          Delete account
+        </Text>
       </Pressable>
     </AuthShell>
   );

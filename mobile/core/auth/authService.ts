@@ -324,6 +324,40 @@ export async function signOut(): Promise<void> {
   }
 }
 
+/**
+ * Sab devices se sign out (Phase 1 completion) — scope 'global' refresh tokens
+ * revoke karta hai. Profile screen "Logout all devices" button.
+ */
+export async function signOutEverywhere(): Promise<void> {
+  const client = requireClient();
+  try {
+    const { error } = await client.auth.signOut({ scope: 'global' });
+    if (error) throw error;
+    await syncAppSession(null);
+  } catch (error) {
+    throw mapError(error);
+  }
+}
+
+/**
+ * Account deletion (Phase 1 completion) — migration 004 ka
+ * request_account_deletion() RPC profile anonymize karta hai (PII null,
+ * status 'deleted'); auth.users row Supabase admin panel me purge hota hai.
+ * Client-side delete API auth me nahi hota — ye saaf pattern hai.
+ */
+export async function deleteAccount(): Promise<void> {
+  const client = requireClient();
+  try {
+    const { error } = await client.rpc('request_account_deletion');
+    if (error) throw error;
+    const { error: signOutError } = await client.auth.signOut({ scope: 'global' });
+    if (signOutError) throw signOutError;
+    await syncAppSession(null);
+  } catch (error) {
+    throw mapError(error);
+  }
+}
+
 export async function getProfile(userId?: string): Promise<AuthProfile | null> {
   const client = requireClient();
   const id = userId ?? (await getCurrentUser())?.id;

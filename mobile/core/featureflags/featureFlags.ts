@@ -10,7 +10,6 @@ export const FEATURE_FLAG_NAMES = [
   'downloads_enabled',
   'ai_playlist_enabled',
   'ai_assistant_enabled',
-  'premium_enabled',
   'events_enabled',
 ] as const;
 
@@ -29,7 +28,6 @@ export const DEFAULT_FEATURE_FLAGS: FeatureFlags = {
   downloads_enabled: false,
   ai_playlist_enabled: false,
   ai_assistant_enabled: false,
-  premium_enabled: false,
   events_enabled: false,
 };
 
@@ -44,8 +42,12 @@ export function resolveFlagsFromEnv(): FeatureFlags {
     jam_enabled: process.env.EXPO_PUBLIC_JAM_ENABLED === 'true',
     podcasts_enabled: process.env.EXPO_PUBLIC_PODCASTS_ENABLED === 'true',
     lyrics_enabled: process.env.EXPO_PUBLIC_LYRICS_ENABLED === 'true',
+    downloads_enabled: process.env.EXPO_PUBLIC_DOWNLOADS_ENABLED === 'true',
     ai_playlist_enabled: process.env.EXPO_PUBLIC_AI_PLAYLIST_ENABLED === 'true',
     ai_assistant_enabled: process.env.EXPO_PUBLIC_AI_ASSISTANT_ENABLED === 'true',
+    // NOTE: premium/payments flag deliberately NAHI hai — app free-forever hai
+    // (user decision, ROADMAP.md Phase 14). Koi entitlement/billing code nahi.
+    events_enabled: process.env.EXPO_PUBLIC_EVENTS_ENABLED === 'true',
   };
 }
 

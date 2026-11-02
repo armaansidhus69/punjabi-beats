@@ -1,14 +1,16 @@
 /**
- * Home tab — 8 mood cards + trending Punjabi songs (Phase 3).
- * FR-3.1..FR-3.4 (moods), trending launch pe auto-fetch hota hai.
+ * Home tab — 8 mood cards + New Songs + Trending (Phase 3).
+ * FR-3.1..FR-3.4 (moods), feed launch pe auto-fetch hota hai.
+ * New Songs section "all new song" requirement — getNewSongs latest releases
+ * laata hai (JioSaavn <year> queries → YouTube Music → Audius trending week).
  */
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  FlatList,
   Image,
   Pressable,
   RefreshControl,
   ScrollView,
+  SectionList,
   StyleSheet,
   Text,
   View,
@@ -16,10 +18,12 @@ import {
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Mood, Song } from '../../types';
 import { MOODS } from '../../constants/moods';
 import { POPULAR_ARTISTS } from '../../constants/artists';
-import { getTrendingSongs } from '../../services/musicApi';
+import { getNewSongs, getTrendingSongs } from '../../services/musicApi';
+import { getMadeForYou } from '../../services/recommendationService';
 import { usePlayer } from '../../stores/playerStore';
 import { useLikedSongs } from '../../stores/likedSongsStore';
 import { promptAddSong } from '../../utils/songActions';
@@ -35,10 +39,20 @@ import MoodCard from '../../components/MoodCard';
 import SongItem from '../../components/SongItem';
 
 const TRENDING_LIMIT = 20;
+const MADE_FOR_YOU_LIMIT = 12;
+const NEW_SONGS_LIMIT = 12;
+
+interface HomeSection {
+  key: 'made' | 'new' | 'trending';
+  title: string;
+  data: Song[];
+}
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const [songs, setSongs] = useState<Song[]>([]);
+  const [newSongs, setNewSongs] = useState<Song[]>([]);
+  const [madeSongs, setMadeSongs] = useState<Song[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -53,18 +67,43 @@ export default function HomeScreen() {
   const handleAddPress = promptAddSong;
   const contentPadding = useMiniPlayerPadding(spacing.xl);
 
-  const loadTrending = useCallback(async (isRefresh = false) => {
+  const cancelledRef = useRef(false);
+  useEffect(() => {
+    cancelledRef.current = false;
+    return () => {
+      cancelledRef.current = true;
+    };
+  }, []);
+
+  const loadFeed = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
     else setLoading(true);
     setError(null);
     try {
-      const trending = await getTrendingSongs(TRENDING_LIMIT);
+      // New + trending parallel — dono independent feeds hain
+      const [trending, fresh] = await Promise.all([
+        getTrendingSongs(TRENDING_LIMIT).catch(err => {
+          console.warn('Trending load failed:', err);
+          return [] as Song[];
+        }),
+        getNewSongs(NEW_SONGS_LIMIT).catch(err => {
+          console.warn('New songs load failed:', err);
+          return [] as Song[];
+        }),
+      ]);
       setSongs(trending);
-      // Service API fail pe [] deti hai — user ko batao
-      if (trending.length === 0) setError('Trending songs nahi mile');
+      setNewSongs(fresh);
+      // Phase 13 v1 — signals-based "Made for you" (best-effort, non-blocking)
+      getMadeForYou(MADE_FOR_YOU_LIMIT)
+        .then(recos => {
+          if (!cancelledRef.current) setMadeSongs(recos);
+        })
+        .catch(() => undefined);
+      // Dono feeds khaali = service fail — user ko batao
+      if (trending.length === 0 && fresh.length === 0) setError('Songs nahi mile');
     } catch (err) {
-      console.warn('Trending load failed:', err);
-      setError('Trending load nahi ho paya');
+      console.warn('Feed load failed:', err);
+      setError('Songs load nahi ho paye');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -72,15 +111,24 @@ export default function HomeScreen() {
   }, []);
 
   useEffect(() => {
-    void loadTrending();
-  }, [loadTrending]);
+    void loadFeed();
+  }, [loadFeed]);
+
+  // Har section apna queue banata hai (New pe tap → New queue, Trending → Trending)
+  const sections = useMemo<HomeSection[]>(() => {
+    const list: HomeSection[] = [];
+    if (madeSongs.length > 0) list.push({ key: 'made', title: 'Made for You ✨', data: madeSongs });
+    if (newSongs.length > 0) list.push({ key: 'new', title: 'New Songs 🆕', data: newSongs });
+    if (songs.length > 0) list.push({ key: 'trending', title: 'Trending Now 🔥', data: songs });
+    return list;
+  }, [madeSongs, newSongs, songs]);
 
   const handleSongPress = useCallback(
-    (song: Song) => {
-      // Poori trending list queue ban jaati hai (auto-next ke liye)
-      void playSong(song, songs);
+    (song: Song, sectionQueue: Song[]) => {
+      // Section ki poori list queue ban jaati hai (auto-next ke liye)
+      void playSong(song, sectionQueue);
     },
-    [playSong, songs],
+    [playSong],
   );
 
   const handleMoodPress = useCallback((mood: Mood) => {
@@ -125,8 +173,13 @@ export default function HomeScreen() {
         </View>
       </View>
 
-      {/* Hero Mehfil Card */}
-      <View style={styles.heroCard}>
+      {/* Hero Mehfil Card — sunset gradient identity */}
+      <LinearGradient
+        colors={[colors.gradientFrom, colors.gradientTo]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.heroCard}
+      >
         <View style={styles.heroCopy}>
           <Text style={styles.heroKicker}>🥁 A Mehfil In Your Pocket</Text>
           <Text style={styles.heroTitle}>The room is already playing.</Text>
@@ -150,7 +203,7 @@ export default function HomeScreen() {
                 songs.length === 0 && styles.disabled,
               ]}
             >
-              <Ionicons name="play" size={16} color="#07070c" />
+              <Ionicons name="play" size={16} color={colors.primaryDark} />
               <Text style={styles.heroPlayText}>Play trending</Text>
             </Pressable>
             <Pressable
@@ -167,7 +220,7 @@ export default function HomeScreen() {
             </Pressable>
           </View>
         </View>
-      </View>
+      </LinearGradient>
 
       {/* Popular Artists Carousel */}
       <Text style={styles.sectionTitle}>Popular Artists 🎤</Text>
@@ -211,26 +264,28 @@ export default function HomeScreen() {
           </View>
         ))}
       </View>
-
-      <Text style={styles.sectionTitle}>Trending Now 🔥</Text>
     </View>
   );
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      <FlatList
-        data={songs}
+      <SectionList
+        sections={sections}
         keyExtractor={song => song.id}
-        renderItem={({ item }) => (
+        renderItem={({ section, item }) => (
           <SongItem
             song={item}
-            onPress={handleSongPress}
+            onPress={selected => handleSongPress(selected, section.data)}
             isActive={item.id === currentSongId}
             onAddPress={handleAddPress}
             isLiked={likedSongs.some(song => song.id === item.id)}
             onLikePress={toggleLiked}
           />
         )}
+        renderSectionHeader={({ section }) => (
+          <Text style={styles.sectionTitle}>{section.title}</Text>
+        )}
+        stickySectionHeadersEnabled={false}
         ListHeaderComponent={listHeader}
         contentContainerStyle={{ paddingBottom: contentPadding }}
         showsVerticalScrollIndicator={false}
@@ -238,7 +293,7 @@ export default function HomeScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={() => {
-              void loadTrending(true);
+              void loadFeed(true);
             }}
             tintColor={colors.primary}
             colors={[colors.primary]}
@@ -252,7 +307,7 @@ export default function HomeScreen() {
             <EmptyState icon="cloud-offline-outline" title="Songs load nahi ho paye" subtitle={error}>
               <Pressable
                 onPress={() => {
-                  void loadTrending();
+                  void loadFeed();
                 }}
                 accessibilityRole="button"
                 accessibilityLabel="Dobara load karo"
@@ -309,15 +364,12 @@ const styles = StyleSheet.create({
     marginHorizontal: spacing.lg,
     marginTop: spacing.md,
     padding: spacing.lg,
-    borderRadius: 20,
-    backgroundColor: '#141420',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 179, 71, 0.2)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
+    borderRadius: 22,
+    shadowColor: colors.primaryDark,
+    shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.35,
-    shadowRadius: 10,
-    elevation: 4,
+    shadowRadius: 16,
+    elevation: 6,
   },
   heroCopy: {
     gap: spacing.xs + 2,
@@ -325,7 +377,7 @@ const styles = StyleSheet.create({
   heroKicker: {
     fontSize: 12,
     fontWeight: '700',
-    color: colors.primary,
+    color: 'rgba(255, 255, 255, 0.85)',
     letterSpacing: 0.3,
     textTransform: 'uppercase',
   },
@@ -353,12 +405,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 999,
-    backgroundColor: colors.primary,
+    backgroundColor: '#FFFFFF',
   },
   heroPlayText: {
     ...typography.caption,
     fontWeight: '700',
-    color: '#07070c',
+    color: colors.primaryDark,
   },
   heroRoomBtn: {
     flexDirection: 'row',
@@ -367,9 +419,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 999,
-    backgroundColor: 'rgba(255, 255, 255, 0.07)',
+    backgroundColor: 'rgba(0, 0, 0, 0.22)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderColor: 'rgba(255, 255, 255, 0.35)',
   },
   heroRoomText: {
     ...typography.caption,
@@ -405,7 +457,7 @@ const styles = StyleSheet.create({
     borderRadius: 36,
     backgroundColor: colors.surface,
     borderWidth: 2,
-    borderColor: 'rgba(255, 179, 71, 0.45)',
+    borderColor: 'rgba(255, 65, 108, 0.45)',
   },
   verifiedDot: {
     position: 'absolute',

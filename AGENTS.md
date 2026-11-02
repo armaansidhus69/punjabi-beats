@@ -39,7 +39,9 @@ node test-music-api.mjs
 
 ## Architecture flow (not obvious from filenames)
 
-- Room sync: client → `POST /api/publish` with `x-publish-token` header (timing-safe compare) → Apinator channel broadcast → `mobile/services/roomSync.ts` on each device. `api/youtube-match.js` is the second function (Spotify→YouTube matching only returns videoId/metadata, never audio URLs).
+- Room sync: `mobile/services/groupTransport.ts` is the single transport layer with TWO backends — **Supabase Realtime broadcast** (DEFAULT, zero-setup: public key bundled in `core/auth/supabaseClient.ts`, client-to-client `channel.send`, no Vercel deploy needed) or **Apinator** (when `EXPO_PUBLIC_APINATOR_KEY` is set; publish still goes through `POST /api/publish` with `x-publish-token`). `roomSync.ts` orchestration (echo guard, seq, presence) is backend-agnostic and imports transport functions from `groupTransport`, not `apinator` directly.
+- `api/youtube-match.js` is the optional second function (Spotify→YouTube matching only returns videoId/metadata, never audio URLs).
+- **In-app playback policy (2026-11)**: music NEVER opens an external app — `playerStore.resolveTrack` and `musicApi.playVeromeSongWithRefresh` no longer `Linking.openURL` YouTube on stream failure; the queue auto-skips to the next playable track instead. YouTube Music catalogue = optional Piped bridge (`EXPO_PUBLIC_PIPED_API` + 5 default public instances, raced in parallel; many public instances are dead — probe before relying on them).
 - Music source fallback chain in `mobile/services/musicApi.ts`: JioSaavn → Audius → optional YouTube/Piped bridge → iTunes. Each source's mapper → common `Song`.
 - `mobile/services/storage.ts` is imported via `require()` (not static `import`) on purpose: a static import drags AsyncStorage into the Node test path and breaks headless tests (`ERR_MODULE_NOT_FOUND`).
 - Zone boundaries: screens render only; logic goes in `stores/` or `services/`. Wire format for room events is `mobile/utils/syncPayload.ts`.

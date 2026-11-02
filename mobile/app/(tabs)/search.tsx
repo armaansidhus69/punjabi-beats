@@ -41,7 +41,7 @@ import { promptAddSong } from '../../utils/songActions';
 import { MAX_RECENT_SEARCHES, useSearch } from '../../stores/searchStore';
 import { useDebounce } from '../../hooks/useDebounce';
 import { useMiniPlayerPadding } from '../../hooks/useMiniPlayerPadding';
-import { colors } from '../../constants/colors';
+import { colors, sourceColor } from '../../constants/colors';
 import { typography } from '../../constants/typography';
 import { spacing } from '../../constants/spacing';
 import { selectionFeedback, successFeedback, tapFeedback, warningFeedback } from '../../utils/haptics';
@@ -60,6 +60,21 @@ const MIN_QUERY_LENGTH = 2;
 
 const FILTERS = ['All', 'Songs', 'Artists', 'Albums', 'Playlists'] as const;
 type SearchFilter = (typeof FILTERS)[number];
+
+/**
+ * SOURCE FILTERS — multi-source picker (2026-11 redesign).
+ * Results ko music source ke hisaab se filter karta hai; har chip ka apna
+ * source color (constants/colors.ts). 'All sources' default — poori chain.
+ */
+const SOURCE_FILTERS = [
+  { key: 'all', label: 'All' },
+  { key: 'jiosaavn', label: 'JioSaavn' },
+  { key: 'youtube_music', label: 'YT Music' },
+  { key: 'audius', label: 'Audius' },
+  { key: 'spotify', label: 'Spotify' },
+  { key: 'itunes', label: 'iTunes' },
+] as const;
+type SourceFilter = (typeof SOURCE_FILTERS)[number]['key'];
 
 /** Trending search queries for Punjabi music discovery */
 const TRENDING_SEARCHES = [
@@ -97,6 +112,7 @@ export default function SearchScreen() {
 
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<SearchFilter>('All');
+  const [sourceFilter, setSourceFilter] = useState<SourceFilter>('all');
   const [results, setResults] = useState<Song[]>([]);
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
@@ -190,25 +206,39 @@ export default function SearchScreen() {
     setFilter(next);
   }, []);
 
+  const handleSourceFilterPress = useCallback((next: SourceFilter) => {
+    selectionFeedback();
+    setSourceFilter(next);
+  }, []);
+
+  /** Source-filtered results — YT Music/JioSaavn/Audius chips isse list me dikhte hain */
+  const visibleResults = useMemo(
+    () =>
+      sourceFilter === 'all'
+        ? results
+        : results.filter(song => song.source === sourceFilter),
+    [results, sourceFilter],
+  );
+
   const handleSongPress = useCallback(
     (song: Song) => {
-      void playSong(song, results);
+      void playSong(song, visibleResults);
     },
-    [playSong, results],
+    [playSong, visibleResults],
   );
 
   const handlePlayAll = useCallback(() => {
-    if (results.length === 0) return;
+    if (visibleResults.length === 0) return;
     successFeedback();
-    void playSong(results[0], results);
-  }, [playSong, results]);
+    void playSong(visibleResults[0], visibleResults);
+  }, [playSong, visibleResults]);
 
   const handleShuffleAll = useCallback(() => {
-    if (results.length === 0) return;
+    if (visibleResults.length === 0) return;
     successFeedback();
-    const shuffled = [...results].sort(() => Math.random() - 0.5);
+    const shuffled = [...visibleResults].sort(() => Math.random() - 0.5);
     void playSong(shuffled[0], shuffled);
-  }, [playSong, results]);
+  }, [playSong, visibleResults]);
 
   // Extract distinct artists from current results list
   const distinctArtists = useMemo<ExtractedArtist[]>(() => {
@@ -383,7 +413,7 @@ export default function SearchScreen() {
                   ? `${distinctAlbums.length} ${distinctAlbums.length === 1 ? 'album' : 'albums'} found`
                   : filter === 'Playlists'
                   ? `${matchingPlaylists.length} ${matchingPlaylists.length === 1 ? 'playlist' : 'playlists'} found`
-                  : `${results.length} tracks found`}
+                  : `${visibleResults.length} tracks found`}
               </Text>
 
               {(filter === 'All' || filter === 'Songs') && (
@@ -415,6 +445,55 @@ export default function SearchScreen() {
                 </View>
               )}
             </View>
+
+            {/* Source filter chips — multi-source picker (sirf song lists pe) */}
+            {(filter === 'All' || filter === 'Songs') && (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.sourceChipRow}
+              >
+                {SOURCE_FILTERS.map(source => {
+                  const active = sourceFilter === source.key;
+                  const count =
+                    source.key === 'all'
+                      ? results.length
+                      : results.filter(song => song.source === source.key).length;
+                  const tint =
+                    source.key === 'all'
+                      ? colors.text
+                      : sourceColor[source.key] ?? colors.subtext;
+                  return (
+                    <Pressable
+                      key={source.key}
+                      onPress={() => handleSourceFilterPress(source.key)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`${source.label} source filter`}
+                      accessibilityState={{ selected: active }}
+                      style={({ pressed }) => [
+                        styles.sourceChip,
+                        active && styles.sourceChipActive,
+                        pressed && styles.pressed,
+                      ]}
+                    >
+                      {source.key !== 'all' ? (
+                        <View
+                          style={[styles.sourceDot, { backgroundColor: tint }]}
+                        />
+                      ) : (
+                        <Ionicons name="layers-outline" size={11} color={tint} />
+                      )}
+                      <Text style={[styles.sourceChipLabel, active && { color: tint }]}>
+                        {source.label}
+                      </Text>
+                      <Text style={[styles.sourceChipCount, active && { color: tint }]}>
+                        {count}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+            )}
 
             {/* Tab: Artists */}
             {filter === 'Artists' ? (
@@ -553,39 +632,39 @@ export default function SearchScreen() {
             ) : (
               /* Tab: All / Songs */
               <FlatList
-                data={results}
+                data={visibleResults}
                 keyExtractor={song => song.id}
                 contentContainerStyle={[styles.listContent, { paddingBottom: contentPadding }]}
                 keyboardShouldPersistTaps="handled"
                 keyboardDismissMode="on-drag"
                 showsVerticalScrollIndicator={false}
                 ListHeaderComponent={
-                  filter === 'All' && results.length > 0 ? (
+                  filter === 'All' && visibleResults.length > 0 ? (
                     <View style={styles.spotlightCard}>
                       <View style={styles.spotlightBadge}>
                         <Ionicons name="flame" size={12} color="#000" />
                         <Text style={styles.spotlightBadgeText}>TOP MATCH</Text>
                       </View>
                       <Pressable
-                        onPress={() => handleSongPress(results[0])}
+                        onPress={() => handleSongPress(visibleResults[0])}
                         style={styles.spotlightContent}
                       >
-                        <SongArtwork uri={results[0].cover} size={64} radius={12} />
+                        <SongArtwork uri={visibleResults[0].cover} size={64} radius={12} />
                         <View style={styles.spotlightInfo}>
                           <Text style={styles.spotlightTitle} numberOfLines={1}>
-                            {results[0].title}
+                            {visibleResults[0].title}
                           </Text>
                           <Text style={styles.spotlightArtist} numberOfLines={1}>
-                            {results[0].artist}
+                            {visibleResults[0].artist}
                           </Text>
                           <Text style={styles.spotlightMeta}>
-                            Punjabi Beats • {Math.round(results[0].duration / 1000)}s
+                            Punjabi Beats • {Math.round(visibleResults[0].duration / 1000)}s
                           </Text>
                         </View>
                         <Pressable
                           onPress={() => {
                             successFeedback();
-                            void playSong(results[0], results);
+                            void playSong(visibleResults[0], visibleResults);
                           }}
                           hitSlop={8}
                           accessibilityRole="button"
@@ -915,6 +994,32 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xs,
     marginBottom: spacing.xs,
   },
+  /* Source filter chips (multi-source picker) */
+  sourceChipRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.sm,
+  },
+  sourceChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingVertical: 5,
+    paddingHorizontal: spacing.md,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  sourceChipActive: {
+    borderColor: colors.primary,
+    backgroundColor: colors.primarySoft,
+  },
+  sourceDot: { width: 6, height: 6, borderRadius: 3 },
+  sourceChipLabel: { ...typography.caption, color: colors.subtext, fontWeight: '600' },
+  sourceChipCount: { ...typography.caption, color: colors.subtext, opacity: 0.7 },
   resultCountText: {
     ...typography.caption,
     color: colors.subtext,

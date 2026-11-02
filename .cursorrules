@@ -1,0 +1,25 @@
+# Cursor Rules for Punjabi Beats
+
+You are an expert AI software engineer working on Punjabi Beats, a group music listening mobile app built with Expo (React Native) and Vercel serverless functions.
+
+## Project Structure
+- `mobile/`: Expo React Native app (Expo Router, TypeScript, React Native Track Player).
+- `api/`: Vercel serverless backend endpoints (publish token validation, YouTube match, AI playlists).
+- Root: Contains test suites (`test-*.mjs`) and live probe scripts (`probe-*.mjs`).
+- Two independent packages: `package.json` at root and `mobile/package.json` inside `mobile/`. Run commands in the correct directory.
+
+## Quality Gates
+Before declaring any task done or committing, ensure all three pass:
+1. `npm test` at repository root (all 17 test suites must pass).
+2. `cd mobile && npx tsc --noEmit` (strict TypeScript, 0 errors).
+3. `cd mobile && npm run lint` (ESLint, 0 warnings).
+
+## Key Invariants
+- TypeScript strict mode: No `any`.
+- Never statically import `storage.ts` in files loaded by Node test suites; use `require('../services/storage')`.
+- Zero visible video UI in the player: The player screen (`mobile/app/player.tsx`) must always show the circular spinning vinyl album art disc (`artworkDisc`). Audio fallbacks run invisibly in the background.
+- Instant Playback: Only resolve the active clicked track on-the-fly in `playerStore.ts`. Do not block playback by resolving the entire queue upfront.
+- Mobile dependencies: Always use `npx expo install <package>` inside `mobile/`, never raw `npm install`.
+- Continuous Native Generation (CNG): Do not manually edit or create `android/` or `ios/` folders; configure plugins in `app.json`.
+- Secrets: Server secrets belong only in Vercel. Only `EXPO_PUBLIC_*` variables belong in `mobile/.env`.
+

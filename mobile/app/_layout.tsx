@@ -72,6 +72,13 @@ function AppShell() {
           options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
         />
         {/* Auth stack (Phase 1) — login, register, profile */}
+        {/* Queue manager (Phase 5 completion) — player ke "Queue" link se */}
+        <Stack.Screen
+          name="queue"
+          options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
+        />
+        {/* Downloads manager (Phase 6 v1) — flag-gated, library se khulta hai */}
+        <Stack.Screen name="downloads" options={{ presentation: 'card' }} />
         <Stack.Screen name="auth" />
       </Stack>
 

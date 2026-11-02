@@ -7,11 +7,10 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { Song } from '../types';
-import { colors } from '../constants/colors';
+import { colors, sourceColor, sourceLabel } from '../constants/colors';
 import { typography } from '../constants/typography';
 import { spacing } from '../constants/spacing';
 import { tapFeedback, warningFeedback } from '../utils/haptics';
-import { handleOpenOnYouTube, isYouTubeMatchConfigured } from '../utils/youtubeLink';
 import SongArtwork from './SongArtwork';
 
 interface SongItemProps {
@@ -81,34 +80,33 @@ export default function SongItem({
           </Pressable>
         </View>
 
-        {song.source === 'youtube_music' && !song.previewOnly ? (
-          <View style={styles.youtubeBadge}>
-            <Text style={styles.youtubeBadgeText}>YT Music</Text>
-          </View>
-        ) : song.previewOnly ? (
-          <View style={[styles.previewBadge, styles.youtubePreviewBadge]}>
-            <Ionicons name="logo-youtube" size={12} color="#ff3b30" />
-            <Text style={styles.youtubePreviewBadgeText}>Full Song</Text>
+        {/* Source badge — har source ka apna color/label (multi-source identity). */}
+        {song.source ? (
+          <View
+            style={[styles.sourceBadge, { borderColor: `${sourceColor[song.source] ?? colors.subtext}55` }]}
+          >
+            <View
+              style={[
+                styles.sourceDot,
+                { backgroundColor: sourceColor[song.source] ?? colors.subtext },
+              ]}
+            />
+            <Text
+              style={[
+                styles.sourceBadgeText,
+                { color: sourceColor[song.source] ?? colors.subtext },
+              ]}
+            >
+              {sourceLabel[song.source] ?? 'Music'}
+            </Text>
           </View>
         ) : null}
 
         {isActive ? <Ionicons name="stats-chart" size={16} color={colors.primary} /> : null}
       </Pressable>
 
-      {/* YouTube link-out — sirf preview-only gaano pe (full version dhundhne ke liye).
-          WebView player NAHI hai (room sync + background play dono bachate hain —
-          dekhho utils/youtubeLink.ts ka header). Backend env na ho to button chhupta hai. */}
-      {song.previewOnly && isYouTubeMatchConfigured() ? (
-        <Pressable
-          onPress={() => handleOpenOnYouTube(song)}
-          hitSlop={10}
-          accessibilityRole="button"
-          accessibilityLabel={`${song.title} YouTube pe full version kholo`}
-          style={({ pressed }) => [styles.actionButton, pressed && styles.pressed]}
-        >
-          <Ionicons name="logo-youtube" size={20} color={colors.primary} />
-        </Pressable>
-      ) : null}
+      {/* DESIGN RULE: koi YouTube link-out button nahi — music hamesha is app
+          me bajti hai (pehle preview-only gaano pe YouTube khulta tha). */}
 
       {onLikePress ? (
         <Pressable
@@ -173,8 +171,8 @@ const styles = StyleSheet.create({
     borderColor: 'transparent',
   },
   rowActive: {
-    backgroundColor: 'rgba(255, 179, 71, 0.08)',
-    borderColor: 'rgba(255, 179, 71, 0.35)',
+    backgroundColor: colors.primarySoft,
+    borderColor: 'rgba(255, 65, 108, 0.35)',
   },
   mainContent: {
     flex: 1,
@@ -188,32 +186,28 @@ const styles = StyleSheet.create({
   title: { ...typography.body, color: colors.text, fontWeight: '600', fontSize: 15 },
   titleActive: { color: colors.primary, fontWeight: '700' },
   artist: { ...typography.caption, color: colors.subtext, fontSize: 13 },
-  artistActive: { color: 'rgba(255, 179, 71, 0.85)' },
+  artistActive: { color: colors.primary },
   actionButton: { padding: spacing.xs },
+  /* Source badge (multi-source identity) */
+  sourceBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+  },
+  sourceDot: { width: 5, height: 5, borderRadius: 3 },
+  sourceBadgeText: { fontSize: 10, fontWeight: '700' },
+  /* 30s preview chip — honest indicator */
   previewBadge: {
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: colors.primary,
-    backgroundColor: colors.surface,
+    borderColor: `${colors.warning}55`,
+    backgroundColor: 'rgba(255, 194, 75, 0.08)',
   },
-  previewBadgeText: { fontSize: 10, fontWeight: '700', color: colors.primary },
-  youtubeBadge: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: colors.primary,
-    backgroundColor: colors.primary + '22',
-  },
-  youtubeBadgeText: { fontSize: 10, fontWeight: '700', color: colors.primary },
-  youtubePreviewBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    borderColor: '#ff3b3066',
-    backgroundColor: 'rgba(255, 59, 48, 0.1)',
-  },
-  youtubePreviewBadgeText: { fontSize: 10, fontWeight: '700', color: '#ff453a' },
+  previewBadgeText: { fontSize: 10, fontWeight: '700', color: colors.warning },
 });

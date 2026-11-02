@@ -16,7 +16,7 @@ export const paperTheme = {
     outline: colors.border,
     onSurface: colors.text,
     onSurfaceVariant: colors.subtext,
-    onPrimary: '#0a0a0f',
+    onPrimary: '#FFFFFF',
     elevation: {
       ...MD3DarkTheme.colors.elevation,
       level2: colors.card,

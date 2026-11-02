@@ -14,6 +14,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Animated,
   Easing,
+  Modal,
   PanResponder,
   Platform,
   Pressable,
@@ -26,9 +27,18 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import Toast from 'react-native-toast-message';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import { usePlayer } from '../stores/playerStore';
 import { useLikedSongs } from '../stores/likedSongsStore';
-import { colors } from '../constants/colors';
+import { useSleepTimer } from '../stores/sleepTimerStore';
+import { useDownloads } from '../services/downloadsService';
+import { buildRadioQueue } from '../services/radioService';
+import {
+  SLEEP_OPTIONS,
+  formatSleepRemaining,
+  type SleepMode,
+} from '../core/playback/sleepTimer';
+import { colors, sourceColor, sourceLabel } from '../constants/colors';
 import { typography } from '../constants/typography';
 import { spacing } from '../constants/spacing';
 import EmptyState from '../components/EmptyState';
@@ -63,6 +73,7 @@ export default function PlayerScreen() {
   const toggleLiked = useLikedSongs(s => s.toggleLiked);
 
   const togglePlay = usePlayer(s => s.togglePlay);
+  const playSong = usePlayer(s => s.playSong);
   const playNext = usePlayer(s => s.playNext);
   const playPrev = usePlayer(s => s.playPrev);
   const seek = usePlayer(s => s.seek);
@@ -73,6 +84,71 @@ export default function PlayerScreen() {
 
   const isLiked = currentSong ? likedSongs.some(song => song.id === currentSong.id) : false;
   const lyricsEnabled = isFeatureEnabled('lyrics_enabled');
+  const downloadsEnabled = isFeatureEnabled('downloads_enabled');
+
+  /* Phase 5/6 — Radio, Sleep timer, Download */
+  const [radioLoading, setRadioLoading] = useState(false);
+  const [sleepVisible, setSleepVisible] = useState(false);
+  const sleepMode = useSleepTimer(s => s.mode);
+  const sleepEndsAt = useSleepTimer(s => s.endsAt);
+  const startSleep = useSleepTimer(s => s.start);
+  const [sleepRemaining, setSleepRemaining] = useState<string | null>(null);
+  const downloadItem = useDownloads(s =>
+    currentSong ? s.items.find(entry => entry.id === currentSong.id) ?? null : null,
+  );
+  const downloadSong = useDownloads(s => s.download);
+
+  useEffect(() => {
+    if (sleepMode === 'off' || sleepMode === 'end_of_track' || sleepEndsAt === null) {
+      setSleepRemaining(null);
+      return;
+    }
+    const tick = setInterval(() => {
+      setSleepRemaining(formatSleepRemaining(sleepEndsAt - Date.now()));
+    }, 1000);
+    setSleepRemaining(formatSleepRemaining(sleepEndsAt - Date.now()));
+    return () => clearInterval(tick);
+  }, [sleepMode, sleepEndsAt]);
+
+  const handleRadio = useCallback(async () => {
+    if (!currentSong || radioLoading) return;
+    setRadioLoading(true);
+    try {
+      const radioQueue = await buildRadioQueue(currentSong);
+      await playSong(currentSong, radioQueue);
+      successFeedback();
+      Toast.show({
+        type: 'success',
+        text1: 'Radio chalu 📻',
+        text2: `${radioQueue.length} songs • ${currentSong.artist}`,
+        visibilityTime: 2200,
+      });
+    } catch {
+      warningFeedback();
+      Toast.show({ type: 'error', text1: 'Radio nahi ban paayi', text2: 'Thodi der baad try karo' });
+    } finally {
+      setRadioLoading(false);
+    }
+  }, [currentSong, radioLoading, playSong]);
+
+  const handleDownload = useCallback(async () => {
+    if (!currentSong) return;
+    // Stream download check
+    if (currentSong.previewOnly) {
+      warningFeedback();
+      Toast.show({ type: 'info', text1: 'Download available nahi hai', text2: 'Dusra track try karo' });
+      return;
+    }
+    const ok = await downloadSong(currentSong);
+    if (ok) successFeedback();
+    else warningFeedback();
+    Toast.show({
+      type: ok ? 'success' : 'error',
+      text1: ok ? 'Download ho gaya ✅' : 'Download fail hua',
+      text2: currentSong.title,
+      visibilityTime: 2000,
+    });
+  }, [currentSong, downloadSong]);
 
   const [inAppYouTubeVideoId, setInAppYouTubeVideoId] = useState<string | null>(null);
   const [youTubeDuration, setYouTubeDuration] = useState<number | null>(null);
@@ -314,6 +390,12 @@ export default function PlayerScreen() {
       style={[styles.container, { paddingTop: insets.top + spacing.sm }]}
       {...panResponder.panHandlers}
     >
+      {/* Sunset glow — top se warm gradient, neeche midnight me fade */}
+      <LinearGradient
+        colors={['rgba(255, 81, 47, 0.20)', 'rgba(221, 36, 118, 0.10)', 'rgba(8, 8, 15, 0)']}
+        style={styles.backgroundGlow}
+        pointerEvents="none"
+      />
       <PlayerHeader
         onClose={close}
         onShare={handleShare}
@@ -364,12 +446,45 @@ export default function PlayerScreen() {
           accessibilityRole="button"
           accessibilityLabel={`Artist ${currentSong.artist} page`}
         >
-          <Text style={styles.artist} numberOfLines={1}>
-            {currentSong.artist}
-          </Text>
+        <Text style={styles.artist} numberOfLines={1}>
+          {currentSong.artist}
+        </Text>
         </Pressable>
+        {/* Source badge — kaun sa source baj raha hai (multi-source identity) */}
+        {currentSong.source ? (
+          <View
+            style={[
+              styles.sourceChip,
+              { borderColor: `${sourceColor[currentSong.source] ?? colors.subtext}66` },
+            ]}
+          >
+            <View
+              style={[
+                styles.sourceDot,
+                { backgroundColor: sourceColor[currentSong.source] ?? colors.subtext },
+              ]}
+            />
+            <Text
+              style={[
+                styles.sourceChipText,
+                { color: sourceColor[currentSong.source] ?? colors.subtext },
+              ]}
+            >
+              {sourceLabel[currentSong.source] ?? 'Music'} • Full song
+            </Text>
+          </View>
+        ) : null}
         {queueLength > 1 ? (
-          <Text style={styles.queueInfo}>Queue me {queueLength} songs</Text>
+          <Pressable
+            onPress={() => router.push('/queue')}
+            accessibilityRole="button"
+            accessibilityLabel="Queue manage karo"
+            hitSlop={8}
+            style={({ pressed }) => [styles.queueLink, pressed && styles.pressed]}
+          >
+            <Text style={styles.queueInfo}>Queue me {queueLength} songs</Text>
+            <Ionicons name="chevron-forward" size={14} color={colors.primary} />
+          </Pressable>
         ) : null}
       </View>
 
@@ -398,7 +513,124 @@ export default function PlayerScreen() {
           repeatOn={repeatActive}
         />
       </View>
+
+      {/* Utility row — Radio / Sleep timer / Download (Phase 5+6) */}
+      {currentSong ? (
+        <View style={styles.utilityRow}>
+          <Pressable
+            onPress={() => void handleRadio()}
+            disabled={radioLoading}
+            accessibilityRole="button"
+            accessibilityLabel="Is gaane ki radio chalao"
+            style={({ pressed }) => [styles.utilityButton, pressed && styles.pressed]}
+          >
+            <Ionicons name="radio" size={20} color={colors.text} />
+            <Text style={styles.utilityLabel}>{radioLoading ? 'Radio…' : 'Radio'}</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => setSleepVisible(true)}
+            accessibilityRole="button"
+            accessibilityLabel="Sleep timer"
+            style={({ pressed }) => [styles.utilityButton, pressed && styles.pressed]}
+          >
+            <Ionicons
+              name="moon"
+              size={20}
+              color={sleepMode !== 'off' ? colors.primary : colors.text}
+            />
+            <Text
+              style={[
+                styles.utilityLabel,
+                sleepMode !== 'off' && { color: colors.primary },
+              ]}
+            >
+              {sleepMode === 'off'
+                ? 'Sleep'
+                : sleepMode === 'end_of_track'
+                  ? 'Track ke baad'
+                  : sleepRemaining ?? 'Sleep'}
+            </Text>
+          </Pressable>
+          {downloadsEnabled ? (
+            <Pressable
+              onPress={() => void handleDownload()}
+              accessibilityRole="button"
+              accessibilityLabel="Ye gaana download karo"
+              style={({ pressed }) => [styles.utilityButton, pressed && styles.pressed]}
+            >
+              <Ionicons
+                name={downloadItem?.status === 'downloaded' ? 'checkmark-circle' : 'download-outline'}
+                size={20}
+                color={downloadItem?.status === 'downloaded' ? colors.success : colors.text}
+              />
+              <Text style={styles.utilityLabel}>
+                {downloadItem?.status === 'downloaded'
+                  ? 'Saved'
+                  : downloadItem?.status === 'downloading'
+                    ? 'Ho raha…'
+                    : downloadItem?.status === 'failed'
+                      ? 'Retry'
+                      : 'Download'}
+              </Text>
+            </Pressable>
+          ) : null}
+        </View>
+      ) : null}
+
+      <SleepTimerModal
+        visible={sleepVisible}
+        mode={sleepMode}
+        onClose={() => setSleepVisible(false)}
+        onStart={startSleep}
+      />
     </View>
+  );
+}
+
+/** Sleep timer picker — player ke neeche slide-up sheet (Phase 5 completion). */
+function SleepTimerModal({
+  visible,
+  mode,
+  onClose,
+  onStart,
+}: {
+  visible: boolean;
+  mode: SleepMode;
+  onClose: () => void;
+  onStart: (mode: SleepMode) => void;
+}) {
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <View style={styles.sheetBackdrop}>
+        <Pressable style={styles.sheetBackdropTouch} onPress={onClose} accessibilityLabel="Band karo" />
+        <View style={styles.sheet}>
+          <Text style={styles.sheetTitle}>Sleep timer 🌙</Text>
+          {SLEEP_OPTIONS.map(option => (
+            <Pressable
+              key={option.mode}
+              onPress={() => {
+                tapFeedback();
+                onStart(option.mode);
+                onClose();
+              }}
+              accessibilityRole="button"
+              accessibilityLabel={`Sleep timer: ${option.label}`}
+              style={({ pressed }) => [styles.sheetRow, pressed && styles.pressed]}
+            >
+              <Ionicons
+                name={option.mode === 'off' ? 'close-circle-outline' : 'time-outline'}
+                size={18}
+                color={colors.text}
+              />
+              <Text style={styles.sheetRowText}>{option.label}</Text>
+              {mode === option.mode ? (
+                <Ionicons name="checkmark" size={18} color={colors.primary} />
+              ) : null}
+            </Pressable>
+          ))}
+        </View>
+      </View>
+    </Modal>
   );
 }
 
@@ -543,6 +775,25 @@ function VolumeSlider({ value, onChange }: { value: number; onChange: (v: number
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
+  backgroundGlow: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 380,
+  },
+  sourceChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs + 2,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 4,
+    borderRadius: 999,
+    borderWidth: 1,
+    marginTop: spacing.sm,
+  },
+  sourceDot: { width: 6, height: 6, borderRadius: 3 },
+  sourceChipText: { ...typography.caption, fontWeight: '600' },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -587,6 +838,37 @@ const styles = StyleSheet.create({
   title: { ...typography.h1, color: colors.text, textAlign: 'center' },
   artist: { ...typography.body, color: colors.subtext, textAlign: 'center', marginTop: spacing.xs },
   queueInfo: { ...typography.caption, color: colors.primary, marginTop: spacing.sm },
+  queueLink: { flexDirection: 'row', alignItems: 'center', gap: 2, marginTop: spacing.sm },
+  utilityRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.lg,
+    marginTop: spacing.md,
+  },
+  utilityButton: { alignItems: 'center', gap: 4, paddingHorizontal: spacing.sm },
+  utilityLabel: { ...typography.caption, color: colors.text },
+  sheetBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+  sheetBackdropTouch: { flex: 1 },
+  sheet: {
+    backgroundColor: colors.card,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.xl,
+    gap: spacing.xs,
+  },
+  sheetTitle: { ...typography.h2, color: colors.text, marginBottom: spacing.sm },
+  sheetRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.xs,
+    borderRadius: 10,
+  },
+  sheetRowText: { ...typography.body, color: colors.text, flex: 1 },
   progressSection: { paddingHorizontal: spacing.lg, marginTop: spacing.lg },
   controls: { marginTop: spacing.xl, marginBottom: spacing.xl },
   volumeRow: {

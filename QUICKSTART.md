@@ -20,9 +20,11 @@ npm install zustand axios @apinator/client@2.0.0 react-native-paper react-native
 ## Step 3: Configure (1 min)
 Create `.env`:
 ```
-EXPO_PUBLIC_APINATOR_KEY=apk_xxxxxxxxxxxxx
-EXPO_PUBLIC_APINATOR_CLUSTER=eu
-EXPO_PUBLIC_PUBLISH_URL=https://YOUR-VERCEL-APP.vercel.app/api/publish
+# Group rooms ke liye KUCH bhi set karne ki zaroorat nahi — Supabase broadcast
+# default hai (public key bundled). Apinator optional transport:
+# EXPO_PUBLIC_APINATOR_KEY=apk_xxxxxxxxxxxxx
+# EXPO_PUBLIC_APINATOR_CLUSTER=eu
+# EXPO_PUBLIC_PUBLISH_URL=https://YOUR-VERCEL-APP.vercel.app/api/publish
 EXPO_PUBLIC_ITUNES_COUNTRY=IN
 # Optional: self-host the open-source JioSaavn API for production reliability.
 # EXPO_PUBLIC_JIOSAAVN_BASE=https://your-jiosaavn-api.example.com

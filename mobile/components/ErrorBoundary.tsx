@@ -18,11 +18,16 @@
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { ErrorBoundaryProps } from 'expo-router';
+import { reportError } from '../core/errors/errorReporting';
 import { colors } from '../constants/colors';
 import { typography } from '../constants/typography';
 import { spacing } from '../constants/spacing';
 
 export default function AppErrorBoundary({ error, retry }: ErrorBoundaryProps) {
+  // Phase 0 error pipeline: crash reporter jo bootstrap ne configure kiya hai
+  // (abhi no-op/console, baad me Sentry-type SDK). Reporting khud kabhi throw
+  // nahi karti — render safe rehta hai.
+  reportError(error, { surface: 'route-error-boundary' });
   return (
     <View style={styles.container}>
       <Ionicons name="alert-circle-outline" size={52} color={colors.primary} />

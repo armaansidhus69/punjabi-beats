@@ -2,7 +2,7 @@
  * Core data types — poore app me yahi use honge (strict TS, no `any`).
  */
 
-export type SongSource = 'jiosaavn' | 'audius' | 'itunes' | 'jamendo' | 'gaana' | 'youtube_music';
+export type SongSource = 'jiosaavn' | 'audius' | 'itunes' | 'jamendo' | 'gaana' | 'youtube_music' | 'spotify';
 
 export interface Song {
   id: string;
@@ -21,8 +21,12 @@ export interface Song {
    * Sirf 30s preview available hai (iTunes preview limitation — full song nahi).
    * JioSaavn mirror se full song aaye to false rehta hai; SongItem ka "30s"
    * badge aur player ka preview note sirf true pe dikhte hain.
+   * NOTE: `youtube_music` songs ke liye true ka matlab "abhi unresolved" hai
+   * (play-time pe Verome/Piped full stream deta hai) — 30s clip nahi.
    */
   previewOnly?: boolean;
+  /** Release year (JioSaavn metadata) — "New Songs" feed freshness ke liye */
+  year?: number;
 }
 
 export interface Playlist {

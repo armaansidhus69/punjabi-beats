@@ -22,12 +22,18 @@ function loadModule(path, dependencies) {
     return dependencies[name];
   };
   const execute = runInThisContext(
-    `(function(require, module, exports, process, console, __DEV__) { ${compiled.get(path)}\n})`,
+    `(function(require, module, exports, process, console, __DEV__, fetch) { ${compiled.get(path)}\n})`,
     { filename: path },
   );
   execute(requireMock, module, module.exports, {
     env: { EXPO_PUBLIC_VEROME_API: 'https://verome.invalid' },
-  }, { ...console, warn: () => {} }, false);
+  }, { ...console, warn: () => {} }, false,
+  // musicApi ka JioSaavn audio-guard HEAD check — deterministic pass (warna ye
+  // real network pe audio.invalid HEAD karta aur upgrade path test nahi hota)
+  async (url, options) => {
+    assert.equal(options.method, 'HEAD');
+    return { ok: true };
+  });
   return module.exports;
 }
 
@@ -46,7 +52,7 @@ function song(id, overrides = {}) {
 const missing = song('missing', { source: 'youtube_music', videoId: 'missing', preview: '' });
 const preview = song('preview', { source: 'youtube_music', videoId: 'preview', preview: '' });
 
-function playerHarness({ previews = [], fullStreams = [], persistedState = null } = {}) {
+function playerHarness({ previews = [], fullStreams = [], persistedState = null, jiosaavn = [] } = {}) {
   const opened = [];
   const alerts = [];
   const events = [];
@@ -102,6 +108,9 @@ function playerHarness({ previews = [], fullStreams = [], persistedState = null 
           if (!fullStreams.includes(params.id)) throw new Error('Stream unavailable');
           return { data: { success: true, streamingUrls: [{ url: `https://audio.invalid/${params.id}.mp3` }] } };
         }
+        if (url.includes('/search/songs')) {
+          return { data: { data: { results: jiosaavn } } };
+        }
         assert.equal(url, 'https://itunes.apple.com/search');
         const id = previews.find(item => params.term === `${item} Test artist`);
         return { data: { results: id ? [{
@@ -109,6 +118,12 @@ function playerHarness({ previews = [], fullStreams = [], persistedState = null 
           previewUrl: `https://audio.invalid/${id}-preview.m4a`,
         }] : [] } };
       },
+      post: async () => { throw new Error('No POST expected in player tests'); },
+    },
+    './spotifyApi': {
+      isSpotifyConfigured: () => false,
+      searchSpotifyTracks: async () => [],
+      fetchSpotifyNewReleaseSongs: async () => [],
     },
     '@react-native-async-storage/async-storage': {
       getItem: async key => key === '@pb_player_state' && persistedState
@@ -136,6 +151,10 @@ function playerHarness({ previews = [], fullStreams = [], persistedState = null 
     },
     '../core/analytics/analytics': { trackEvent: () => {} },
     '../core/signals/skip': loadModule('./mobile/core/signals/skip.ts', {}),
+    // Phase 5 queue ops (pure) — asli module load karo
+    '../core/queue/ops': loadModule('./mobile/core/queue/ops.ts', {}),
+    // Phase 6 downloads-first resolve — test me koi download nahi hunda
+    '../services/downloadsService': { getDownloadedUrl: () => null },
   });
   store.setPlayerActionListener(event => events.push(event));
   return {
@@ -210,7 +229,8 @@ test('failed selection starts the next playable song, skipping other unavailable
   assert.equal(h.usePlayer.getState().index, 3);
   assert.equal(h.playing(), true);
   assert.equal(h.nextCalls(), 0);
-  assert.equal(h.opened.length, 1, 'Only the explicitly selected track may link out');
+  assert.deepEqual(h.opened, [], 'Music always plays in-app — no external app opens');
+  assert.deepEqual(h.alerts, [], 'No link-out alert — queue silently skips to next playable');
   assert.equal(h.events.length, 1);
   assert.equal(h.events[0].song.id, 'next');
 });
@@ -371,4 +391,44 @@ test('superseded resolution cannot replace the newer selected song', async () =>
   assert.deepEqual(h.queue().map(item => item.id), ['new']);
   assert.equal(h.events.length, 1);
   assert.equal(h.events[0].song.id, 'new');
+});
+
+test('full-only playback: 30s clips drop out of the native queue when full tracks exist', async () => {
+  const h = playerHarness({ previews: ['preview'] });
+  // preview YTM song → iTunes 30s fallback; baaki queue full songs hai
+  await h.usePlayer.getState().playSong(preview, [preview, song('full-1'), song('full-2')]);
+  assert.deepEqual(h.queue().map(item => item.id), ['full-1', 'full-2'], 'Native queue contains only full tracks');
+  assert.equal(h.usePlayer.getState().currentSong.id, 'full-1', 'Next full track plays instead of the 30s clip');
+  assert.equal(h.playing(), true);
+});
+
+test('full-only playback: a lone preview still plays when nothing full exists', async () => {
+  const h = playerHarness({ previews: ['preview'] });
+  await h.usePlayer.getState().playSong(preview);
+  assert.deepEqual(h.queue().map(item => item.id), ['preview']);
+  assert.equal(h.queue()[0].duration, 30);
+  assert.equal(h.playing(), true);
+});
+
+test('Spotify songs resolve to a full in-app stream at play time (never 30s Spotify clip)', async () => {
+  const h = playerHarness({
+    // resolveFullAudioStream → JioSaavn strict title-match full song
+    jiosaavn: [{
+      id: 'j-1', name: 'Test Song', duration: 240, primaryArtists: 'Test artist',
+      image: [{ quality: '500x500', url: 'https://img.invalid/j.jpg' }],
+      downloadUrl: [{ quality: '320kbps', url: 'https://audio.invalid/j-320.m4a' }],
+    }],
+  });
+  const spotifySong = song('spotify_sp-1', {
+    source: 'spotify', preview: '', previewOnly: true, title: 'Test Song',
+  });
+  await h.usePlayer.getState().playSong(spotifySong);
+  // Upgraded full stream native queue me hai (spotify clip nahi)
+  assert.deepEqual(h.queue().map(item => item.id), ['spotify_sp-1']);
+  const current = h.usePlayer.getState().currentSong;
+  assert.equal(current.previewOnly, false);
+  assert.equal(current.preview, 'https://audio.invalid/j-320.m4a');
+  // Badge jahan se AUDIO aaya wahi dikhata hai (Spotify metadata → JioSaavn audio)
+  assert.equal(current.source, 'jiosaavn');
+  assert.equal(h.playing(), true);
 });

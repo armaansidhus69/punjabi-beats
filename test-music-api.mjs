@@ -8,7 +8,11 @@ import { runInThisContext } from 'node:vm';
 const requireMobile = createRequire(new URL('./mobile/package.json', import.meta.url));
 const ts = requireMobile('typescript');
 const source = readFileSync(new URL('./mobile/services/musicApi.ts', import.meta.url), 'utf8');
+const spotifySource = readFileSync(new URL('./mobile/services/spotifyApi.ts', import.meta.url), 'utf8');
 const compiled = ts.transpileModule(source, {
+  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true },
+}).outputText;
+const spotifyCompiled = ts.transpileModule(spotifySource, {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true },
 }).outputText;
 const DEFAULT_BASE = 'https://saavn.sumit.co';
@@ -26,10 +30,11 @@ function rawSong(id, overrides = {}) {
   };
 }
 
-function harness({ env = {}, saavn = () => [], audius = [], upgradeAudius = [], itunes = [], audioOk = true, youtubeCandidates = [], pipedStreams = [] } = {}) {
+function harness({ env = {}, saavn = () => [], audius = [], upgradeAudius = [], itunes = [], audioOk = true, youtubeCandidates = [], pipedStreams = [], pipedSongs = [], trending = [], spotifySearch = [], spotifyNewReleases = [], spotifyAlbumTracks = [] } = {}) {
   const calls = [];
   const audioChecks = [];
   const deadWrites = [];
+  const tokenCalls = [];
   const module = { exports: {} };
   const math = Object.create(Math);
   math.random = () => 0.999999; // Preserve artist order so both language pools can be asserted.
@@ -43,14 +48,33 @@ function harness({ env = {}, saavn = () => [], audius = [], upgradeAudius = [], 
         if (url.includes('/search/songs')) {
           return { data: { data: { results: await saavn(url, params) } } };
         }
+        if (params && params.filter === 'music_songs') {
+          return { data: { items: pipedSongs } };
+        }
+        if (url === 'https://api.audius.co/v1/tracks/trending') {
+          return { data: { data: trending } };
+        }
         if (url === 'https://api.audius.co/v1/tracks/search') {
           const rows = params.limit === 10 && upgradeAudius.length > 0 ? upgradeAudius : audius;
           return { data: { data: params.offset ? [] : rows } };
+        }
+        if (url === 'https://api.spotify.com/v1/search') {
+          return { data: { tracks: { items: spotifySearch } } };
+        }
+        if (url === 'https://api.spotify.com/v1/browse/new-releases') {
+          return { data: { albums: { items: spotifyNewReleases } } };
+        }
+        if (url.startsWith('https://api.spotify.com/v1/albums/')) {
+          return { data: { items: spotifyAlbumTracks } };
         }
         if (url === 'https://itunes.apple.com/search') return { data: { results: itunes } };
         throw new Error(`Unexpected HTTP request: ${url}`);
       },
       post: async (url, body) => {
+        if (url === 'https://accounts.spotify.com/api/token') {
+          tokenCalls.push({ url, body });
+          return { data: { access_token: 'spotify-test-token', expires_in: 3600 } };
+        }
         calls.push({ url, body });
         assert.equal(url, 'https://bridge.invalid/api/youtube-match');
         return { data: { candidates: youtubeCandidates } };
@@ -61,19 +85,30 @@ function harness({ env = {}, saavn = () => [], audius = [], upgradeAudius = [], 
       saveDeadMirrors: async entries => deadWrites.push(entries),
     },
   };
+  const processEnv = { env };
+  const sharedConsole = { ...console, warn: () => {} };
+  const headFetch = async (url, options) => {
+    assert.equal(options.method, 'HEAD');
+    audioChecks.push(url);
+    return { ok: audioOk };
+  };
+  const requireMock = name => {
+    assert.ok(Object.hasOwn(dependencies, name), `Unexpected dependency: ${name}`);
+    return dependencies[name];
+  };
+  // Spotify module pehle load — musicApi isi ko './spotifyApi' se require karta hai
+  const spotifyModule = { exports: {} };
+  runInThisContext(
+    `(function(require, module, exports, process, console, fetch, Math, __DEV__) { ${spotifyCompiled}\n})`,
+    { filename: 'mobile/services/spotifyApi.ts' },
+  )(requireMock, spotifyModule, spotifyModule.exports, processEnv, sharedConsole, headFetch, math, false);
+  dependencies['./spotifyApi'] = spotifyModule.exports;
   const execute = runInThisContext(
     `(function(require, module, exports, process, console, fetch, Math, __DEV__) { ${compiled}\n})`,
     { filename: 'mobile/services/musicApi.ts' },
   );
-  execute(name => {
-    assert.ok(Object.hasOwn(dependencies, name), `Unexpected dependency: ${name}`);
-    return dependencies[name];
-  }, module, module.exports, { env }, { ...console, warn: () => {} }, async (url, options) => {
-    assert.equal(options.method, 'HEAD');
-    audioChecks.push(url);
-    return { ok: audioOk };
-  }, math, false);
-  return { ...module.exports, calls, audioChecks, deadWrites };
+  execute(requireMock, module, module.exports, processEnv, sharedConsole, headFetch, math, false);
+  return { ...module.exports, calls, audioChecks, deadWrites, tokenCalls };
 }
 
 test('working open-source provider is the default and avoids legacy mirrors on success', async () => {
@@ -226,4 +261,115 @@ test('configured Piped instance resolves the highest-bitrate YouTube audio strea
   });
   assert.equal(resolved.url, 'https://audio.invalid/256.m4a');
   assert.equal(resolved.previewOnly, false);
+});
+
+test('full-only policy: 30s previews drop from results when full songs exist', async () => {
+  const h = harness({
+    saavn: () => [rawSong('full-1'), rawSong('full-2')],
+    itunes: [
+      { trackId: 90, trackName: 'Preview Only', artistName: 'Test Artist', trackTimeMillis: 30_000, previewUrl: 'https://audio.invalid/prev-90.m4a' },
+      { trackId: 91, trackName: 'Preview Too', artistName: 'Test Artist', trackTimeMillis: 30_000, previewUrl: 'https://audio.invalid/prev-91.m4a' },
+    ],
+  });
+  const songs = await h.searchSongs('Diljit Dosanjh', 10);
+  assert.deepEqual(songs.map(item => item.id), ['full-1', 'full-2']);
+  assert.ok(songs.every(item => item.previewOnly === false), 'No 30s previews in a full-only result');
+});
+
+test('full-only policy: previews stay as last resort when zero full songs exist', async () => {
+  const h = harness({
+    itunes: [
+      { trackId: 90, trackName: 'Preview Only', artistName: 'Test Artist', trackTimeMillis: 30_000, previewUrl: 'https://audio.invalid/prev-90.m4a' },
+    ],
+  });
+  const songs = await h.searchSongs('xyzabc nothing', 10);
+  assert.deepEqual(songs.map(item => item.id), ['90']);
+  assert.equal(songs[0].previewOnly, true);
+});
+
+test('getNewSongs merges latest releases full-first: JioSaavn → YouTube Music → Audius', async () => {
+  const h = harness({
+    saavn: () => [rawSong('new-1', { name: 'Ashke', year: 2026 }), rawSong('new-2', { name: 'Kaali Hoodie', year: 2026 })],
+    pipedSongs: [
+      { url: 'https://youtube.com/watch?v=newYt1', title: 'Fresh Drop', uploaderName: 'New Artist', duration: 200, thumbnailUrl: 'https://img.invalid/t.jpg' },
+    ],
+    trending: [
+      { id: 'tr-1', title: 'Week Banger', duration: 210, user: { name: 'Fresh Find' } },
+      { id: 'tr-short', title: 'Too Short Clip', duration: 20, user: { name: 'Skip Me' } },
+    ],
+  });
+  const songs = await h.getNewSongs(10);
+  assert.deepEqual(songs.map(item => item.id), ['new-1', 'new-2', 'ytm_newYt1', 'audius-tr-1']);
+  assert.equal(songs[0].year, 2026);
+  assert.ok(songs.every(item => item.previewOnly !== true || item.source === 'youtube_music'));
+  assert.ok(h.calls.some(call => call.url === 'https://api.audius.co/v1/tracks/trending' && call.params.time === 'week'));
+  assert.ok(h.calls.some(call => call.url.includes('/search/songs') && String(call.params.query).includes('latest punjabi')));
+});
+
+const SPOTIFY_CREDS = { EXPO_PUBLIC_SPOTIFY_CLIENT_ID: 'test-id', EXPO_PUBLIC_SPOTIFY_CLIENT_SECRET: 'test-secret' };
+
+function spotifyTrack(id, overrides = {}) {
+  return {
+    id,
+    name: `Spotify Song ${id}`,
+    duration_ms: 210_000,
+    preview_url: null,
+    artists: [{ name: 'Spotify Artist' }],
+    album: { name: `Album ${id}`, images: [{ url: `https://img.invalid/${id}.jpg` }], release_date: '2026-10-24' },
+    ...overrides,
+  };
+}
+
+test('Spotify catalogue joins results and is exempt from the true-preview filter', async () => {
+  const h = harness({
+    env: SPOTIFY_CREDS,
+    saavn: () => [rawSong('full-1')],
+    itunes: [
+      { trackId: 90, trackName: 'Preview Only', artistName: 'Test Artist', trackTimeMillis: 30_000, previewUrl: 'https://audio.invalid/prev-90.m4a' },
+    ],
+    spotifySearch: [spotifyTrack('sp-1', { name: 'Ashke', artists: [{ name: 'Karan Aujla' }] })],
+  });
+  const songs = await h.searchSongs('Karan Aujla', 10);
+  // Full JioSaavn + Spotify metadata (30s iTunes preview full songs hote hi drop)
+  assert.deepEqual(songs.map(item => item.id), ['full-1', 'spotify_sp-1']);
+  const spotify = songs[1];
+  assert.equal(spotify.source, 'spotify');
+  assert.equal(spotify.previewOnly, true, 'Spotify metadata unresolved hota hai — 30s clip nahi');
+  assert.equal(spotify.year, 2026);
+  assert.equal(spotify.cover, 'https://img.invalid/sp-1.jpg');
+  assert.ok(h.calls.some(call => call.url === 'https://api.spotify.com/v1/search' && call.params.market === 'IN'));
+});
+
+test('Spotify token is requested once and cached across searches', async () => {
+  const h = harness({
+    env: SPOTIFY_CREDS,
+    spotifySearch: [spotifyTrack('sp-1')],
+  });
+  await h.searchSongs('Diljit Dosanjh', 5);
+  await h.searchSongs('Sidhu Moose Wala', 5);
+  assert.equal(h.tokenCalls.length, 1, 'Client-credentials token cache hona chahiye');
+  assert.ok(h.calls.filter(call => call.url === 'https://api.spotify.com/v1/search').length === 2);
+});
+
+test('Spotify stays skipped when no credentials are configured', async () => {
+  const h = harness({ saavn: () => [rawSong('full-1')] });
+  const songs = await h.searchSongs('Diljit Dosanjh', 5);
+  assert.equal(songs[0].id, 'full-1');
+  assert.ok(h.calls.every(call => !call.url.includes('spotify.com')), 'Bina creds koi Spotify HTTP nahi');
+});
+
+test('getNewSongs includes Spotify launch-day releases ahead of YouTube Music', async () => {
+  const h = harness({
+    env: SPOTIFY_CREDS,
+    spotifyNewReleases: [
+      { id: 'alb-1', name: 'Brand New Album', images: [{ url: 'https://img.invalid/alb.jpg' }], release_date: '2026-10-30', artists: [{ name: 'New Artist' }] },
+    ],
+    spotifyAlbumTracks: [spotifyTrack('launch-1', { name: 'Launch Day Track', album: { name: 'Brand New Album', release_date: '2026-10-30' } })],
+  });
+  const songs = await h.getNewSongs(10);
+  assert.equal(songs[0].id, 'spotify_launch-1');
+  assert.equal(songs[0].cover, 'https://img.invalid/alb.jpg', 'Album cover track ko milta hai');
+  assert.equal(songs[0].year, 2026);
+  assert.ok(h.calls.some(call => call.url === 'https://api.spotify.com/v1/browse/new-releases' && call.params.country === 'IN'));
+  assert.ok(h.calls.some(call => call.url.startsWith('https://api.spotify.com/v1/albums/alb-1/tracks')));
 });

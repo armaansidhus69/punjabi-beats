@@ -29,7 +29,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRoom } from '../../stores/roomStore';
-import { isKeyConfigured, isPublishConfigured } from '../../services/apinator';
+import { getTransportMode, isPublishConfigured } from '../../services/groupTransport';
 import { CONNECTION_DOT, CONNECTION_LABEL } from '../../constants/connection';
 import { useMiniPlayerPadding } from '../../hooks/useMiniPlayerPadding';
 import { successFeedback, tapFeedback, warningFeedback } from '../../utils/haptics';
@@ -41,8 +41,12 @@ import { spacing } from '../../constants/spacing';
 const CODE_PATTERN = /^\d{6}$/;
 
 /** Module scope pe check — env runtime pe change nahi hoti */
-const SOCKET_READY = isKeyConfigured();
+const TRANSPORT_MODE = getTransportMode(); // 'supabase' (default) | 'apinator'
 const BROADCAST_READY = isPublishConfigured();
+const TRANSPORT_LABEL =
+  TRANSPORT_MODE === 'apinator' ? 'Apinator Realtime' : 'Supabase Realtime';
+/** Supabase mode = zero-setup (public key bundled) — tabhi "ready" chip dikhta hai */
+const SYNC_READY_BY_DEFAULT = TRANSPORT_MODE === 'supabase' && BROADCAST_READY;
 
 export default function RoomScreen() {
   const insets = useSafeAreaInsets();
@@ -140,6 +144,9 @@ export default function RoomScreen() {
               </View>
             </View>
 
+            {/* Transport chip — sync kis transport pe live hai (debug-proof UI) */}
+            <Text style={styles.transportText}>Live via {TRANSPORT_LABEL}</Text>
+
             {roomError ? <Text style={styles.errorText}>{roomError}</Text> : null}
 
             <Text style={styles.membersText}>
@@ -168,7 +175,7 @@ export default function RoomScreen() {
             accessibilityLabel="Room chhodo"
             style={({ pressed }) => [styles.dangerButton, pressed && styles.pressed]}
           >
-            <Ionicons name="exit-outline" size={18} color="#ff6b6b" />
+            <Ionicons name="exit-outline" size={18} color={colors.danger} />
             <Text style={styles.dangerText}>Leave Room</Text>
           </Pressable>
 
@@ -193,13 +200,20 @@ export default function RoomScreen() {
           Doston ke saath ek hi song — sab devices pe sync
         </Text>
 
-        {!SOCKET_READY || !BROADCAST_READY ? (
+        {!BROADCAST_READY ? (
           <View style={styles.warnCard}>
-            <Ionicons name="cloud-offline-outline" size={18} color="#f1c40f" />
+            <Ionicons name="cloud-offline-outline" size={18} color={colors.warning} />
             <Text style={styles.warnText}>
-              Realtime setup pending — .env me{' '}
-              {!SOCKET_READY ? 'EXPO_PUBLIC_APINATOR_KEY' : 'EXPO_PUBLIC_PUBLISH_URL'} set
-              karo (Phase 12 deploy ke baad sync live hoga).
+              Realtime transport unavailable — .env me EXPO_PUBLIC_SUPABASE_URL (ya
+              EXPO_PUBLIC_APINATOR_KEY) check karo, phir app restart karo.
+            </Text>
+          </View>
+        ) : SYNC_READY_BY_DEFAULT ? (
+          <View style={styles.readyCard}>
+            <Ionicons name="radio-outline" size={18} color={colors.success} />
+            <Text style={styles.readyText}>
+              Live sync ready — {TRANSPORT_LABEL}. Room banao, code share karo, sab
+              devices pe same song same position pe chalega.
             </Text>
           </View>
         ) : null}
@@ -302,7 +316,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
 
-  /* Setup warning (Phase 12 tak) */
+  /* Setup cards — transport status (warn = dead, ready = zero-setup sync live) */
   warnCard: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -310,10 +324,21 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
+    borderColor: `${colors.warning}44`,
+    backgroundColor: 'rgba(255, 194, 75, 0.07)',
   },
   warnText: { ...typography.caption, color: colors.subtext, flex: 1 },
+  readyCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+    padding: spacing.md,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: `${colors.success}44`,
+    backgroundColor: 'rgba(43, 212, 109, 0.07)',
+  },
+  readyText: { ...typography.caption, color: colors.subtext, flex: 1 },
 
   /* Current room card */
   card: {
@@ -363,6 +388,7 @@ const styles = StyleSheet.create({
   },
   statusDot: { width: 8, height: 8, borderRadius: 4 },
   statusText: { ...typography.caption, color: colors.subtext },
+  transportText: { ...typography.caption, color: colors.subtext, marginTop: -spacing.xs },
   membersText: { ...typography.body, color: colors.subtext },
   memberNames: { ...typography.caption, color: colors.text, marginTop: spacing.xs },
   /* Naam field (FR-5.11) */
@@ -419,10 +445,10 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: '#ff6b6b',
+    borderColor: colors.danger,
     backgroundColor: colors.surface,
   },
-  dangerText: { ...typography.body, color: '#ff6b6b', fontWeight: '700' },
+  dangerText: { ...typography.body, color: colors.danger, fontWeight: '700' },
 
   /* Join form */
   dividerRow: {
@@ -457,7 +483,7 @@ const styles = StyleSheet.create({
 
   errorText: {
     ...typography.caption,
-    color: '#ff6b6b',
+    color: colors.danger,
     textAlign: 'center',
   },
   hint: {

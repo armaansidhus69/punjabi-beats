@@ -34,7 +34,12 @@ export async function initializeCore(): Promise<void> {
         sink: event => recordSignal(event.name, event.properties),
       })],
     ['signals ledger restore', loadSignals],
-    ['error reporting', () => configureErrorReporting(null)],
+    // Dev me console reporter taaki reportError() calls dikhein; production
+    // abhi null (remote SDK — Sentry/Crashlytics — account phase me aayega)
+    ['error reporting', () =>
+      configureErrorReporting(typeof __DEV__ !== 'undefined' && __DEV__
+        ? (error, context) => console.warn('[error-report]', context ?? {}, error)
+        : null)],
   ];
 
   for (const [name, step] of steps) {

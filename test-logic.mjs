@@ -18,11 +18,17 @@ import { isLikedSong, removeLikedSong, toggleLikedSong } from './mobile/utils/li
 import { parsePlaylistImportText, playlistToImportJson } from './mobile/utils/playlistImport.ts';
 import {
   DEFAULT_FEATURE_FLAGS,
+  FEATURE_FLAG_NAMES,
   getFeatureFlags,
   isFeatureEnabled,
   resetFeatureFlags,
+  resolveFlagsFromEnv,
   setFeatureFlag,
 } from './mobile/core/featureflags/featureFlags.ts';
+import {
+  configureErrorReporting,
+  reportError,
+} from './mobile/core/errors/errorReporting.ts';
 import {
   buildSyncPayload,
   parseSyncPayload,
@@ -107,6 +113,53 @@ check('internal flag override works', isFeatureEnabled('chat_enabled'), true);
 check('flag snapshot is copied', getFeatureFlags().chat_enabled, true);
 resetFeatureFlags();
 check('feature flags reset to disabled', isFeatureEnabled('chat_enabled'), false);
+
+/* ---- Phase 0: env mapping (plan ke saare flags env se aane chahiye;
+        premium/payments flag jaan-bujh ke registry vich nahi — app free-forever) ---- */
+const FLAG_ENV_KEYS = {
+  EXPO_PUBLIC_AUTH_ENABLED: 'auth_enabled',
+  EXPO_PUBLIC_CATALOG_ENABLED: 'catalog_enabled',
+  EXPO_PUBLIC_SOCIAL_SHARE_ENABLED: 'social_share_enabled',
+  EXPO_PUBLIC_CHAT_ENABLED: 'chat_enabled',
+  EXPO_PUBLIC_BLEND_ENABLED: 'blend_enabled',
+  EXPO_PUBLIC_JAM_ENABLED: 'jam_enabled',
+  EXPO_PUBLIC_PODCASTS_ENABLED: 'podcasts_enabled',
+  EXPO_PUBLIC_LYRICS_ENABLED: 'lyrics_enabled',
+  EXPO_PUBLIC_DOWNLOADS_ENABLED: 'downloads_enabled',
+  EXPO_PUBLIC_AI_PLAYLIST_ENABLED: 'ai_playlist_enabled',
+  EXPO_PUBLIC_AI_ASSISTANT_ENABLED: 'ai_assistant_enabled',
+  EXPO_PUBLIC_EVENTS_ENABLED: 'events_enabled',
+};
+const savedFlagEnv = {};
+for (const key of Object.keys(FLAG_ENV_KEYS)) {
+  savedFlagEnv[key] = process.env[key];
+  delete process.env[key];
+}
+const flagsAllOff = resolveFlagsFromEnv();
+check('env mapping: blank env -> sab flags off', Object.values(flagsAllOff).every(value => value === false), true);
+check('env mapping covers every registry flag', Object.keys(flagsAllOff).sort(), [...FEATURE_FLAG_NAMES].sort());
+for (const [key, flag] of Object.entries(FLAG_ENV_KEYS)) {
+  process.env[key] = 'true';
+  const flags = resolveFlagsFromEnv();
+  check(`env mapping: ${key} -> ${flag}`, flags[flag], true);
+  delete process.env[key];
+}
+for (const [key, value] of Object.entries(savedFlagEnv)) {
+  if (value !== undefined) process.env[key] = value;
+}
+
+/* ================= errorReporting.ts (Phase 0 pipeline) ================= */
+configureErrorReporting(null);
+reportError(new Error('x'));
+check('null reporter no-op (koi crash nahi)', true, true);
+const reported = [];
+configureErrorReporting((error, context) => reported.push({ message: error.message, context }));
+reportError(new Error('boom'), { surface: 'test' });
+check('reporter ko error + context milta hai', reported, [{ message: 'boom', context: { surface: 'test' } }]);
+configureErrorReporting(() => { throw new Error('reporter khud fail'); });
+reportError(new Error('boom-2'));
+check('throwing reporter app ko nahi todta', true, true);
+configureErrorReporting(null);
 
 /* ================= syncPayload.ts ================= */
 const songA = { id: 's1', title: 'Lover', artist: 'Diljit', cover: '', preview: 'https://x/a.mp3', duration: 225000 };
@@ -238,6 +291,152 @@ check('playlist import converts seconds to milliseconds', parsePlaylistImportTex
 check('playlist export is valid JSON', JSON.parse(playlistToImportJson({ id: 'p', name: 'Export', songs: [importSong], createdAt: 1 })).name, 'Export');
 
 console.warn = realWarn;
+
+/* ================= core/queue/ops.ts (Phase 5 completion) ================= */
+import {
+  clearUpcoming,
+  insertNext,
+  moveQueueItem,
+  removeQueueItem,
+  upcomingSongs,
+} from './mobile/core/queue/ops.ts';
+const qSong = (id, title = `T-${id}`) => ({ id, title, artist: 'A', cover: '', preview: `https://x/${id}.mp3`, duration: 1000 });
+const q = [qSong('cur'), qSong('a'), qSong('b'), qSong('c')];
+check('upcoming: current ke baad wale', upcomingSongs(q, 0).map(s => s.id), ['a', 'b', 'c']);
+check('upcoming: current 1 pe', upcomingSongs(q, 1).map(s => s.id), ['b', 'c']);
+check('move down: a → after b', moveQueueItem(q, 'a', 'down').map(s => s.id), ['cur', 'b', 'a', 'c']);
+check('move up: b → a di jagah', moveQueueItem(q, 'b', 'up').map(s => s.id), ['cur', 'b', 'a', 'c']);
+check('move up: first upcoming boundary no-op', moveQueueItem(q, 'a', 'up').map(s => s.id), ['cur', 'a', 'b', 'c']);
+check('move: missing id no-op', moveQueueItem(q, 'zz', 'up').map(s => s.id), ['cur', 'a', 'b', 'c']);
+check('move: current (index 0) protected', moveQueueItem(q, 'cur', 'down').map(s => s.id), ['cur', 'a', 'b', 'c']);
+check('remove: upcoming item', removeQueueItem(q, 'a').map(s => s.id), ['cur', 'b', 'c']);
+check('remove: current protected', removeQueueItem(q, 'cur').map(s => s.id), ['cur', 'a', 'b', 'c']);
+check('insertNext: naya song current ke baad', insertNext(q, 'cur', qSong('n')).map(s => s.id), ['cur', 'n', 'a', 'b', 'c']);
+check('insertNext: pehle se ho to move (no duplicate)', insertNext(q, 'cur', qSong('c')).map(s => s.id), ['cur', 'c', 'a', 'b']);
+check('insertNext: current null → append', insertNext(q, null, qSong('n')).map(s => s.id), ['cur', 'a', 'b', 'c', 'n']);
+check('clearUpcoming: current tak rakho', clearUpcoming(q, 1).map(s => s.id), ['cur', 'a']);
+check('clearUpcoming: khali queue safe', clearUpcoming([], 0), []);
+check('clearUpcoming: index -1 → pehla bacha', clearUpcoming(q, -1).map(s => s.id), ['cur']);
+
+/* ================= core/catalogue/radio.ts (Phase 5 autoplay) ================= */
+import { artistTokens, pickRadioCandidates, sharesArtist } from './mobile/core/catalogue/radio.ts';
+check('artistTokens: comma split + lowercase', artistTokens('Diljit Dosanjh, Intense'), ['diljit dosanjh', 'intense']);
+const radioSeed = { ...qSong('seed'), artist: 'Diljit Dosanjh' };
+const radioCands = [
+  { ...qSong('r1'), artist: 'Diljit Dosanjh' },
+  { ...qSong('r2'), artist: 'diljit dosanjh feat. someone' },
+  { ...qSong('r3'), artist: 'AP Dhillon' },
+  { ...qSong('r4'), artist: 'Other' },
+];
+const seededRng = () => 0; // deterministic shuffle
+const radioPicks = pickRadioCandidates(radioCands, radioSeed, { limit: 10, rng: seededRng });
+check('radio: seed exclude + same-artist only', radioPicks.map(s => s.id).sort(), ['r1', 'r2']);
+check('radio: limit respect', pickRadioCandidates(radioCands, radioSeed, { limit: 1, rng: seededRng }).length, 1);
+check('radio: koi match nahi → khali (service seed-only bhejti)', pickRadioCandidates([radioCands[2]], radioSeed, { rng: seededRng }), []);
+check('sharesArtist: comma lists cross-match', sharesArtist(radioSeed, { ...qSong('x'), artist: 'Intense & Diljit Dosanjh' }), true);
+
+/* ================= core/recommendations/rank.ts (Phase 13 v1) ================= */
+import { rankArtists, rankSongs, scoreSongStats } from './mobile/core/recommendations/rank.ts';
+check('score: plays+completions+likes positive', Math.round(scoreSongStats({ plays: 2, completions: 1, skips: 0, likes: 1, playlistAdds: 0, lastTs: '' })), 2 * 1 + 1 * 2 + 1 * 3);
+check('score: skips penalty', Math.round(scoreSongStats({ plays: 1, completions: 0, skips: 2, likes: 0, playlistAdds: 0, lastTs: '' })), 1 - 3);
+const tasteStats = {
+  songs: {
+    s1: { plays: 3, completions: 2, skips: 0, likes: 1, playlistAdds: 0, lastTs: '' },
+    s2: { plays: 1, completions: 0, skips: 1, likes: 0, playlistAdds: 0, lastTs: '' },
+    s3: { plays: 5, completions: 4, skips: 0, likes: 2, playlistAdds: 1, lastTs: '' },
+  },
+  queries: {},
+};
+const artistLookup = { s1: ['diljit dosanjh'], s2: ['ap dhillon'], s3: ['diljit dosanjh'] };
+const ranked = rankSongs(tasteStats, artistLookup);
+check('rank: sabse zyada score pehle', ranked[0].songId, 's3');
+check('rank: artists carry', ranked[0].artists, ['diljit dosanjh']);
+const topArtists = rankArtists(ranked, 2);
+check('rankArtists: diljit top (2 songs)', topArtists[0].artist, 'diljit dosanjh');
+check('rankArtists: songs count', topArtists[0].songs, 2);
+check('rankArtists: limit', rankArtists(ranked, 1).length, 1);
+
+/* ================= core/playback/sleepTimer.ts (Phase 5 completion) ================= */
+import {
+  computeSleepEnd,
+  formatSleepRemaining,
+  shouldPauseEndOfTrack,
+  sleepDurationMs,
+  SLEEP_OPTIONS,
+} from './mobile/core/playback/sleepTimer.ts';
+check('sleep: 30 min duration', sleepDurationMs('30'), 30 * 60_000);
+check('sleep: end_of_track → null', sleepDurationMs('end_of_track'), null);
+check('sleep: off → null', sleepDurationMs('off'), null);
+check('computeSleepEnd: now + duration', computeSleepEnd('15', 1000), 1000 + 15 * 60_000);
+check('computeSleepEnd: off → null', computeSleepEnd('off', 1000), null);
+check('formatRemaining: 4:59', formatSleepRemaining(299000), '4:59');
+check('formatRemaining: 1:00:12', formatSleepRemaining(3612000), '1:00:12');
+check('formatRemaining: negative → 0:00', formatSleepRemaining(-5), '0:00');
+check('endOfTrack: duration-700 pe pause', shouldPauseEndOfTrack(180_000 - 500, 180_000), true);
+check('endOfTrack: door pe nahi', shouldPauseEndOfTrack(60_000, 180_000), false);
+check('endOfTrack: duration unknown → false', shouldPauseEndOfTrack(1000, 0), false);
+check('sleep options: 6 modes listed', SLEEP_OPTIONS.length, 6);
+
+/* ================= core/chat/reactions.ts (Phase 9 slice) ================= */
+import {
+  buildReactionPayload,
+  isReactionEmoji,
+  mergeReaction,
+  parseReactionPayload,
+  REACTION_EMOJIS,
+} from './mobile/core/chat/reactions.ts';
+check('reactions: emoji guard', isReactionEmoji('👍'), true);
+check('reactions: invalid emoji reject', isReactionEmoji('🤡'), false);
+const react = buildReactionPayload('m1', '🔥', { senderId: 'u1', sentAt: 5 });
+check('reaction payload build', react, { messageId: 'm1', emoji: '🔥', senderId: 'u1', sentAt: 5 });
+check('reaction build: khali messageId → null', buildReactionPayload('  ', '👍', { senderId: 'u1', sentAt: 5 }), null);
+const parsedReaction = parseReactionPayload(JSON.stringify(react));
+check('reaction parse roundtrip', parsedReaction?.emoji, '🔥');
+check('reaction parse: junk → null', parseReactionPayload('not-json{{'), null);
+let rmap = mergeReaction({}, react);
+check('merge: reaction add', rmap, { m1: { '🔥': ['u1'] } });
+rmap = mergeReaction(rmap, react);
+check('merge: toggle same sender → remove (idempotent)', rmap, {});
+rmap = mergeReaction(rmap, react);
+rmap = mergeReaction(rmap, { ...react, senderId: 'u2' });
+check('merge: do senders count', rmap.m1['🔥'].length, 2);
+check('merge: doosra emoji alag bucket', mergeReaction(rmap, { ...react, emoji: '👍' }).m1['👍'], ['u1']);
+check('REACTION_EMOJIS: 5 options', REACTION_EMOJIS.length, 5);
+
+/* ================= core/moderation/moderation.ts (Phase 9/2 slice) ================= */
+import {
+  createReport,
+  filterVisibleMessages,
+  isUserBlocked,
+  toggleBlockedUser,
+} from './mobile/core/moderation/moderation.ts';
+check('report: valid banta hai', createReport({ kind: 'message', targetId: 'm1', reason: 'spam', reporterId: 'me' })?.reason, 'spam');
+check('report: khali target → null', createReport({ kind: 'message', targetId: '  ', reason: 'spam', reporterId: 'me' }), null);
+check('report: galat reason → null', createReport({ kind: 'user', targetId: 'u1', reason: 'nonsense', reporterId: 'me' }), null);
+check('blocked check', isUserBlocked(['u1'], 'u1'), true);
+check('block toggle: add', toggleBlockedUser([], 'u1'), ['u1']);
+check('block toggle: remove', toggleBlockedUser(['u1', 'u2'], 'u1'), ['u2']);
+const chatMsgs = [{ senderId: 'u1', text: 'a' }, { senderId: 'me', text: 'b' }];
+check('filter: blocked ke messages gayab', filterVisibleMessages(chatMsgs, ['u1']), [{ senderId: 'me', text: 'b' }]);
+check('filter: khali blocklist → sab', filterVisibleMessages(chatMsgs, []).length, 2);
+
+/* ================= core/downloads/stateMachine.ts (Phase 6 v1) ================= */
+import {
+  isPlayableOffline,
+  reduceDownload,
+} from './mobile/core/downloads/stateMachine.ts';
+const dlSong = qSong('d1');
+const dlItem = { id: 'd1', song: dlSong, status: 'queued', progress: 0, updatedAt: 1 };
+check('dl: queued → downloading', reduceDownload(dlItem, { type: 'start' }).status, 'downloading');
+check('dl: progress clamp', reduceDownload({ ...dlItem, status: 'downloading' }, { type: 'progress', progress: 150 }).progress, 100);
+const dlDone = reduceDownload({ ...dlItem, status: 'downloading' }, { type: 'complete', filePath: 'file:///x.mp3', sizeBytes: 5 });
+check('dl: complete', dlDone.status, 'downloaded');
+check('dl: complete stores file', dlDone.filePath, 'file:///x.mp3');
+check('dl: illegal queued→complete no-op', reduceDownload(dlItem, { type: 'complete', filePath: 'x' }), dlItem);
+check('dl: fail sets error', reduceDownload({ ...dlItem, status: 'downloading' }, { type: 'fail', error: 'HTTP 404' }).error, 'HTTP 404');
+check('dl: failed → retry → queued', reduceDownload({ ...dlItem, status: 'failed' }, { type: 'retry' }).status, 'queued');
+check('dl: offline playable check', isPlayableOffline(dlDone), true);
+check('dl: queued not playable offline', isPlayableOffline(dlItem), false);
 
 /* ================= summary ================= */
 if (fail > 0) {
