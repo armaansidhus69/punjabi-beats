@@ -48,7 +48,7 @@
   - [x] Optional Reverbio-style YouTube bridge — metadata search via existing backend + Piped audio resolver when `EXPO_PUBLIC_PIPED_API` is configured
   - [x] Try 3 `searchITunes` — `country=IN`, `entity=song` (sirf 30s preview) + partial Audius top-up
   - [x] **Audio guard** — JioSaavn mirror ke download URL ka HEAD check; zombie mirror (metadata sahi, CDN 404) skip hota hai
-  - [x] `previewOnly` flag: sirf iTunes pe `true` → SongItem ka "30s" badge + player note
+  - [x] `previewOnly` flag: unresolved/preview metadata ko internal full-stream resolver mark karta hai; preview-only rows search aur playback queue se drop hote hain
 - [x] Response mapping (har source ka mapper → common `Song`; JioSaavn ke 3 shapes + `link`/`url` dono)
 - [x] Dynamic on-the-fly 320kbps full stream upgrade (`resolveFullAudioStream` in `musicApi.ts` & `playerStore.ts`): any preview track automatically upgrades to JioSaavn 320kbps full audio track at playback time
 - [x] Error handling with fallback (har source ka try/catch + `[musicApi] … → source` console log)
@@ -144,14 +144,14 @@
 - [x] Debounced search (400ms — Stitch design spec; purane checklist me 300ms tha) — `hooks/useDebounce.ts`
 - [x] Search on Enter key (`onSubmitEditing` — debounce skip karke turant)
 - [x] Clear button (query.length > 0 pe hi dikhta hai)
-- [x] Results list — `SongItem` reuse, max 30 (FR-1.3), race-guard se purane response ignore
+- [x] Results list — `SongItem` reuse, max 100 (FR-1.3), race-guard se purane response ignore
 - [x] Empty state ("Kuch type karo") — 🎤 emoji (`EmptyState` me naya optional `emoji` prop)
 - [x] No results state — 😕 "Kuch nahi mila" / "Doosra try karo"
 - [x] Loading indicator — 3 shimmer skeleton rows (`Animated` loop)
 - [x] Recent searches (design: max 5) — `stores/searchStore.ts` + `@pb_recent_searches`; FR-1.6 me "last 10" likha hai
 - [x] Tap recent → re-search (+ X se single remove, "Clear all" se poora clear; query <2 chars pe nahi search hota)
-- [x] Test: Search returns Punjabi songs (live API probe: Diljit / AP Dhillon / Karan Aujla → 30 songs each; garbage query → 0)
-  - Extra (design reference): filter chips "All / Songs / Artists / Albums / Playlists" — filhaal sab pe songs hi aate hain (API song-level hai)
+- [x] Test: Search returns Punjabi songs (live API probe: Diljit / AP Dhillon / Karan Aujla → 30 songs each; garbage query → 0); pure search-index regression tests cover dedupe, partial matching, and independent counts
+  - Functional result tabs: "All / Songs / Artists / Albums / Playlists" — category-specific rows/counts are derived from the song-level API metadata
 
 **Phase 5 Complete?** `[x]` (code + live search probe + tsc/lint ✓; `npm test` covers app logic; phone pe ek manual run baaki)
 
@@ -159,7 +159,7 @@
 
 ## ▶️ PHASE 6: Audio Player
 
-- [x] `playerStore.ts` implemented (react-native-track-player@4.1.2 single instance + `setupPromise`, strict TS; **2026-09-27 double-play fix**: generation token + serialized load queue + `requestedTrackId` race guard + `TrackPlayer.reset()` before add — sim test `test-loadqueue.mjs` 3/3 PASS; purana expo-av `Audio.Sound` code kabhi tha hi nahi)
+- [x] `playerStore.ts` implemented (react-native-track-player@4.1.2 single instance + `setupPromise`, strict TS; generation token + serialized load queue + `requestedTrackId` race guard + `TrackPlayer.reset()` before add; selected track first + bounded upcoming hydration + logical next/previous fallback; purana expo-av `Audio.Sound` code kabhi tha hi nahi)
 - [x] `playSong(song, queue)` action (+ `initialPosition`/`startPaused`/`remote` options)
 - [x] `togglePlay()` action (+ idempotent `play`/`pause` for sync)
 - [x] `playNext()` action (shuffle/repeat logic FR-2.9/2.10 ke saath)
@@ -169,7 +169,7 @@
 - [x] Load track on song change — `TrackPlayer.reset()` + `add()` + `skip()` + `play()` (`loadAndPlaySong`)
 - [x] Reload guard — `loadGeneration` token + serialized `loadQueue`: purana load stale-skip hota hai, `reset()` se pehle ka track nahi bajta (double-play impossible)
 - [x] Progress tracking (every 500ms) — `PlaybackProgressUpdated` listener (`progressUpdateEventInterval: 0.5`)
-- [x] Auto-next on finish — `PlaybackQueueEnded` → `playNext()` (+ `PlaybackError` pe skip)
+- [x] Auto-next on finish — `PlaybackQueueEnded` → logical/native next fallback (+ `PlaybackError` pe full-song auto-skip)
 - [ ] Test: Play, pause, next, prev, seek all work (phone manual)
 
 **Phase 6 Complete?** `[x]` (code ✓ tsc clean; phone test baaki)
@@ -308,8 +308,7 @@
 - [x] Share playlist — playlist detail header share (top 10 songs + count)
 - [x] Presence (online users) — host roster + `member-join`/`member-leave`/`member-list` events + 30s heartbeat + stale-prune (`roomSync`) — FR-5.10
 - [x] User names — Room tab naam field (persist `@pb_room_name`, default `Guest-XXXX`) + members list me naam — FR-5.11
-- [x] **YouTube matching — link-out (DONE 2026-10-05)** — `songMatch.ts` (pure scoring core) + `youtubeAudio.ts` (orchestration) + `api/youtube-match.js` (live Vercel) + **`utils/youtubeLink.ts` (call site, NEW)**. 67/67 unit + live probe 4 exact/partial + 2 honest fallback. Wired into `SongItem` (▶ YouTube button on preview-only rows) + `player.tsx` ("Full version on YouTube"). Env `EXPO_PUBLIC_YOUTUBE_MATCH_URL` set.
-  - ⚠️ **Link-out, NOT in-app WebView player — deliberate decision.** WebView se audio lena evaluate karke reject kiya: (a) `roomSync` ka core invariant tootti — sab devices same URL/position pe chalte hain; ek pe 30s preview + doosre pe full song = position math bekaar, aur phone lock pe WebView mar ke room permanently desync; (b) background play + notification controls chala jaate; (c) `url: ''` rows → `PlaybackError` → auto-skip storm. Playback hamesha TrackPlayer se.
+- [x] **YouTube matching / in-app full stream resolution** — `songMatch.ts` + `youtubeAudio.ts` + `api/youtube-match.js` metadata path; Verome/Piped full-audio race stays inside TrackPlayer. Preview rows have no link-out or embedded-player action; unavailable tracks auto-skip in-app.
 
 **Phase 14 Complete?** `[x]` (code ✓ tsc clean; 2-device presence live test — backend LIVE hai, ab possible)
 
@@ -322,7 +321,7 @@
 - [x] Test on Android phone 2 — **PASS (2026-09-27)**: 2-phone sync live verified
 - [ ] Test on iPhone (Expo Go)
 - [ ] Test on tablet (`ios.supportsTablet: true` set hai; player artwork width-se clamp hota hai)
-- [ ] Test on slow network (3G) — 8s axios timeouts + shimmer skeletons ready hain
+- [ ] Test on slow network (3G) — bounded resolver timeout, loading state, and shimmer skeletons ready hain
 - [ ] Test offline mode — API fail pe `[]` + empty states + "Try Again" retry UI ready hain
 - [ ] Test while app in background — background audio **ENABLED** (feature request 2026-09-30): TrackPlayer native service + `appKilledPlaybackBehavior: ContinuePlayback` + iOS `infoPlist.UIBackgroundModes: ["audio"]` + Android `permissions: [FOREGROUND_SERVICE, FOREGROUND_SERVICE_MEDIA_PLAYBACK, WAKE_LOCK, POST_NOTIFICATIONS]` + lock-screen notification controls (`playbackService.ts` RemotePlay/Pause/Next/Previous/Seek). Phone pe 3 scenarios baaki: home button → bajta rahe, lock screen → bajta rahe, wapas khola → same position se continue
 - [ ] Test after force close — AsyncStorage persistence (playlists, recently played, searches, room name)
@@ -416,7 +415,7 @@ Before releasing:
 | Phase | Total | Done | % |
 |---|---|---|---|
 | Phase 0: Project Setup | 19 | 19 | 100% |
-| Phase 1: Data Layer | 35 | 34 | 97% |
+| Phase 1: Data Layer | 36 | 35 | 97% |
 | Phase 2: UI Components | 12 | 12 | 100% |
 | Phase 3: Home Screen | 11 | 10 | 91% |
 | Phase 4: Mood Screen | 7 | 6 | 86% |
@@ -445,9 +444,9 @@ Before releasing:
 | Phase 27: Copy Link + QR Composer V1 (Roadmap 8c) | 14 | 13 | 93% |
 | Phase 28: Artist & Album Detail Screens & Modern UI (Roadmap 3) | 19 | 18 | 95% |
 | Phase 29: Cultural Polish, Gurmukhi Engine, Resilience, & Acoustic Architecture | 21 | 20 | 95% |
-| **TOTAL** | **433** | **396** | **91%** |
+| **TOTAL** | **434** | **397** | **91%** |
 
-> Counts 2026-10-30 ko actual checkbox lines se dobara verify hue — har `## PHASE n` section
+> Counts 2026-11-02 ko actual checkbox lines se dobara verify hue — har `## PHASE n` section
 > ke andar ke `- [ ]`/`- [x]` boxes gine gaye (SECTION 0/1/2 ke headers, Tracker table,
 > Pending summary, Milestones aur FINAL CHECKLIST is count me nahi — wo alag sections
 > hain). Phases 18–27 ab tracker me include hain. FINAL CHECKLIST aur Milestones alag
@@ -870,12 +869,10 @@ Before releasing:
 ### Reliability & Verification
 - [x] `test-lyrics.mjs` — Gurmukhi transliteration dictionary, phonetic fallback, and native script pass-through tests
 - [x] `test-format-helpers.mjs` — 5 automated assertions for duration, SSRF guard, cleanName, and albumKey
-- [x] `npm test` — All 17 automated test suites green
+- [x] `npm test` — All 18 automated test suites green
 - [x] `cd mobile && npx tsc --noEmit` — 0 errors
 - [x] `cd mobile && npm run lint` — 0 warnings
 - [x] Live EAS production deployment: `https://punjabi-beats.expo.app`
 - [ ] Manual verification on physical iOS/Android device
 
 **Phase 29 Complete?** `[x]` (code + automated tests + web production deploy live)
-
-

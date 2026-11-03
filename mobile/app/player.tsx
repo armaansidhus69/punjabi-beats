@@ -10,13 +10,12 @@
  * (Phase 11 room sync) automatically broadcast kar deta hai, isliye is file me
  * real-time ka koi code nahi hai.
  */
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
   Easing,
   Modal,
   PanResponder,
-  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -45,7 +44,6 @@ import EmptyState from '../components/EmptyState';
 import PlayerControls from '../components/PlayerControls';
 import ProgressBar from '../components/ProgressBar';
 import SongArtwork from '../components/SongArtwork';
-import { resolveYouTubeMatch } from '../utils/youtubeLink';
 import { successFeedback, tapFeedback, warningFeedback } from '../utils/haptics';
 import { isFeatureEnabled } from '../core/featureflags/featureFlags';
 import { shareTrack } from '../services/shareComposerFacade';
@@ -65,6 +63,7 @@ export default function PlayerScreen() {
   const currentSong = usePlayer(s => s.currentSong);
   const queueLength = usePlayer(s => s.queue.length);
   const isPlaying = usePlayer(s => s.isPlaying);
+  const isLoading = usePlayer(s => s.isLoading);
   const position = usePlayer(s => s.position);
   const duration = usePlayer(s => s.duration);
   const shuffle = usePlayer(s => s.shuffle);
@@ -133,10 +132,9 @@ export default function PlayerScreen() {
 
   const handleDownload = useCallback(async () => {
     if (!currentSong) return;
-    // Stream download check
     if (currentSong.previewOnly) {
       warningFeedback();
-      Toast.show({ type: 'info', text1: 'Download available nahi hai', text2: 'Dusra track try karo' });
+      Toast.show({ type: 'info', text1: 'Full song available nahi hai', text2: 'Dusra track try karo' });
       return;
     }
     const ok = await downloadSong(currentSong);
@@ -150,117 +148,9 @@ export default function PlayerScreen() {
     });
   }, [currentSong, downloadSong]);
 
-  const [inAppYouTubeVideoId, setInAppYouTubeVideoId] = useState<string | null>(null);
-  const [youTubeDuration, setYouTubeDuration] = useState<number | null>(null);
-  const [youTubePosition, setYouTubePosition] = useState(0);
-  const [isYouTubePlaying, setIsYouTubePlaying] = useState(false);
-  const iframeRef = useRef<HTMLIFrameElement | null>(null);
-
-  // Auto-resolve YouTube match for preview tracks
-  useEffect(() => {
-    let active = true;
-    setInAppYouTubeVideoId(null);
-    setYouTubeDuration(null);
-    setYouTubePosition(0);
-    setIsYouTubePlaying(false);
-
-    if (currentSong?.previewOnly) {
-      resolveYouTubeMatch(currentSong)
-        .then(match => {
-          if (!active) return;
-          if (match?.videoId) {
-            if (Platform.OS === 'web') {
-              // Pause 30s preview so full YouTube version plays cleanly
-              void usePlayer.getState().pause();
-              setInAppYouTubeVideoId(match.videoId);
-              setIsYouTubePlaying(true);
-              if (match.durationSec) {
-                setYouTubeDuration(match.durationSec * 1000);
-              }
-              Toast.show({
-                type: 'success',
-                text1: 'Full version auto-playing',
-                text2: match.title ?? currentSong.title,
-                visibilityTime: 2500,
-              });
-            }
-          }
-        })
-        .catch(err => {
-          if (!active) return;
-          console.warn('[player] Auto YouTube match failed:', err);
-        });
-    }
-
-    return () => {
-      active = false;
-    };
-  }, [currentSong]);
-
-  // Listen to YouTube player state changes via postMessage (Web)
-  useEffect(() => {
-    if (Platform.OS !== 'web') return;
-    const handleMessage = (e: MessageEvent) => {
-      try {
-        const data = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
-        if (data?.event === 'onStateChange') {
-          if (data.info === 0) {
-            // Track ended -> play next
-            void playNext();
-          } else if (data.info === 1) {
-            setIsYouTubePlaying(true);
-          } else if (data.info === 2) {
-            setIsYouTubePlaying(false);
-          }
-        } else if (data?.event === 'infoDelivery' && typeof data.info?.currentTime === 'number') {
-          setYouTubePosition(data.info.currentTime * 1000);
-          if (typeof data.info.duration === 'number' && data.info.duration > 0) {
-            setYouTubeDuration(data.info.duration * 1000);
-          }
-        }
-      } catch {
-        // ignore non-json messages
-      }
-    };
-    window.addEventListener('message', handleMessage);
-    return () => window.removeEventListener('message', handleMessage);
-  }, [playNext]);
-
-  // Position increment ticker while YouTube is playing
-  useEffect(() => {
-    if (!inAppYouTubeVideoId || !isYouTubePlaying || Platform.OS !== 'web') return;
-    const interval = setInterval(() => {
-      setYouTubePosition(pos => {
-        if (youTubeDuration && pos >= youTubeDuration) {
-          void playNext();
-          return pos;
-        }
-        return pos + 500;
-      });
-    }, 500);
-    return () => clearInterval(interval);
-  }, [inAppYouTubeVideoId, isYouTubePlaying, youTubeDuration, playNext]);
-
-  // Sync volume to YouTube iframe
-  useEffect(() => {
-    if (inAppYouTubeVideoId && Platform.OS === 'web' && iframeRef.current?.contentWindow) {
-      iframeRef.current.contentWindow.postMessage(
-        JSON.stringify({ event: 'command', func: 'setVolume', args: [Math.round(volume * 100)] }),
-        '*',
-      );
-    }
-  }, [inAppYouTubeVideoId, volume]);
-
-  const activePosition = inAppYouTubeVideoId ? youTubePosition : position;
-  const activeDuration =
-    inAppYouTubeVideoId && youTubeDuration
-      ? youTubeDuration
-      : currentSong?.previewOnly && youTubeDuration
-        ? youTubeDuration
-        : currentSong?.previewOnly
-          ? 161_000
-          : duration;
-  const activePlaying = inAppYouTubeVideoId ? isYouTubePlaying : isPlaying;
+  const activePosition = position;
+  const activeDuration = duration;
+  const activePlaying = isPlaying;
 
   /* ---------- Album art rotation (sirf playing me ghoomta hai) ---------- */
   const spin = useRef(new Animated.Value(0)).current;
@@ -321,51 +211,20 @@ export default function PlayerScreen() {
 
   const handleSeek = useCallback(
     (positionMs: number) => {
-      if (inAppYouTubeVideoId && Platform.OS === 'web') {
-        setYouTubePosition(positionMs);
-        if (iframeRef.current?.contentWindow) {
-          iframeRef.current.contentWindow.postMessage(
-            JSON.stringify({ event: 'command', func: 'seekTo', args: [positionMs / 1000, true] }),
-            '*',
-          );
-        }
-      } else {
-        void seek(positionMs);
-      }
+      void seek(positionMs);
     },
-    [inAppYouTubeVideoId, seek],
+    [seek],
   );
 
   const handlePlayPause = useCallback(() => {
-    if (inAppYouTubeVideoId && Platform.OS === 'web') {
-      const nextPlaying = !isYouTubePlaying;
-      setIsYouTubePlaying(nextPlaying);
-      if (iframeRef.current?.contentWindow) {
-        iframeRef.current.contentWindow.postMessage(
-          JSON.stringify({
-            event: 'command',
-            func: nextPlaying ? 'playVideo' : 'pauseVideo',
-            args: [],
-          }),
-          '*',
-        );
-      }
-    } else {
-      void togglePlay();
-    }
-  }, [inAppYouTubeVideoId, isYouTubePlaying, togglePlay]);
+    void togglePlay();
+  }, [togglePlay]);
 
   const handleVolumeChange = useCallback(
     (v: number) => {
       setVolume(v);
-      if (inAppYouTubeVideoId && Platform.OS === 'web' && iframeRef.current?.contentWindow) {
-        iframeRef.current.contentWindow.postMessage(
-          JSON.stringify({ event: 'command', func: 'setVolume', args: [Math.round(v * 100)] }),
-          '*',
-        );
-      }
     },
-    [inAppYouTubeVideoId, setVolume],
+    [setVolume],
   );
 
   /* ---------- Koi song nahi (deep link se seedha /player khula) ---------- */
@@ -414,23 +273,6 @@ export default function PlayerScreen() {
         </Animated.View>
       </View>
 
-      {/* Background YouTube audio engine (invisible off-screen on web) */}
-      {inAppYouTubeVideoId && Platform.OS === 'web' ? (
-        <View style={styles.hiddenIframe}>
-          {React.createElement('iframe', {
-            ref: iframeRef,
-            src: `https://www.youtube.com/embed/${inAppYouTubeVideoId}?autoplay=1&enablejsapi=1&playsinline=1`,
-            title: currentSong.title,
-            style: {
-              width: '200px',
-              height: '200px',
-              border: 'none',
-            },
-            allow: 'autoplay; encrypted-media',
-          })}
-        </View>
-      ) : null}
-
       {/* Song title + artist */}
       <View style={styles.meta}>
         <Text style={styles.title} numberOfLines={2}>
@@ -447,7 +289,7 @@ export default function PlayerScreen() {
           accessibilityLabel={`Artist ${currentSong.artist} page`}
         >
         <Text style={styles.artist} numberOfLines={1}>
-          {currentSong.artist}
+          {isLoading ? 'Full song load ho raha hai…' : currentSong.artist}
         </Text>
         </Pressable>
         {/* Source badge — kaun sa source baj raha hai (multi-source identity) */}
@@ -813,15 +655,6 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
   },
   artworkWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  hiddenIframe: {
-    position: 'absolute',
-    top: -9999,
-    left: -9999,
-    width: 200,
-    height: 200,
-    opacity: 0.01,
-    pointerEvents: 'none',
-  },
   artworkDisc: {
     borderRadius: 999,
     borderWidth: 1,

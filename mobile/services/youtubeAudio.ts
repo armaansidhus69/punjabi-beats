@@ -17,11 +17,9 @@
  *      seedha SDK de sakte hain. Isse ye module RN me safely bundle hota hai.
  *   3. STREAMING yahan nahi hoti — platform decide karta hai (dekho CLAIM below).
  *
- * CLAIM (honest): full-length audio stream karne ke liye koi bhi rasta chahiye —
- *   (a) Node host + yt-dlp + IP-matched client (googlevideo URL IP-bound hota hai,
- *       isliye Vercel-resolve + phone-play 403 de sakta hai), ya
- *   (b) in-app YouTube player (WebView/official embed) — background play nahi.
- * Ye module sirf **kaun sa video** play karna hai wo decide karta hai, URL nahi.
+ * CLAIM (honest): ye module sirf **kaun sa video** match hota hai wo decide
+ * karta hai, audio URL nahi. Active mobile playback Verome/Piped ke full-audio
+ * resolver se hota hai; external app aur embedded-player fallback yahan nahi hai.
  */
 import {
   pickBestMatch,

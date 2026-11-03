@@ -29,6 +29,7 @@ export default function MiniPlayer({ bottomOffset = 0 }: MiniPlayerProps) {
   const insets = useSafeAreaInsets();
   const currentSong = usePlayer(s => s.currentSong);
   const isPlaying = usePlayer(s => s.isPlaying);
+  const isLoading = usePlayer(s => s.isLoading);
   const position = usePlayer(s => s.position);
   const duration = usePlayer(s => s.duration);
   const togglePlay = usePlayer(s => s.togglePlay);
@@ -39,7 +40,7 @@ export default function MiniPlayer({ bottomOffset = 0 }: MiniPlayerProps) {
   // Tab bar na hone pe (bottomOffset 0) safe-area inset khud handle karo
   const bottomPad = bottomOffset === 0 ? insets.bottom : 0;
   const effectiveBottom = bottomOffset > 0 ? bottomOffset + 6 : 6 + bottomPad;
-  const effectiveDuration = currentSong.previewOnly && duration <= 30000 ? 161000 : duration;
+  const effectiveDuration = duration;
 
   return (
     <View style={[styles.container, { bottom: effectiveBottom }]}>
@@ -64,7 +65,7 @@ export default function MiniPlayer({ bottomOffset = 0 }: MiniPlayerProps) {
               {currentSong.title}
             </Text>
             <Text style={styles.artist} numberOfLines={1}>
-              {currentSong.artist}
+              {isLoading ? 'Loading full song…' : currentSong.artist}
             </Text>
           </View>
         </Pressable>

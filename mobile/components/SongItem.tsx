@@ -54,9 +54,6 @@ export default function SongItem({
         onPress={() => {
           tapFeedback();
           onPress(song);
-          if (song.previewOnly) {
-            router.push('/player');
-          }
         }}
         accessibilityRole="button"
         accessibilityLabel={`${song.title} — ${song.artist}`}
@@ -101,7 +98,6 @@ export default function SongItem({
             </Text>
           </View>
         ) : null}
-
         {isActive ? <Ionicons name="stats-chart" size={16} color={colors.primary} /> : null}
       </Pressable>
 
@@ -200,14 +196,4 @@ const styles = StyleSheet.create({
   },
   sourceDot: { width: 5, height: 5, borderRadius: 3 },
   sourceBadgeText: { fontSize: 10, fontWeight: '700' },
-  /* 30s preview chip — honest indicator */
-  previewBadge: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: `${colors.warning}55`,
-    backgroundColor: 'rgba(255, 194, 75, 0.08)',
-  },
-  previewBadgeText: { fontSize: 10, fontWeight: '700', color: colors.warning },
 });

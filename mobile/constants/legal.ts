@@ -52,9 +52,9 @@ export const TERMS_OF_SERVICE = {
         'Group Jam rooms use real-time peer synchronization. In Open Jam mode, members take turns adding tracks under fair-turn scheduling. Harassment, abuse in room chats, or disruptive flooding will result in session revocation.',
     },
     {
-      title: '3. Streaming Providers & Preview Clips',
+      title: '3. Streaming Providers & Full-Song Playback',
       content:
-        'Music is streamed via legal public discovery APIs (JioSaavn, Audius, iTunes IN preview catalog). Where full streams are unavailable, 30-second preview clips are clearly badged.',
+        'Music is resolved through legal public discovery APIs (JioSaavn, Audius, iTunes IN metadata, and YouTube Music bridge providers). Punjabi Beats plays full streams only; if a full stream is unavailable, that track is skipped.',
     },
     {
       title: '4. Limitation of Liability',
@@ -63,4 +63,3 @@ export const TERMS_OF_SERVICE = {
     },
   ],
 };
-

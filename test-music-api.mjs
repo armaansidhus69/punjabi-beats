@@ -263,6 +263,62 @@ test('configured Piped instance resolves the highest-bitrate YouTube audio strea
   assert.equal(resolved.previewOnly, false);
 });
 
+test('concurrent full-song upgrades share one provider lookup', async () => {
+  let saavnLookups = 0;
+  const h = harness({
+    saavn: () => {
+      saavnLookups++;
+      return [rawSong('shared', { name: 'Shared Song' })];
+    },
+  });
+  const candidate = {
+    id: 'itunes_shared',
+    title: 'Shared Song',
+    artist: 'Test Artist',
+    cover: '',
+    preview: '',
+    duration: 240_000,
+    source: 'itunes',
+    previewOnly: true,
+  };
+
+  const [first, second] = await Promise.all([
+    h.resolveFullAudioStream(candidate),
+    h.resolveFullAudioStream(candidate),
+  ]);
+
+  assert.equal(saavnLookups, 1, 'same song ke concurrent upgrades dedupe hone chahiye');
+  assert.equal(first.url, second.url);
+  assert.equal(first.previewOnly, false);
+});
+
+test('concurrent YouTube resolutions share the Verome/Piped race', async () => {
+  const h = harness({
+    env: { EXPO_PUBLIC_PIPED_API: 'https://piped.invalid' },
+    pipedStreams: [{ url: 'https://audio.invalid/shared-youtube.m4a', bitrate: 256 }],
+  });
+  const candidate = {
+    id: 'ytm_shared',
+    title: 'Shared YouTube Song',
+    artist: 'Test Artist',
+    cover: '',
+    preview: '',
+    duration: 240_000,
+    source: 'youtube_music',
+    videoId: 'shared-video',
+    previewOnly: false,
+  };
+
+  const [first, second] = await Promise.all([
+    h.resolveSongPlaybackUrl(candidate),
+    h.resolveSongPlaybackUrl(candidate),
+  ]);
+
+  const streamRequests = h.calls.filter(call => call.url.includes('/streams/'));
+  assert.equal(streamRequests.length, 6, 'one parallel provider race honi chahiye');
+  assert.equal(first.url, second.url);
+});
+
 test('full-only policy: 30s previews drop from results when full songs exist', async () => {
   const h = harness({
     saavn: () => [rawSong('full-1'), rawSong('full-2')],
@@ -276,15 +332,14 @@ test('full-only policy: 30s previews drop from results when full songs exist', a
   assert.ok(songs.every(item => item.previewOnly === false), 'No 30s previews in a full-only result');
 });
 
-test('full-only policy: previews stay as last resort when zero full songs exist', async () => {
+test('full-only policy: previews are removed when zero full songs exist', async () => {
   const h = harness({
     itunes: [
       { trackId: 90, trackName: 'Preview Only', artistName: 'Test Artist', trackTimeMillis: 30_000, previewUrl: 'https://audio.invalid/prev-90.m4a' },
     ],
   });
   const songs = await h.searchSongs('xyzabc nothing', 10);
-  assert.deepEqual(songs.map(item => item.id), ['90']);
-  assert.equal(songs[0].previewOnly, true);
+  assert.deepEqual(songs, []);
 });
 
 test('getNewSongs merges latest releases full-first: JioSaavn → YouTube Music → Audius', async () => {

@@ -47,7 +47,7 @@ import { spacing } from '../../constants/spacing';
 import { selectionFeedback, successFeedback, tapFeedback, warningFeedback } from '../../utils/haptics';
 import { POPULAR_ARTISTS } from '../../constants/artists';
 import { MOODS } from '../../constants/moods';
-import { matchCuratedArtist, normalizeArtistName, slugify } from '../../core/catalogue/catalogue';
+import { buildSearchIndex, type SearchFilter } from '../../utils/searchFilters';
 import EmptyState from '../../components/EmptyState';
 import PlaylistRow from '../../components/PlaylistRow';
 import RecentSearchRow from '../../components/RecentSearchRow';
@@ -59,7 +59,6 @@ const DEBOUNCE_MS = 400;
 const MIN_QUERY_LENGTH = 2;
 
 const FILTERS = ['All', 'Songs', 'Artists', 'Albums', 'Playlists'] as const;
-type SearchFilter = (typeof FILTERS)[number];
 
 /**
  * SOURCE FILTERS — multi-source picker (2026-11 redesign).
@@ -92,21 +91,6 @@ const TRENDING_SEARCHES = [
   '295',
 ];
 
-interface ExtractedArtist {
-  name: string;
-  count: number;
-  image: string;
-  bio?: string;
-}
-
-interface ExtractedAlbum {
-  id: string;
-  title: string;
-  artist: string;
-  cover: string;
-  count: number;
-}
-
 export default function SearchScreen() {
   const insets = useSafeAreaInsets();
 
@@ -114,8 +98,10 @@ export default function SearchScreen() {
   const [filter, setFilter] = useState<SearchFilter>('All');
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>('all');
   const [results, setResults] = useState<Song[]>([]);
+  const [resultsTerm, setResultsTerm] = useState('');
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
+  const [searchError, setSearchError] = useState(false);
   const [focused, setFocused] = useState(false);
 
   const runIdRef = useRef(0);
@@ -150,14 +136,30 @@ export default function SearchScreen() {
   const runSearch = useCallback(
     async (term: string) => {
       const runId = ++runIdRef.current;
+      const normalizedTerm = term.trim();
+      if (normalizedTerm.length < MIN_QUERY_LENGTH) return;
       setLoading(true);
-      const list = await searchSongs(term, RESULT_LIMIT);
-      if (runId !== runIdRef.current) return;
-      setResults(list);
-      setLoading(false);
-      setSearched(true);
-      resultsTermRef.current = term;
-      if (list.length > 0) addRecentSearch(term);
+      setSearchError(false);
+      try {
+        const list = await searchSongs(normalizedTerm, RESULT_LIMIT);
+        if (runId !== runIdRef.current) return;
+        setResults(list);
+        setResultsTerm(normalizedTerm);
+        resultsTermRef.current = normalizedTerm.toLowerCase();
+        if (list.length > 0) addRecentSearch(normalizedTerm);
+      } catch (error) {
+        if (runId !== runIdRef.current) return;
+        console.warn('[Search] search failed:', error);
+        setResults([]);
+        setResultsTerm(normalizedTerm);
+        setSearchError(true);
+        resultsTermRef.current = normalizedTerm.toLowerCase();
+      } finally {
+        if (runId === runIdRef.current) {
+          setLoading(false);
+          setSearched(true);
+        }
+      }
     },
     [addRecentSearch],
   );
@@ -167,11 +169,13 @@ export default function SearchScreen() {
       runIdRef.current += 1;
       resultsTermRef.current = null;
       setResults([]);
+      setResultsTerm('');
       setLoading(false);
       setSearched(false);
+      setSearchError(false);
       return;
     }
-    if (resultsTermRef.current === activeQuery) return;
+    if (resultsTermRef.current === activeQuery.toLowerCase()) return;
     void runSearch(activeQuery);
   }, [activeQuery, isSearchable, runSearch]);
 
@@ -211,105 +215,55 @@ export default function SearchScreen() {
     setSourceFilter(next);
   }, []);
 
-  /** Source-filtered results — YT Music/JioSaavn/Audius chips isse list me dikhte hain */
-  const visibleResults = useMemo(
+  const searchIndex = useMemo(
+    () => buildSearchIndex(results, playlists, resultsTerm, POPULAR_ARTISTS),
+    [playlists, results, resultsTerm],
+  );
+
+  /** Source-filtered songs — source chips sirf song categories par apply hote hain. */
+  const visibleSongs = useMemo(
     () =>
       sourceFilter === 'all'
-        ? results
-        : results.filter(song => song.source === sourceFilter),
-    [results, sourceFilter],
+        ? searchIndex.songs
+        : searchIndex.songs.filter(song => song.source === sourceFilter),
+    [searchIndex.songs, sourceFilter],
   );
 
   const handleSongPress = useCallback(
     (song: Song) => {
-      void playSong(song, visibleResults);
+      void playSong(song, visibleSongs);
     },
-    [playSong, visibleResults],
+    [playSong, visibleSongs],
   );
 
   const handlePlayAll = useCallback(() => {
-    if (visibleResults.length === 0) return;
+    if (visibleSongs.length === 0) return;
     successFeedback();
-    void playSong(visibleResults[0], visibleResults);
-  }, [playSong, visibleResults]);
+    void playSong(visibleSongs[0], visibleSongs);
+  }, [playSong, visibleSongs]);
 
   const handleShuffleAll = useCallback(() => {
-    if (visibleResults.length === 0) return;
+    if (visibleSongs.length === 0) return;
     successFeedback();
-    const shuffled = [...visibleResults].sort(() => Math.random() - 0.5);
+    const shuffled = [...visibleSongs].sort(() => Math.random() - 0.5);
     void playSong(shuffled[0], shuffled);
-  }, [playSong, visibleResults]);
+  }, [playSong, visibleSongs]);
 
-  // Extract distinct artists from current results list
-  const distinctArtists = useMemo<ExtractedArtist[]>(() => {
-    if (results.length === 0) return [];
-    const map = new Map<string, ExtractedArtist>();
-    for (const song of results) {
-      const raw = song.artist || '';
-      const clean = normalizeArtistName(raw) || raw.trim();
-      if (!clean) continue;
-      const key = clean.toLowerCase();
-      const existing = map.get(key);
-      if (existing) {
-        existing.count += 1;
-        if (!existing.image && song.cover) existing.image = song.cover;
-      } else {
-        const curated = matchCuratedArtist(clean, POPULAR_ARTISTS);
-        map.set(key, {
-          name: curated ? curated.name : clean,
-          count: 1,
-          image: curated?.image || song.cover || '',
-          bio: curated?.bio,
-        });
-      }
-    }
-    return Array.from(map.values());
-  }, [results]);
-
-  // Extract distinct albums from current results list
-  const distinctAlbums = useMemo<ExtractedAlbum[]>(() => {
-    if (results.length === 0) return [];
-    const map = new Map<string, ExtractedAlbum>();
-    for (const song of results) {
-      const albumInfo = (song as Song & { album?: string }).album;
-      const albumTitle =
-        typeof albumInfo === 'string' && albumInfo.trim().length > 0
-          ? albumInfo.trim()
-          : song.title;
-      const key = `${song.artist}-${albumTitle}`.toLowerCase();
-      const existing = map.get(key);
-      if (existing) {
-        existing.count += 1;
-        if (!existing.cover && song.cover) existing.cover = song.cover;
-      } else {
-        map.set(key, {
-          id: slugify(`${song.artist}-${albumTitle}`),
-          title: albumTitle,
-          artist: song.artist,
-          cover: song.cover || '',
-          count: 1,
-        });
-      }
-    }
-    return Array.from(map.values());
-  }, [results]);
-
-  // Matching local playlists
-  const matchingPlaylists = useMemo(() => {
-    if (!activeQuery) return [];
-    const q = activeQuery.toLowerCase();
-    return playlists.filter(p => p.name.toLowerCase().includes(q));
-  }, [playlists, activeQuery]);
-
-  const showResults = isSearchable && !loading && results.length > 0;
+  const showResults =
+    isSearchable &&
+    !loading &&
+    (searchIndex.songs.length > 0 ||
+      searchIndex.artists.length > 0 ||
+      searchIndex.albums.length > 0 ||
+      searchIndex.playlists.length > 0);
 
   // Filter badge count label
   const getFilterBadge = (item: SearchFilter): string | null => {
     if (!showResults) return null;
-    if (item === 'Songs') return `${results.length}`;
-    if (item === 'Artists') return `${distinctArtists.length}`;
-    if (item === 'Albums') return `${distinctAlbums.length}`;
-    if (item === 'Playlists') return `${matchingPlaylists.length}`;
+    if (item === 'Songs') return `${visibleSongs.length}`;
+    if (item === 'Artists') return `${searchIndex.artists.length}`;
+    if (item === 'Albums') return `${searchIndex.albums.length}`;
+    if (item === 'Playlists') return `${searchIndex.playlists.length}`;
     return null;
   };
 
@@ -365,6 +319,7 @@ export default function SearchScreen() {
 
       {/* Filter Tabs */}
       <ScrollView
+        style={styles.filterScroll}
         horizontal
         showsHorizontalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
@@ -408,12 +363,12 @@ export default function SearchScreen() {
             <View style={styles.actionBar}>
               <Text style={styles.resultCountText}>
                 {filter === 'Artists'
-                  ? `${distinctArtists.length} ${distinctArtists.length === 1 ? 'artist' : 'artists'} found`
+                  ? `${searchIndex.artists.length} ${searchIndex.artists.length === 1 ? 'artist' : 'artists'} found`
                   : filter === 'Albums'
-                  ? `${distinctAlbums.length} ${distinctAlbums.length === 1 ? 'album' : 'albums'} found`
+                  ? `${searchIndex.albums.length} ${searchIndex.albums.length === 1 ? 'album' : 'albums'} found`
                   : filter === 'Playlists'
-                  ? `${matchingPlaylists.length} ${matchingPlaylists.length === 1 ? 'playlist' : 'playlists'} found`
-                  : `${visibleResults.length} tracks found`}
+                  ? `${searchIndex.playlists.length} ${searchIndex.playlists.length === 1 ? 'playlist' : 'playlists'} found`
+                  : `${visibleSongs.length} tracks found`}
               </Text>
 
               {(filter === 'All' || filter === 'Songs') && (
@@ -449,6 +404,7 @@ export default function SearchScreen() {
             {/* Source filter chips — multi-source picker (sirf song lists pe) */}
             {(filter === 'All' || filter === 'Songs') && (
               <ScrollView
+                style={styles.sourceFilterScroll}
                 horizontal
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={styles.sourceChipRow}
@@ -457,8 +413,8 @@ export default function SearchScreen() {
                   const active = sourceFilter === source.key;
                   const count =
                     source.key === 'all'
-                      ? results.length
-                      : results.filter(song => song.source === source.key).length;
+                      ? searchIndex.songs.length
+                      : searchIndex.songs.filter(song => song.source === source.key).length;
                   const tint =
                     source.key === 'all'
                       ? colors.text
@@ -498,7 +454,7 @@ export default function SearchScreen() {
             {/* Tab: Artists */}
             {filter === 'Artists' ? (
               <FlatList
-                data={distinctArtists}
+                data={searchIndex.artists}
                 keyExtractor={item => item.name}
                 contentContainerStyle={[styles.listContent, { paddingBottom: contentPadding }]}
                 keyboardShouldPersistTaps="handled"
@@ -545,7 +501,7 @@ export default function SearchScreen() {
             ) : filter === 'Albums' ? (
               /* Tab: Albums */
               <FlatList
-                data={distinctAlbums}
+                data={searchIndex.albums}
                 keyExtractor={item => item.id}
                 contentContainerStyle={[styles.listContent, { paddingBottom: contentPadding }]}
                 keyboardShouldPersistTaps="handled"
@@ -589,7 +545,7 @@ export default function SearchScreen() {
             ) : filter === 'Playlists' ? (
               /* Tab: Playlists */
               <FlatList
-                data={matchingPlaylists}
+                data={searchIndex.playlists}
                 keyExtractor={item => item.id}
                 contentContainerStyle={[styles.listContent, { paddingBottom: contentPadding }]}
                 keyboardShouldPersistTaps="handled"
@@ -632,43 +588,43 @@ export default function SearchScreen() {
             ) : (
               /* Tab: All / Songs */
               <FlatList
-                data={visibleResults}
+                data={visibleSongs}
                 keyExtractor={song => song.id}
                 contentContainerStyle={[styles.listContent, { paddingBottom: contentPadding }]}
                 keyboardShouldPersistTaps="handled"
                 keyboardDismissMode="on-drag"
                 showsVerticalScrollIndicator={false}
                 ListHeaderComponent={
-                  filter === 'All' && visibleResults.length > 0 ? (
+                  filter === 'All' && visibleSongs.length > 0 ? (
                     <View style={styles.spotlightCard}>
                       <View style={styles.spotlightBadge}>
                         <Ionicons name="flame" size={12} color="#000" />
                         <Text style={styles.spotlightBadgeText}>TOP MATCH</Text>
                       </View>
                       <Pressable
-                        onPress={() => handleSongPress(visibleResults[0])}
+                        onPress={() => handleSongPress(visibleSongs[0])}
                         style={styles.spotlightContent}
                       >
-                        <SongArtwork uri={visibleResults[0].cover} size={64} radius={12} />
+                        <SongArtwork uri={visibleSongs[0].cover} size={64} radius={12} />
                         <View style={styles.spotlightInfo}>
                           <Text style={styles.spotlightTitle} numberOfLines={1}>
-                            {visibleResults[0].title}
+                            {visibleSongs[0].title}
                           </Text>
                           <Text style={styles.spotlightArtist} numberOfLines={1}>
-                            {visibleResults[0].artist}
+                            {visibleSongs[0].artist}
                           </Text>
                           <Text style={styles.spotlightMeta}>
-                            Punjabi Beats • {Math.round(visibleResults[0].duration / 1000)}s
+                            Punjabi Beats • {Math.round(visibleSongs[0].duration / 1000)}s
                           </Text>
                         </View>
                         <Pressable
                           onPress={() => {
                             successFeedback();
-                            void playSong(visibleResults[0], visibleResults);
+                            void playSong(visibleSongs[0], visibleSongs);
                           }}
                           hitSlop={8}
                           accessibilityRole="button"
-                          accessibilityLabel={`Play ${results[0].title}`}
+                          accessibilityLabel={`Play ${visibleSongs[0].title}`}
                           style={styles.spotlightPlayBtn}
                         >
                           <Ionicons
@@ -694,6 +650,21 @@ export default function SearchScreen() {
                 )}
               />
             )}
+          </View>
+        ) : searchError ? (
+          <View style={styles.noResultsWrap}>
+            <Text style={styles.noResultsEmoji}>⚠️</Text>
+            <Text style={styles.noResultsTitle}>Search load nahi ho paayi</Text>
+            <Text style={styles.noResultsSubtitle}>Network check karke dobara try karo.</Text>
+            <Pressable
+              onPress={() => void runSearch(trimmedQuery)}
+              accessibilityRole="button"
+              accessibilityLabel="Search dobara try karo"
+              style={({ pressed }) => [styles.retryButton, pressed && styles.pressed]}
+            >
+              <Ionicons name="refresh" size={15} color={colors.background} />
+              <Text style={styles.retryButtonText}>Try again</Text>
+            </Pressable>
           </View>
         ) : searched ? (
           /* Empty Search Recovery */
@@ -955,16 +926,21 @@ const styles = StyleSheet.create({
   clearButton: { padding: spacing.xs },
 
   /* Filter Chips */
+  filterScroll: { flexGrow: 0, height: 48 },
   chipsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: spacing.xs,
     paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
+    paddingVertical: spacing.xs,
   },
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    paddingVertical: 7,
+    height: 34,
+    minHeight: 34,
+    flexShrink: 0,
     paddingHorizontal: 14,
     borderRadius: 999,
     borderWidth: 1,
@@ -995,12 +971,13 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xs,
   },
   /* Source filter chips (multi-source picker) */
+  sourceFilterScroll: { flexGrow: 0, height: 38 },
   sourceChipRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
     paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.sm,
+    paddingVertical: spacing.xs,
   },
   sourceChip: {
     flexDirection: 'row',
@@ -1195,6 +1172,16 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     marginBottom: spacing.lg,
   },
+  retryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    backgroundColor: colors.primary,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: 999,
+  },
+  retryButtonText: { ...typography.caption, color: colors.background, fontWeight: '800' },
   suggestChipsWrap: {
     flexDirection: 'row',
     flexWrap: 'wrap',

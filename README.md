@@ -15,17 +15,16 @@ devices pe ek hi song sync chalta hai**.
   multi-source picker search me, glowing mini player, aur cleaner room screen
 - **Multi-source playback — hamesha IN-APP** — JioSaavn (320kbps full) → Audius
   (full) → YouTube Music bridge (Piped search + streams, optional live instance)
-  → iTunes preview fallback; **kabhi bhi YouTube/external app nahi khulta** —
+  → metadata-only fallback for full-song upgrade; **kabhi bhi YouTube/external app nahi khulta** —
   stream na mile to player queue ke agle playable track pe skip karta hai;
   source filter chips (All / JioSaavn / YT Music / Audius / Spotify / iTunes) search me
 - **Spotify catalogue (optional source, 2026-11)** — official metadata + launch-day
   new releases. Spotify full audio NAHI deta — Spotify songs play-time pe
   JioSaavn/Audius se full stream resolve hote hain (full-only policy bana rehta
   hai). Credentials blank → source khud skip
-- **Full songs ONLY (2026-11)** — search/trending/new feeds 30s previews filter
-  kar dete hain jab full songs available hain; player bhi native queue me
-  full tracks ko prefer karta hai (30s clip kabhi full track ki jagah nahi
-  bajta); strict title-match upgrade — galat gaane ka audio kabhi nahi lagta
+- **Full songs ONLY (2026-11)** — search/trending/new feeds aur native player
+  queue me true 30s previews kabhi nahi aate; metadata-only tracks active hone
+  par strict title-match full-stream upgrade karte hain; unavailable tracks skip hote hain
 - **New Songs feed (2026-11)** — home pe "New Songs 🆕" section: latest
   releases JioSaavn `latest punjabi songs <year>` queries → YouTube Music →
   Audius trending week se, har open pe fresh
@@ -35,7 +34,7 @@ devices pe ek hi song sync chalta hai**.
   **Apinator + /api/publish** (jab `EXPO_PUBLIC_APINATOR_KEY` set ho). Room tab
   live transport + connection status dikhata hai
 - **Search** — open-source JioSaavn stream (Punjabi + Hindi) → Audius → optional
-  Reverbio-style YouTube/Piped bridge → iTunes fallback;
+  YouTube/Piped bridge → metadata fallback;
   larger searches page through the catalogue and keep full-song priority;
   **full-song priority** — artist expansion + per-song upgrade se 30s preview bhi full
   me upgrade hota hai; debounced, recent-search chips, empty/no-results states
@@ -64,7 +63,7 @@ devices pe ek hi song sync chalta hai**.
 | Audio | react-native-track-player@4.1.2 (native service + notification controls) |
 | Realtime | `services/groupTransport.ts`: Supabase Realtime broadcast (default, zero-setup) ya `@apinator/client` (WebSocket channels) |
 | Backend | Vercel serverless `api/publish.js` + `@apinator/server` (HTTP trigger) |
-| Data | Open-source JioSaavn API + Audius (free, no key) + iTunes previews · AsyncStorage |
+| Data | Open-source JioSaavn API + Audius (free, no key) + metadata providers · AsyncStorage |
 
 ## 📂 Project structure
 
@@ -108,7 +107,6 @@ npx expo start           # QR scan karo — Expo Go me app chalegi
 | `EXPO_PUBLIC_PIPED_API` | optional live Piped API for YouTube bridge audio resolution |
 | `EXPO_PUBLIC_SPOTIFY_CLIENT_ID` / `_SECRET` | optional Spotify Web API source (search + new releases; blank = skip) |
 | `EXPO_PUBLIC_SPOTIFY_TOKEN_URL` | optional secure token proxy for production (secret server-side rakho) |
-| `EXPO_PUBLIC_FULL_ONLY` | `0` = purana behavior (30s previews bhi list me); default full-songs-only |
 
 ### 2) Backend (Vercel) — room sync broadcast ke liye
 

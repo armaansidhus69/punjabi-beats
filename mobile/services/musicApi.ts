@@ -6,7 +6,7 @@
  *   2. JioSaavn mirrors       → full song fallback
  *   3. Audius direct     → full song (free, no API key), 3-5 min
  *   4. Reverbio-style YouTube/Piped bridge → extra catalogue + optional full stream
- *   5. iTunes (30s preview) + FULL-SONG UPGRADE passes:
+ *   5. iTunes metadata (preview URL) + FULL-SONG UPGRADE passes:
  *        a. artist expansion — iTunes results ke artist names se Audius search
  *           ("Diljit party" → artist "Diljit Dosanjh" → 30 full songs)
  *        b. per-song upgrade — top iTunes tracks ko title-match karke Audius ke
@@ -14,9 +14,9 @@
  *   6. getTrendingSongs → curated Punjabi + Hindi artist rotation (probe-artists.mjs
  *      se 13/18 artists >=5 full verify) — home feed hamesha full songs
  *
- * Har source ka apna mapper hai → common `Song` type. `previewOnly` sirf tab
- * true rehta hai jab sach me 30s hi mile (ya dono upgrade pass fail ho jaayein)
- * — isliye SongItem ka "30s" badge aur player ka preview note usi pe dikhte hain.
+ * Har source ka apna mapper hai → common `Song` type. Final search/feed aur
+ * native playback queue me true preview rows kabhi nahi jaate; metadata-only
+ * YouTube/Spotify rows play-time par full stream resolve karte hain.
  *
  * PROBE (2026-09-28, probe-mirrors.mjs + probe-audius.mjs + probe-search.mjs):
  * - JioSaavn (har mirror ke DONO paths test kiye: /api/search/songs + /search/songs):
@@ -43,11 +43,9 @@
  *   per-song upgrade (title match) ke baad dono queries pe full songs aate hain.
  *
  * FULL-ONLY POLICY (2026-11-02, "only play full song"):
- *   Search/trending/new feeds sirf FULL songs return karte hain — 30s previews
- *   (iTunes etc.) final list se filter ho jaate hain JAB full songs available
- *   hain. Zero-full edge case me previews last resort rehte hain (honest "30s"
- *   badge + play-time upgrade try hota hai). `EXPO_PUBLIC_FULL_ONLY=0` se
- *   purana behavior (previews bhi list me).
+ *   Search/trending/new feeds sirf FULL songs return karte hain — iTunes/Jamendo
+ *   jaise preview-only rows final list se filter ho jaate hain. Preview clips
+ *   kabhi play nahi hote.
  *
  * NEW SONGS FEED (2026-11-02, "all new song"): `getNewSongs()` — JioSaavn
  *   "latest punjabi/hindi songs <year>" queries → YouTube Music (Piped) →
@@ -111,10 +109,8 @@ const AUDIUS_MIN_FULL_SONGS = 5;
 const MIN_FULL_SONG_MS = 60_000;
 /**
  * FULL-ONLY policy (2026-11-02): true 30s previews search/feed results se
- * filter hote hain jab full songs available hain — user ko sirf full songs
- * dikhte/bajte hain. `EXPO_PUBLIC_FULL_ONLY=0` se purana behavior.
+ * filter hote hain — user ko sirf full songs dikhte/bajte hain.
  */
-const FULL_ONLY = (process.env.EXPO_PUBLIC_FULL_ONLY ?? '1') !== '0';
 /**
  * iTunes results ko upgrade karne ke liye kitne parallel Audius calls chalte hain.
  * Zyada cap = search latency badhti hai; 6 se zyada tracks user waise bhi nahi chunta.
@@ -132,8 +128,8 @@ const MIN_ITUNES_FOR_EXPANSION = 6;
 /* ---------- Pagination caps (probe-verified 2026-10-05) ---------- */
 /**
  * Kitna ORIGINAL fetch karein — caller ke `limit` se independent. Isse
- * `searchSongs` har source se max nikalta hai, phir top-quality wala `limit`
- * tak trim karta hai (precision order: full song → preview).
+ * `searchSongs` har source se max nikalta hai, phir full-song priority ke saath
+ * `limit` tak trim karta hai; preview-only rows baad me drop hote hain.
  */
 const AUDIUS_FETCH_MAX = 90;
 /**
@@ -187,8 +183,7 @@ const YOUTUBE_MATCH_ENABLED =
  *   - stream: `/streams/{videoId}` → audioStreams (highest bitrate)
  * Env wala instance (EXPO_PUBLIC_PIPED_API) sabse pehle try hota hai; baaki
  * public instances fallback hain. Koi instance fail ho to agla — sab fail ho
- * to iTunes preview (bhi in-app) last resort hai. KABHI YouTube app open nahi
- * karte (music hamesha is app me bajti hai).
+ * to track unavailable maana jaata hai. KABHI YouTube app open nahi karte.
  */
 const DEFAULT_PIPED_INSTANCES: string[] = [
   'https://pipedapi.kavin.rocks',
@@ -205,7 +200,7 @@ const PIPED_FALLBACKS: string[] = [
 
 /** Trending artist rotation — probe-artists.mjs (2026-09-29) se har ek pe
  * Audius pe >=5 FULL songs (60s+) verify. Home feed inhi se banta hai, isliye
- * "punjabi hits" jaisi generic query pe 30s fallback kabhi nahi aata.
+ * "punjabi hits" jaisi generic query pe preview fallback kabhi nahi aata.
  */
 const TRENDING_PUNJABI_ARTISTS: string[] = [
   'Diljit Dosanjh',
@@ -353,6 +348,9 @@ interface JioSaavnArtist {
 interface JioSaavnSongRaw {
   id?: string;
   name?: string;
+  album?: string | { name?: string };
+  albumName?: string;
+  album_name?: string;
   duration?: string | number;
   /** release year ("2026") — getNewSongs freshness ke liye */
   year?: string | number;
@@ -408,6 +406,7 @@ interface ITunesResult {
   trackId?: number;
   trackName?: string;
   artistName?: string;
+  collectionName?: string;
   artworkUrl100?: string;
   previewUrl?: string | null;
   trackTimeMillis?: number;
@@ -467,14 +466,12 @@ function isTruePreview(song: Song): boolean {
 }
 
 /**
- * FULL-ONLY policy apply — previews jab tak return honge jitne full songs
- * available NAHI hain (kuch bajna > kuch na bajna; player play-time pe full
- * upgrade try karta hai). Full songs milte hi previews list se hat jaate hain.
+ * FULL-ONLY policy apply — true preview rows ko result list se hatao. Metadata-only
+ * YouTube/Spotify rows is helper se exempt hain kyunki player unka full stream
+ * play-time par resolve karta hai.
  */
 function applyFullOnlyPolicy(songs: Song[]): Song[] {
-  if (!FULL_ONLY) return songs;
-  const full = songs.filter(song => !isTruePreview(song));
-  return full.length > 0 ? full : songs;
+  return songs.filter(song => !isTruePreview(song));
 }
 
 /* ---------- Full-song upgrade helpers ---------- */
@@ -563,6 +560,15 @@ function pickBestAudioUrl(downloadUrl: JioSaavnImage[]): string | null {
   return cdnUrl(picked) || null;
 }
 
+function readAlbumName(raw: JioSaavnSongRaw): string | undefined {
+  if (typeof raw.album === 'string' && raw.album.trim()) return decodeHtml(raw.album.trim());
+  if (raw.album && typeof raw.album === 'object' && raw.album.name?.trim()) {
+    return decodeHtml(raw.album.name.trim());
+  }
+  const fallback = raw.albumName?.trim() || raw.album_name?.trim();
+  return fallback ? decodeHtml(fallback) : undefined;
+}
+
 function mapJioSaavnSong(raw: JioSaavnSongRaw): Song | null {
   const id = raw.id;
   const title = raw.name ? decodeHtml(raw.name).trim() : '';
@@ -587,6 +593,7 @@ function mapJioSaavnSong(raw: JioSaavnSongRaw): Song | null {
     id,
     title,
     artist: decodeHtml(artist),
+    album: readAlbumName(raw),
     cover,
     preview,
     duration: durationMs || 30_000,
@@ -620,7 +627,7 @@ function mapAudiusTrack(raw: AudiusTrack): Song | null {
     preview: `${AUDIUS_BASE}/tracks/${id}/stream?app_name=${AUDIUS_APP_NAME}`,
     duration: durationMs,
     source: 'audius' as const,
-    // Audius full song deta hai → "30s" badge / preview note nahi dikhega
+    // Audius full song deta hai → preview-only state nahi lagti
     previewOnly: false,
   };
 }
@@ -632,12 +639,13 @@ function mapITunesSong(raw: ITunesResult): Song | null {
     id: String(raw.trackId ?? raw.trackName),
     title: raw.trackName,
     artist: raw.artistName || 'Unknown',
+    album: raw.collectionName?.trim() || undefined,
     // artworkUrl100 se badi artwork banate hain
     cover: raw.artworkUrl100?.replace('100x100bb', '600x600bb') ?? '',
     preview: raw.previewUrl,
     duration: raw.trackTimeMillis ?? 30000,
     source: 'itunes',
-    // iTunes sirf 30s preview deta hai (full song nahi) — UI badge + player note
+    // iTunes metadata preview-only hota hai; full stream upgrade baad me try hota hai.
     previewOnly: true,
   };
 }
@@ -667,7 +675,7 @@ interface VeromeStreamResult {
 interface SongPlaybackResolution {
   url: string;
   previewOnly: boolean;
-  /** Playback duration override in milliseconds (e.g. a fallback preview clip). */
+  /** Playback duration override in milliseconds when a provider gives a better duration. */
   duration?: number;
 }
 
@@ -716,6 +724,52 @@ async function getPipedAudioUrl(videoId: string): Promise<string | null> {
   return firstSuccessful(attempts);
 }
 
+function chooseVeromeUrl(stream: VeromeStreamResult): string {
+  return stream.streamingUrls?.find(item => typeof item?.url === 'string' && item.url)?.url
+    ?? stream.url
+    ?? '';
+}
+
+const youtubeAudioInFlight = new Map<string, Promise<string | null>>();
+
+/** Verome aur Piped ko parallel race karo — slow/dead Verome latency nahi add karega. */
+async function getFastYouTubeAudioUrl(videoId: string): Promise<string | null> {
+  const existing = youtubeAudioInFlight.get(videoId);
+  if (existing) return existing;
+
+  const request = resolveFastYouTubeAudioUrl(videoId);
+  youtubeAudioInFlight.set(videoId, request);
+  try {
+    return await request;
+  } finally {
+    if (youtubeAudioInFlight.get(videoId) === request) youtubeAudioInFlight.delete(videoId);
+  }
+}
+
+async function resolveFastYouTubeAudioUrl(videoId: string): Promise<string | null> {
+  const cachedAttempt = (async (): Promise<string | null> => {
+    const cached = await getCachedVeromeStream(videoId);
+    return cached ? chooseVeromeUrl(cached) || null : null;
+  })();
+
+  const veromeAttempt = (async (): Promise<string | null> => {
+    const stream = await getVeromeStream(videoId);
+    const url = chooseVeromeUrl(stream);
+    if (!url) return null;
+    try {
+      const storage = require('@react-native-async-storage/async-storage') as {
+        setItem: (key: string, value: string) => Promise<void>;
+      };
+      await storage.setItem(`stream_${videoId}`, JSON.stringify({ ...stream, url }));
+    } catch {
+      // Cache write optional hai; URL usable hai.
+    }
+    return url;
+  })();
+
+  return firstSuccessful([cachedAttempt, veromeAttempt, getPipedAudioUrl(videoId)]);
+}
+
 /**
  * Parallel race — pehla NON-NULL resolve jeeta hai; sab null/fail → null.
  * Empty-results ko bhi null maan ke agle ka wait karta hai (settled order me).
@@ -755,7 +809,7 @@ async function firstSuccessful<T>(
  *   2. Public Piped instances (`/search?filter=music_songs`) — bina kisi backend
  *      ke YouTube Music catalogue milta hai (2026-11: default path)
  * Dono fail → []. Stream resolution play ke waqt `resolveSongPlaybackUrl` karta
- * hai (Verome → Piped → iTunes preview) — sab IN-APP.
+ * hai (Verome/Piped full audio providers) — sab IN-APP.
  */
 async function searchYouTubeMusicSongs(query: string, limit: number): Promise<Song[]> {
   if (YOUTUBE_MATCH_ENABLED) {
@@ -797,7 +851,7 @@ async function searchYouTubeMusicViaBackend(query: string, limit: number): Promi
           artist: typeof row.channel === 'string' && row.channel ? row.channel : 'Unknown',
           cover: typeof row.thumbnail === 'string' ? row.thumbnail : '',
           preview: '',
-          duration: durationSec > 0 ? durationSec * 1000 : 30_000,
+           duration: durationSec > 0 ? durationSec * 1000 : 0,
           source: 'youtube_music' as const,
           videoId,
           // Metadata search alone does not prove a playable full stream.
@@ -846,7 +900,7 @@ async function searchYouTubeMusicViaPiped(query: string, limit: number): Promise
             artist: (item?.uploaderName ?? item?.uploader ?? 'Unknown').trim() || 'Unknown',
             cover: item?.thumbnailUrl ?? item?.thumbnail ?? '',
             preview: '',
-            duration: durationSec > 0 ? durationSec * 1000 : 30_000,
+           duration: durationSec > 0 ? durationSec * 1000 : 0,
             source: 'youtube_music' as const,
             videoId,
             // Stream resolution play ke waqt hoti hai — honest default
@@ -954,33 +1008,10 @@ export async function resolveSongPlaybackUrl(song: Song): Promise<SongPlaybackRe
 
   if (song.source === 'youtube_music' && song.videoId) {
     try {
-      const cached = await getCachedVeromeStream(song.videoId);
-      const stream = cached ?? (await getVeromeStream(song.videoId));
-      const chosenUrl = stream.streamingUrls?.find(item => !!item?.url)?.url ?? stream.url;
-      if (chosenUrl) {
-        try {
-          const storage = require('@react-native-async-storage/async-storage') as {
-            setItem: (key: string, value: string) => Promise<void>;
-          };
-          await storage.setItem(`stream_${song.videoId}`, JSON.stringify({ ...stream, url: chosenUrl }));
-        } catch {
-          // ignore cache write failures
-        }
-        return { url: chosenUrl, previewOnly: false };
-      }
+      const streamUrl = await getFastYouTubeAudioUrl(song.videoId);
+      if (streamUrl) return { url: streamUrl, previewOnly: false };
     } catch {
-      // fall through to fallback preview / youtube
-    }
-
-    const pipedUrl = await getPipedAudioUrl(song.videoId);
-    if (pipedUrl) return { url: pipedUrl, previewOnly: false };
-
-    try {
-      const itunesMatches = await searchITunes(`${song.title} ${song.artist}`, 5);
-      const previewUrl = itunesMatches.find(item => !!item.preview)?.preview ?? itunesMatches[0]?.preview ?? '';
-      if (previewUrl) return { url: previewUrl, previewOnly: true, duration: 30_000 };
-    } catch {
-      // ignore fallback lookup failures
+      // Full providers failed; track unavailable hai.
     }
 
     return { url: '', previewOnly: song.previewOnly === true };
@@ -1021,7 +1052,7 @@ export async function playVeromeSongWithRefresh(song: VeromeSearchResult): Promi
   } catch (err) {
     console.warn('[musicApi] Verome stream play failed:', err);
     // DESIGN RULE: music hamesha IN-APP bajti hai — YouTube app/browser me
-    // kabhi nahi bhejte (Linking.openURL fallback hataya gaya). Caller
+    // kabhi external app fallback nahi hota. Caller
     // (playerStore) queue ke agle playable track pe auto-skip karta hai.
     throw err;
   }
@@ -1036,6 +1067,8 @@ interface GaanaSong {
   artist?: string;
   artists?: string | string[];
   artist_name?: string;
+  album?: string;
+  album_name?: string;
   artwork?: string;
   image?: string;
   cover?: string;
@@ -1060,6 +1093,7 @@ function mapGaanaSong(raw: GaanaSong): Song | null {
     id: `gaana-${String(id)}`,
     title,
     artist: artist || 'Unknown',
+    album: raw.album?.trim() || raw.album_name?.trim() || undefined,
     cover: raw.artwork || raw.image || raw.cover || '',
     preview,
     duration: durationMs,
@@ -1072,7 +1106,7 @@ function mapVeromeSearchResult(raw: VeromeSearchResult): Song | null {
   const title = raw.title?.trim();
   const videoId = raw.videoId?.trim();
   if (!title || !videoId) return null;
-  const durationMs = (Number(raw.duration) || 0) * 1000 || 30_000;
+  const durationMs = (Number(raw.duration) || 0) * 1000;
   return {
     id: `ytm_${videoId}`,
     title,
@@ -1096,6 +1130,7 @@ interface JamendoTrack {
   /** direct mp3 (legal, CDN-hosted) */
   audio?: string;
   album_image?: string;
+  album_name?: string;
   image?: string;
   artist?: { name?: string };
 }
@@ -1120,6 +1155,7 @@ function mapJamendoTrack(raw: JamendoTrack): Song | null {
     id: `jamendo-${id}`,
     title,
     artist: raw.artist?.name?.trim() || 'Unknown',
+    album: raw.album_name?.trim() || undefined,
     cover: raw.album_image ?? raw.image ?? '',
     preview,
     duration: durationMs || 30_000,
@@ -1420,7 +1456,7 @@ async function searchJamendo(query: string, limit: number): Promise<Song[]> {
   return dedupeByTitle(songs).slice(0, limit);
 }
 
-/** Try 3 — iTunes (sirf 30s preview) */
+/** Metadata fallback — iTunes preview URLs ko upgrade ke liye use karte hain. */
 async function searchITunes(query: string, limit: number): Promise<Song[]> {
   const res = await axios.get<ITunesResponse>(ITUNES_BASE, {
     params: { term: query, media: 'music', entity: 'song', limit, country: ITUNES_COUNTRY },
@@ -1475,7 +1511,7 @@ async function searchAudiusByArtists(artists: string[], perArtistLimit = 20): Pr
 /**
  * Per-song upgrade — iTunes ke top tracks ko Audius ke FULL version se replace
  * karo (title match). Ye sabse precise pass hai: user ko wahi gaana chahiye jo
- * iTunes list me tha, bas 30s ki jagah pura. Fail ho to wahi 30s preview rehta hai.
+ * iTunes list me tha, lekin final result me sirf full upgrade rakha jaata hai.
  */
 async function upgradeITunesWithAudius(songs: Song[], cap: number): Promise<Song[]> {
   const targets: number[] = [];
@@ -1493,7 +1529,7 @@ async function upgradeITunesWithAudius(songs: Song[], cap: number): Promise<Song
         const jioCandidates = await searchJioSaavn(`${cleanTitle} ${song.artist}`, 2);
         // STRICT title match — loose "koi bhi full song" fallback nikaal diya
         // (2026-11-02): wo galat gaane ka audio laga deta tha (title-match fail
-        // ho to preview rahna sahi hai, unrelated full song nahi).
+         // ho to track drop hota hai, unrelated full song nahi).
         const hit = jioCandidates.find(c => !c.previewOnly && c.preview && titleMatches(cleanTitle, c.title));
         if (hit && hit.preview) {
           return {
@@ -1534,19 +1570,33 @@ async function upgradeITunesWithAudius(songs: Song[], cap: number): Promise<Song
   return out;
 }
 
-const fullStreamCache = new Map<string, { url: string; duration: number }>();
+const FULL_STREAM_CACHE_TTL_MS = 10 * 60_000;
+const FULL_STREAM_FAILURE_TTL_MS = 30_000;
+type FullStreamResolution = { url: string; duration?: number; previewOnly: boolean };
+
+interface FullStreamCacheEntry {
+  url: string;
+  duration: number;
+  expiresAt: number;
+}
+
+const fullStreamCache = new Map<string, FullStreamCacheEntry>();
+/** Same song ke concurrent queue/search upgrades ko ek hi provider request banao. */
+const fullStreamInFlight = new Map<string, Promise<FullStreamResolution>>();
+/** Temporary negative cache — dead providers ko har tap pe immediately retry mat karo. */
+const fullStreamUnavailableUntil = new Map<string, number>();
 
 /**
  * On-the-fly full song audio resolver.
- * Agar koi song previewOnly hai (jaise iTunes 30s preview), ye runtime pe
- * JioSaavn se 320kbps full stream nikalta hai taaki song 30 second pe na kate.
+ * Agar koi song full stream verify nahi hua, ye runtime pe JioSaavn/Audius se
+ * full stream nikalta hai; fail hone par caller track ko unavailable maanta hai.
  */
 export async function resolveFullAudioStream(
   song: Song,
 ): Promise<{ url: string; duration?: number; previewOnly: boolean }> {
   if (!song) return { url: '', previewOnly: true };
 
-  // Agar pehle se full stream hai aur > 30s hai to wahi use karo
+  // Agar pehle se full stream hai aur meaningful duration hai to wahi use karo
   if (!song.previewOnly && song.preview && (!song.duration || song.duration > 30_000)) {
     return { url: song.preview, duration: song.duration, previewOnly: false };
   }
@@ -1554,9 +1604,16 @@ export async function resolveFullAudioStream(
   const cleanTitle = song.title.replace(/\s*[\(\[].*?[\)\]]/g, '').trim();
   const cacheKey = `${normalizeTitle(cleanTitle)}|${normalizeTitle(song.artist)}`;
   const cached = fullStreamCache.get(cacheKey);
-  if (cached) {
+  if (cached && cached.expiresAt > Date.now()) {
     return { url: cached.url, duration: cached.duration, previewOnly: false };
   }
+  if (cached) fullStreamCache.delete(cacheKey);
+
+  const unavailableUntil = fullStreamUnavailableUntil.get(cacheKey) ?? 0;
+  if (unavailableUntil > Date.now()) return { url: '', previewOnly: true };
+
+  const inFlight = fullStreamInFlight.get(cacheKey);
+  if (inFlight) return inFlight;
 
   // 1. Primary: JioSaavn 320kbps full song lookup
   const resolvePromise = (async () => {
@@ -1568,7 +1625,11 @@ export async function resolveFullAudioStream(
         jioMatches.find(m => !m.previewOnly && m.preview && titleMatches(cleanTitle, m.title));
       if (hit && hit.preview) {
         const duration = hit.duration || song.duration;
-        fullStreamCache.set(cacheKey, { url: hit.preview, duration });
+        fullStreamCache.set(cacheKey, {
+          url: hit.preview,
+          duration,
+          expiresAt: Date.now() + FULL_STREAM_CACHE_TTL_MS,
+        });
         return {
           url: hit.preview,
           duration,
@@ -1585,7 +1646,11 @@ export async function resolveFullAudioStream(
       const hit = audiusMatches.find(m => !m.previewOnly && m.preview && titleMatches(cleanTitle, m.title));
       if (hit && hit.preview) {
         const duration = hit.duration || song.duration;
-        fullStreamCache.set(cacheKey, { url: hit.preview, duration });
+        fullStreamCache.set(cacheKey, {
+          url: hit.preview,
+          duration,
+          expiresAt: Date.now() + FULL_STREAM_CACHE_TTL_MS,
+        });
         return {
           url: hit.preview,
           duration,
@@ -1596,34 +1661,29 @@ export async function resolveFullAudioStream(
       // Audius fallback failure
     }
 
-    // 3. Fallback: original preview clip agar kuch na mila
-    if (song.preview) {
-      return {
-        url: song.preview,
-        duration: song.duration || 30_000,
-        previewOnly: true,
-      };
-    }
-
     return { url: '', previewOnly: true };
   })();
 
-  // FULL-ONLY policy: 2.5s pe 30s preview pe kaatna galat tha — slow network
-  // pe har gaana 30s ho jaata. Ab 7s tak full-stream resolution ka wait karte
-  // hain (JioSaavn mirror probe 3.5s timeout + ek retry fit ho jaata hai);
-  // uske baad hi preview last resort hai. Dead-mirror cache slow path skip
-  // karata hai, isliye aam case me ye 1-2s me resolve hota hai.
-  const timeoutPromise = new Promise<{ url: string; duration?: number; previewOnly: boolean }>(resolve => {
-    setTimeout(() => {
-      resolve({
-        url: song.preview || '',
-        duration: song.duration || 30_000,
-        previewOnly: Boolean(song.previewOnly),
-      });
-    }, 7000);
+  // Full stream ke liye limited wait; timeout par track unavailable hota hai.
+  let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
+  const timeoutPromise = new Promise<FullStreamResolution>(resolve => {
+    timeoutHandle = setTimeout(() => resolve({ url: '', previewOnly: true }), 7000);
   });
+  const guarded = Promise.race([resolvePromise, timeoutPromise]);
+  fullStreamInFlight.set(cacheKey, guarded);
 
-  return Promise.race([resolvePromise, timeoutPromise]);
+  try {
+    const result = await guarded;
+    if (result.previewOnly) {
+      fullStreamUnavailableUntil.set(cacheKey, Date.now() + FULL_STREAM_FAILURE_TTL_MS);
+    } else {
+      fullStreamUnavailableUntil.delete(cacheKey);
+    }
+    return result;
+  } finally {
+    if (timeoutHandle) clearTimeout(timeoutHandle);
+    if (fullStreamInFlight.get(cacheKey) === guarded) fullStreamInFlight.delete(cacheKey);
+  }
 }
 
 /* ---------- Public API ---------- */
@@ -1717,10 +1777,8 @@ export async function searchSongs(query: string, limit = 30): Promise<Song[]> {
   ]);
 
   // Merge order = precision order: direct query > exact upgraded tracks >
-  // artist matches > Jamendo full > baaki 30s previews. Full songs top pe.
-  // NOTE: `upgradeITunesWithAudius` sirf UPGRADE_CAP(6) tak hi upgrade karta hai
-  // (latency deliberate) — baaki itunes previews hi rehte hain, isliye 200-row
-  // list me most entries 30s badge ke saath aayengi (that's honest + intended).
+  // artist matches > Jamendo/Spotify full-capable metadata. Preview-only rows
+  // upgrade fail hone par final result se drop hote hain.
   const upgradedFull = upgraded.filter(s => !s.previewOnly);
   const previews = upgraded.filter(s => s.previewOnly);
   const merged = dedupeByTitle([
@@ -1742,8 +1800,7 @@ export async function searchSongs(query: string, limit = 30): Promise<Song[]> {
     return [];
   }
 
-  // FULL-ONLY: full songs milte hi 30s previews results se drop (jitne full
-  // hain unhi ko return karo). Zero-full case me previews last resort rehte hain.
+  // FULL-ONLY: preview-only results are always removed from the final list.
   const results = applyFullOnlyPolicy(merged);
 
   const fullCount = results.filter(s => !s.previewOnly).length;
@@ -1759,7 +1816,7 @@ export async function searchSongs(query: string, limit = 30): Promise<Song[]> {
     trimmed,
     source,
     results.length,
-    `${fullCount} full, ${results.length - fullCount} 30s (verome=${verome.length}, gaana=${gaana.length}, audius=${audius.length}, artist=${expanded.length}, upgraded=${upgradedFull.length}, jamendo=${jamendo.length}, spotify=${spotifyCount}, dropped=${merged.length - results.length})`,
+    `${fullCount} full, droppedPreview=${merged.length - results.length} (verome=${verome.length}, gaana=${gaana.length}, audius=${audius.length}, artist=${expanded.length}, upgraded=${upgradedFull.length}, jamendo=${jamendo.length}, spotify=${spotifyCount})`,
   );
   return results;
 }
@@ -1825,7 +1882,7 @@ async function searchAudiusTrending(limit: number): Promise<Song[]> {
  *      release turant aata hai; stream play-time pe resolve hota hai.
  *   4. Audius trending week — independent fallback jo HAMESHA live hai.
  * Order = freshness precision: real releases → Spotify official → YTM → Audius.
- * Full-only policy yahan bhi lagti hai (30s previews tabhi jab kuch aur nahi).
+ * Full-only policy yahan bhi lagti hai; preview-only results never return hote.
  */
 export async function getNewSongs(limit = 20): Promise<Song[]> {
   const year = new Date().getFullYear();

@@ -149,8 +149,13 @@ export default function LibraryScreen() {
   const isEmpty = playlists.length === 0;
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      <View style={styles.header}>
+    <View style={styles.container}>
+      <FlatList
+        style={styles.list}
+        data={loaded ? playlists : []}
+        ListHeaderComponent={
+          <>
+      <View style={[styles.header, { paddingTop: insets.top + spacing.md }]}>
         <View style={styles.headerInfo}>
           <Text style={styles.title}>Library 📚</Text>
           <Text style={styles.subtitle}>
@@ -332,12 +337,9 @@ export default function LibraryScreen() {
         <Ionicons name="chevron-forward" size={20} color={colors.subtext} />
       </Pressable>
 
-      {!loaded ? (
-        <LoadingSpinner label="Playlists load ho rahi hain…" />
-      ) : (
-        <FlatList
-          data={playlists}
-          keyExtractor={item => item.id}
+          </>
+        }
+        keyExtractor={item => item.id}
           renderItem={({ item }) => (
             <PlaylistRow playlist={item} onPress={handlePlaylistPress} />
           )}
@@ -346,7 +348,10 @@ export default function LibraryScreen() {
             isEmpty && styles.emptyContent,
           ]}
           showsVerticalScrollIndicator={false}
-          ListEmptyComponent={
+        ListEmptyComponent={
+          !loaded ? (
+            <LoadingSpinner label="Playlists load ho rahi hain…" />
+          ) : (
             <EmptyState
               icon="albums-outline"
               title="Abhi koi playlist nahi"
@@ -362,9 +367,9 @@ export default function LibraryScreen() {
                 <Text style={styles.emptyButtonText}>New Playlist</Text>
               </Pressable>
             </EmptyState>
-          }
-        />
-      )}
+          )
+        }
+      />
 
       <CreatePlaylistModal
         visible={modalVisible}
@@ -378,6 +383,7 @@ export default function LibraryScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
+  list: { flex: 1 },
   header: {
     flexDirection: 'row',
     alignItems: 'center',

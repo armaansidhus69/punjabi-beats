@@ -8,6 +8,8 @@ export interface Song {
   id: string;
   title: string;
   artist: string;
+  /** Album/release name when the provider exposes it. */
+  album?: string;
   cover: string;
   /** Direct audio URL (320kbps preferred) */
   preview: string;
@@ -18,11 +20,10 @@ export interface Song {
   /** Verome/YouTube Music video id (for stream refresh logic) */
   videoId?: string;
   /**
-   * Sirf 30s preview available hai (iTunes preview limitation — full song nahi).
-   * JioSaavn mirror se full song aaye to false rehta hai; SongItem ka "30s"
-   * badge aur player ka preview note sirf true pe dikhte hain.
-   * NOTE: `youtube_music` songs ke liye true ka matlab "abhi unresolved" hai
-   * (play-time pe Verome/Piped full stream deta hai) — 30s clip nahi.
+   * Full stream abhi verify nahi hua. True-preview sources ko search/queue se
+   * drop kiya jaata hai; `youtube_music` aur `spotify` me true ka matlab
+   * metadata unresolved hai, jise play-time par full stream me upgrade kiya jaata
+   * hai — koi 30-second clip play nahi hoti.
    */
   previewOnly?: boolean;
   /** Release year (JioSaavn metadata) — "New Songs" feed freshness ke liye */
@@ -185,6 +186,8 @@ export interface PlayerState {
   queue: Song[];
   index: number;
   isPlaying: boolean;
+  /** Track resolve/load ho raha hai; UI controls ko stale playing state na dikhaye. */
+  isLoading: boolean;
   /** ms */
   position: number;
   /** ms */
@@ -662,4 +665,3 @@ export interface LyricsCacheEnvelope {
 export type LyricsErrorCode = 'not_found' | 'network' | 'bad_request';
 
 export * from './syncroom';
-

@@ -9,7 +9,7 @@
  *     null). Isliye Spotify songs play-time pe existing chain se resolve hote
  *     hain: JioSaavn → Audius strict title-match (playerStore.resolveTrack ka
  *     non-YTM branch `resolveFullAudioStream` chalata hai). Fail hone par
- *     Spotify 30s preview last resort (honest "30s" badge).
+ *     Spotify metadata-only result; playback resolves a verified full stream.
  *
  * AUTH (client credentials):
  *   - `EXPO_PUBLIC_SPOTIFY_CLIENT_ID` + `EXPO_PUBLIC_SPOTIFY_CLIENT_SECRET` —
@@ -152,6 +152,7 @@ function mapSpotifyTrack(track: SpotifyTrack, fallbackCover: string, fallbackYea
     id: `spotify_${id}`,
     title,
     artist,
+    album: track.album?.name?.trim() || undefined,
     cover,
     preview: track.preview_url ?? '',
     duration: track.duration_ms ?? 0,

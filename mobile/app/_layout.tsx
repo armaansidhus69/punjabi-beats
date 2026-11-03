@@ -34,7 +34,9 @@ import { useAuthStore } from '../stores/authStore';
 import { handleInitialOAuthCallback } from '../core/auth/authService';
 import usePodcastProgressWriter from '../hooks/usePodcastProgress';
 
-TrackPlayer.registerPlaybackService(() => playbackService);
+if (Platform.OS !== 'web') {
+  TrackPlayer.registerPlaybackService(() => playbackService);
+}
 
 export function ErrorBoundary(props: ErrorBoundaryProps) {
   return <AppErrorBoundary {...props} />;

@@ -4,6 +4,19 @@ Is build me teen bade kaam hue: **UI redesign ("Dhol Sunset" theme)**, **multi-s
 music jo HAMESHA in-app bajti hai**, aur **group listening jo ab zero setup me
 chalta hai**. Neeche har change ka detail hai.
 
+## 0.1. Update (2026-11-03) — lazy queue startup + provider recovery
+
+- Selected track ab pehle resolve/start hota hai; 30–100 item queue ko startup pe
+  provider resolution se block nahi kiya jaata.
+- Direct/full upcoming tracks bounded background batches me native queue me add
+  hote hain; YouTube/Spotify metadata-only rows active hone tak unresolved rehte hain.
+- Native queue me next/previous track na ho to logical queue fallback load hota hai,
+  shuffle/repeat/auto-skip semantics preserve rehte hain.
+- Same provider request ki in-flight deduplication, bounded stream cache expiry,
+  short unavailable backoff, loading state, and pause-during-resolution intent add hua.
+- Regression coverage ab player 21 tests, music API 19 tests, plus full project suite
+  ke saath green hai.
+
 ## −1. Update (2026-11-02, shaam) — 7 naye features: queue/timer/radio/recos/reactions/moderation/downloads
 
 **Playback + queue (Phase 5 completion):**
@@ -68,24 +81,22 @@ checks).
 
 **"Only play full song":**
 - **Full-only policy** (`services/musicApi.ts`): search, trending aur new feeds
-  ab 30s previews (iTunes) results se **filter kar dete hain** jab full songs
-  available hain — user ko sirf full songs dikhti hain. Zero-full edge case me
-  previews last resort rehte hain (honest "30s" badge + play-time full-upgrade
-  try). `EXPO_PUBLIC_FULL_ONLY=0` se purana behavior.
-- **Player enforcement** (`stores/playerStore.ts`): native TrackPlayer queue ab
-  full tracks ko **prefer** karta hai — jab queue me ek bhi full track hai,
-  30s clip us queue me nahi jaata (na current, na auto-advance). Single preview
-  tap abhi bhi bajta hai (dead air se better) — badge honest rehta hai.
+  ab true 30s previews ko **hamesha filter** karte hain — zero-full edge case me
+  bhi preview clip return/play nahi hoti.
+- **Player enforcement** (`stores/playerStore.ts`): native TrackPlayer queue me
+  sirf verified full tracks jaate hain. Selected track pehle load hota hai;
+  upcoming direct tracks background me hydrate hote hain aur metadata-only rows
+  active hone par full stream resolve karte hain.
 - **Wrong-song audio bug fix**: per-song upgrade + `resolveFullAudioStream` ka
   loose fallback ("title match fail to koi bhi JioSaavn full song laga do")
   hataya — ab **strict title match**. Galat gaane ka audio bajana 30s preview
   se bhi bura hai.
 - **Upgrade timeout 2.5s → 7s**: pehle slow network pe resolution ka wait na
-  hote hi 30s pe kaat dete the; ab full-stream resolution ka poora wait hota
-  hai (dead-mirror cache slow path skip karata hai).
+  hote hi short clip pe kaat dete the; ab full-stream resolution ka poora wait
+  hota hai, with positive/negative cache and in-flight deduplication.
 - Live smoke test: `searchSongs("Karan Aujla")` → 15 songs, **0 true previews**
-  (200 iTunes previews filtered); `resolveFullAudioStream` ne fake 30s clip ko
-  real 257s Audius full stream me upgrade kiya.
+  (200 iTunes previews filtered); `resolveFullAudioStream` ne metadata ko real
+  257s Audius full stream me upgrade kiya.
 
 **"All new song":**
 - **Naya `getNewSongs()`** — latest releases teen sources se (sab parallel):
@@ -100,8 +111,8 @@ checks).
   "Trending Now 🔥" — har section apna queue banata hai (New pe tap → New
   queue, auto-next section ke andar). Pull-to-refresh dono refresh karta hai.
 - `Song.year` field add hua (JioSaavn metadata) — freshness ke liye.
-- 5 naye regression tests (full-only drop, last-resort previews, getNewSongs
-  merge order, player full-preference, lone-preview still plays).
+- Regression tests cover full-only filtering, getNewSongs merge order, and
+  verified full-stream playback.
 
 **Spotify source ("spotipy api", 2026-11-02):**
 - **Naya `services/spotifyApi.ts`** — Spotify Web API client-credentials token
@@ -113,9 +124,8 @@ checks).
   YT Music jaisa treatment) aur play-time pe `resolveFullAudioStream` se
   JioSaavn/Audius **full stream** resolve hote hain. Upgrade hone par badge
   audio ka source dikhata hai (Spotify → JioSaavn remap).
-- **Search**: Spotify results merge order me full sources ke baad, 30s previews
-  se pehle aate hain (official metadata accurate hai); true-preview filter se
-  exempt (unresolved ≠ 30s clip).
+- **Search**: Spotify metadata full sources ke baad merge hota hai; unresolved
+  metadata true-preview nahi maana jaata, lekin activation pe full stream required hai.
 - **New Songs feed**: Spotify new-releases ab 4th source hai (JioSaavn →
   Spotify → YT Music → Audius).
 - **UI**: Spotify badge (green `#1DB954`) + search me "Spotify" filter chip.
@@ -166,12 +176,12 @@ checks).
 - **Home**: hero card ab gradient hai (expo-linear-gradient), white CTA button,
   glow shadow. Popular artists rings naye primary tone me.
 - **Player**: warm gradient glow background (top se fade), aur **source badge**
-  ("YT Music • Full song" / "JioSaavn • Full song" / "Audius • 30s preview" type)
+  ("YT Music • Full song" / "JioSaavn • Full song" / "Audius • Full song" type)
   jo batata hai kaun sa source baj raha hai.
 - **MiniPlayer**: pink-tinted border + primary glow.
 - **SongItem**: har song pe **colored source badge** (JioSaavn green / YT Music
   red / Audius purple / iTunes pink / Gaana orange / Jamendo blue) + honest
-  "30s" chip preview-only tracks pe.
+  preview-only rows list/playback se drop hote hain.
 - **Search**: **source filter chips** (All / JioSaavn / YT Music / Audius /
   iTunes) — ek tap me kisi ek source ke results; count bhi chip pe dikhta hai.
 - **Room**: green "Live sync ready" card (transport naam ke saath) jab sync

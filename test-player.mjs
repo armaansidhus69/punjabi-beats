@@ -52,7 +52,14 @@ function song(id, overrides = {}) {
 const missing = song('missing', { source: 'youtube_music', videoId: 'missing', preview: '' });
 const preview = song('preview', { source: 'youtube_music', videoId: 'preview', preview: '' });
 
-function playerHarness({ previews = [], fullStreams = [], persistedState = null, jiosaavn = [] } = {}) {
+function playerHarness({
+  previews = [],
+  fullStreams = [],
+  persistedState = null,
+  jiosaavn = [],
+  platform = 'android',
+  webPlayback = null,
+} = {}) {
   const opened = [];
   const alerts = [];
   const events = [];
@@ -99,6 +106,10 @@ function playerHarness({ previews = [], fullStreams = [], persistedState = null,
       playing = true;
       emit(Event.PlaybackState, { state: 'Playing' });
     },
+    pause: async () => {
+      playing = false;
+      emit(Event.PlaybackState, { state: 'Paused' });
+    },
     seekTo: async position => seeks.push(position),
   };
   const api = loadModule('./mobile/services/musicApi.ts', {
@@ -134,6 +145,7 @@ function playerHarness({ previews = [], fullStreams = [], persistedState = null,
   });
   const store = loadModule('./mobile/stores/playerStore.ts', {
     'react-native': {
+      Platform: { OS: platform },
       Alert: { alert: (...args) => alerts.push(args) },
       Linking: { openURL: async url => opened.push(url) },
     },
@@ -155,6 +167,15 @@ function playerHarness({ previews = [], fullStreams = [], persistedState = null,
     '../core/queue/ops': loadModule('./mobile/core/queue/ops.ts', {}),
     // Phase 6 downloads-first resolve — test me koi download nahi hunda
     '../services/downloadsService': { getDownloadedUrl: () => null },
+    '../services/webPlayback': webPlayback ?? {
+      setupWebPlayback: () => {},
+      loadWebTrack: () => {},
+      playWebPlayback: async () => {},
+      pauseWebPlayback: () => {},
+      seekWebPlayback: () => {},
+      setWebVolume: () => {},
+      resetWebPlayback: () => {},
+    },
   });
   store.setPlayerActionListener(event => events.push(event));
   return {
@@ -223,7 +244,7 @@ test('failed selection starts the next playable song, skipping other unavailable
   const next = song('next');
   const missingToo = { ...missing, id: 'missing-too', videoId: 'missing-too' };
   await h.usePlayer.getState().playSong(missing, [song('previous'), missing, missingToo, next]);
-  assert.deepEqual(h.queue().map(item => item.id), ['previous', 'next']);
+  assert.deepEqual(h.queue().map(item => item.id), ['next']);
   assert.equal((await h.native.getActiveTrack()).id, 'next');
   assert.equal(h.usePlayer.getState().currentSong.id, 'next');
   assert.equal(h.usePlayer.getState().index, 3);
@@ -283,34 +304,80 @@ test('a playable selection keeps its queue index, position and normal playback',
   assert.equal(h.playing(), true);
 });
 
-test('iTunes resolution reports preview duration, not the catalog full-song duration', async () => {
-  const h = playerHarness({ previews: ['preview'] });
-  const resolved = await h.api.resolveSongPlaybackUrl(preview);
-  assert.equal(resolved.previewOnly, true);
-  assert.equal(resolved.duration, 30_000);
-  assert.equal(resolved.url, 'https://audio.invalid/preview-preview.m4a');
+test('upcoming metadata-only tracks resolve only when they become active', async () => {
+  const h = playerHarness({ fullStreams: ['upcoming'] });
+  const originalResolve = h.api.resolveSongPlaybackUrl;
+  let resolveCalls = 0;
+  h.api.resolveSongPlaybackUrl = async songToResolve => {
+    resolveCalls++;
+    return originalResolve(songToResolve);
+  };
+  const upcoming = song('upcoming', {
+    source: 'youtube_music',
+    videoId: 'upcoming',
+    preview: '',
+    previewOnly: true,
+  });
+
+  await h.usePlayer.getState().playSong(song('current'), [song('current'), upcoming]);
+  assert.equal(resolveCalls, 0, 'upcoming YTM metadata ko startup pe resolve nahi karna chahiye');
+  assert.deepEqual(h.queue().map(item => item.id), ['current']);
+  assert.deepEqual(h.usePlayer.getState().queue.map(item => item.id), ['current', 'upcoming']);
+
+  await h.usePlayer.getState().playNext();
+  assert.equal(resolveCalls, 1);
+  assert.deepEqual(h.queue().map(item => item.id), ['upcoming']);
+  assert.equal(h.usePlayer.getState().currentSong.id, 'upcoming');
 });
 
-test('preview duration reaches queue, current song, progress state and native metadata', async () => {
+test('pause intent during stream resolution is honoured after the track becomes ready', async () => {
+  const h = playerHarness();
+  let release;
+  let started;
+  const resolving = new Promise(resolve => { started = resolve; });
+  h.api.resolveSongPlaybackUrl = () => {
+    started();
+    return new Promise(resolve => { release = resolve; });
+  };
+
+  const pending = h.usePlayer.getState().playSong(preview);
+  await resolving;
+  assert.equal(h.usePlayer.getState().isLoading, true);
+  assert.equal(h.usePlayer.getState().isPlaying, true);
+  h.usePlayer.getState().pause();
+  release({ url: 'https://audio.invalid/resolved.m4a', previewOnly: false, duration: 240_000 });
+  await pending;
+
+  assert.equal(h.usePlayer.getState().isLoading, false);
+  assert.equal(h.usePlayer.getState().isPlaying, false);
+  assert.equal(h.playing(), false);
+});
+
+test('iTunes preview resolution is unavailable for full-only playback', async () => {
+  const h = playerHarness({ previews: ['preview'] });
+  const resolved = await h.api.resolveSongPlaybackUrl(preview);
+  assert.equal(resolved.url, '');
+});
+
+test('preview tracks never enter the playback queue', async () => {
   for (const previewOnly of [false, true]) {
     const h = playerHarness({ previews: ['preview'] });
     await h.usePlayer.getState().playSong({ ...preview, previewOnly });
     const state = h.usePlayer.getState();
-    assert.equal(state.currentSong.duration, 30_000);
-    assert.equal(state.currentSong.previewOnly, true);
-    assert.equal(state.queue[0].duration, 30_000);
-    assert.equal(state.duration, 30_000);
-    assert.equal(h.queue()[0].duration, 30);
-    assert.equal(h.events[0].song.duration, 30_000);
+    assert.equal(state.currentSong, null);
+    assert.deepEqual(state.queue, []);
+    assert.equal(state.duration, 0);
+    assert.deepEqual(h.queue(), []);
+    assert.equal(h.playing(), false);
     assert.equal(preview.duration, 240_000, 'Original catalog entry is not mutated');
   }
 });
 
-test('queued preview gets clip duration without starting playback', async () => {
+test('queued preview is rejected without starting playback', async () => {
   const h = playerHarness({ previews: ['preview'] });
-  assert.equal(await h.usePlayer.getState().addToQueue(preview), true);
-  assert.equal(h.usePlayer.getState().queue[0].duration, 30_000);
-  assert.equal(h.queue()[0].duration, 30);
+  await assert.rejects(h.usePlayer.getState().addToQueue(preview), /unavailable/i);
+  assert.deepEqual(h.usePlayer.getState().queue, []);
+  assert.deepEqual(h.queue(), []);
   assert.equal(h.playing(), false);
   assert.deepEqual(h.opened, []);
 });
@@ -344,8 +411,37 @@ test('player restores the persisted queue without starting playback', async () =
   assert.equal(state.repeat, 'all');
   assert.equal(state.volume, 0.6);
   assert.equal(state.isPlaying, false);
+  await new Promise(resolve => setImmediate(resolve));
   assert.deepEqual(new Set(h.queue().map(item => item.id)), new Set(['restored', 'next']));
   assert.equal(h.playing(), false);
+});
+
+test('web playback uses the browser backend and never resets TrackPlayer', async () => {
+  const loaded = [];
+  let callbacks;
+  const webPlayback = {
+    setupWebPlayback: nextCallbacks => { callbacks = nextCallbacks; },
+    loadWebTrack: track => loaded.push(track),
+    playWebPlayback: async () => callbacks?.onState(true),
+    pauseWebPlayback: () => callbacks?.onState(false),
+    seekWebPlayback: () => {},
+    setWebVolume: () => {},
+    resetWebPlayback: () => {},
+  };
+  const h = playerHarness({
+    platform: 'web',
+    webPlayback,
+  });
+  h.native.reset = async () => { throw new Error('TrackPlayer reset must not run on web'); };
+
+  await h.usePlayer.getState().playSong(song('browser-song'));
+
+  assert.deepEqual(loaded, [{
+    id: 'browser-song',
+    url: 'https://audio.invalid/browser-song.mp3',
+  }]);
+  assert.equal(h.usePlayer.getState().isPlaying, true);
+  assert.equal(h.usePlayer.getState().isLoading, false);
 });
 
 test('room queue UI shows an error, not success or duplicate, for an unavailable track', async () => {
@@ -388,26 +484,27 @@ test('superseded resolution cannot replace the newer selected song', async () =>
   await Promise.all([oldLoad, newLoad]);
   unsubscribe();
   assert.ok(selections.every(id => id === 'new'));
-  assert.deepEqual(h.queue().map(item => item.id), ['new']);
+  assert.deepEqual(h.queue().map(item => item.id), ['new'], JSON.stringify({ state: h.usePlayer.getState(), native: h.queue() }));
   assert.equal(h.events.length, 1);
   assert.equal(h.events[0].song.id, 'new');
 });
 
 test('full-only playback: 30s clips drop out of the native queue when full tracks exist', async () => {
   const h = playerHarness({ previews: ['preview'] });
-  // preview YTM song → iTunes 30s fallback; baaki queue full songs hai
+  // preview-only YTM row; baaki queue me verified full songs hain
   await h.usePlayer.getState().playSong(preview, [preview, song('full-1'), song('full-2')]);
+  await new Promise(resolve => setImmediate(resolve));
   assert.deepEqual(h.queue().map(item => item.id), ['full-1', 'full-2'], 'Native queue contains only full tracks');
   assert.equal(h.usePlayer.getState().currentSong.id, 'full-1', 'Next full track plays instead of the 30s clip');
   assert.equal(h.playing(), true);
 });
 
-test('full-only playback: a lone preview still plays when nothing full exists', async () => {
+test('full-only playback: a lone preview does not play when nothing full exists', async () => {
   const h = playerHarness({ previews: ['preview'] });
   await h.usePlayer.getState().playSong(preview);
-  assert.deepEqual(h.queue().map(item => item.id), ['preview']);
-  assert.equal(h.queue()[0].duration, 30);
-  assert.equal(h.playing(), true);
+  assert.deepEqual(h.queue(), []);
+  assert.equal(h.usePlayer.getState().currentSong, null);
+  assert.equal(h.playing(), false);
 });
 
 test('Spotify songs resolve to a full in-app stream at play time (never 30s Spotify clip)', async () => {
